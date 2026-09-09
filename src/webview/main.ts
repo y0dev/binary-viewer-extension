@@ -1,6 +1,6 @@
 import { post, saveState, loadState, logToHost } from './vscodeApi';
 import { el, clear, base64ToBytes } from './dom';
-import { Store, AppState, selectBytes } from './state';
+import { Store, AppState, selectBytes, resolveGotoTarget } from './state';
 import { DataProvider } from './DataProvider';
 import { HexView } from './HexView';
 import { StructureView } from './StructureView';
@@ -41,12 +41,16 @@ function handleMessage(msg: HostToWebview): void {
           parsed: msg.nodes,
           sections: msg.sections,
           parseError: msg.error ?? null,
+          formatBaseAddress: msg.baseAddress,
         });
       }
       break;
     case 'formats':
       if (store) {
-        const cleared = msg.activeFormat === null ? { parsed: [], sections: [] } : {};
+        const cleared =
+          msg.activeFormat === null
+            ? { parsed: [], sections: [], formatBaseAddress: null }
+            : {};
         store.update({ formats: msg.formats, activeFormat: msg.activeFormat, ...cleared });
       }
       break;
@@ -55,8 +59,9 @@ function handleMessage(msg: HostToWebview): void {
       break;
     case 'gotoOffset':
       if (store) {
-        selectBytes(store, msg.offset, msg.select ?? 1);
-        hexView.revealOffset(msg.offset);
+        const target = resolveGotoTarget(store.state, msg.offset);
+        selectBytes(store, target, msg.select ?? 1);
+        hexView.revealOffset(target);
         afterSelectionChange();
       }
       break;
@@ -112,10 +117,18 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
   booted = true;
   const persisted = loadState();
 
+  const activeFormat = msg.activeFormat ?? persisted.activeFormat ?? null;
+  // Remembered tab wins; otherwise the configured default, but structure /
+  // sections need a format — fall back to raw when there is none.
+  let view = persisted.view ?? msg.config.defaultView ?? 'raw';
+  if ((view === 'structure' || view === 'sections') && !activeFormat) {
+    view = 'raw';
+  }
+
   const initial: AppState = {
     fileSize: msg.fileSize,
     fileName: msg.fileName,
-    view: persisted.view ?? 'raw',
+    view,
     bytesPerRow: persisted.bytesPerRow ?? msg.config.bytesPerRow,
     endianness: persisted.endianness ?? msg.config.defaultEndianness,
     showInspector: persisted.showInspector ?? msg.config.showInspector,
@@ -123,7 +136,7 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     anchor: 0,
     selection: { start: 0, length: 1 },
     formats: msg.formats,
-    activeFormat: msg.activeFormat ?? persisted.activeFormat ?? null,
+    activeFormat,
     detectedFormat: msg.detectedFormat,
     parsed: [],
     parseError: null,
@@ -132,6 +145,8 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     activeSectionName: null,
     blockSizeBytes: msg.config.blockSizeBytes,
     maxSearchResults: msg.config.maxSearchResults,
+    baseAddress: msg.config.baseAddress,
+    formatBaseAddress: null,
   };
 
   store = new Store(initial);
@@ -162,8 +177,9 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
   new Toolbar(toolbarEl, store, {
     onToggleSearch: () => searchBar.toggle(),
     onGoto: (offset) => {
-      selectBytes(store, offset, 1);
-      hexView.revealOffset(offset);
+      const target = resolveGotoTarget(store.state, offset);
+      selectBytes(store, target, 1);
+      hexView.revealOffset(target);
       afterSelectionChange();
     },
   });

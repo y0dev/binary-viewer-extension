@@ -1,7 +1,6 @@
-import { Store, selectBytes } from './state';
+import { Store, selectBytes, displayAddr } from './state';
 import { el, clear } from './dom';
 import { post } from './vscodeApi';
-import { offsetHex } from '../core/humanize';
 import type { ParsedNode } from '../types/messages';
 
 export interface StructureCallbacks {
@@ -36,7 +35,9 @@ export class StructureView {
         changed.has('parseError') ||
         changed.has('activeFormat') ||
         changed.has('activeNodeId') ||
-        changed.has('formats')
+        changed.has('formats') ||
+        changed.has('baseAddress') ||
+        changed.has('formatBaseAddress')
       ) {
         this.render();
       }
@@ -263,7 +264,7 @@ export class StructureView {
     });
     tr.append(
       el('td', {}, [arrow, el('span', { class: 'bv-node-name', text: formatName })]),
-      el('td', { class: 'bv-mono', text: offsetHex(0) }),
+      el('td', { class: 'bv-mono', text: displayAddr(this.store.state, 0) }),
       el('td', { class: 'bv-mono bv-dim', text: 'format' }),
       el('td', { class: 'bv-struct-val bv-dim', text: `${childCount} top-level, ${endOffset} bytes` }),
     );
@@ -305,7 +306,7 @@ export class StructureView {
 
     tr.append(
       nameCell,
-      el('td', { class: 'bv-mono', text: node.size > 0 || node.offset > 0 ? offsetHex(node.offset) : offsetHex(0) }),
+      el('td', { class: 'bv-mono', text: displayAddr(this.store.state, node.offset) }),
       el('td', { class: 'bv-mono bv-dim', text: node.typeLabel }),
       el('td', {
         class: 'bv-struct-val' + (node.isContainer ? ' bv-dim' : ''),

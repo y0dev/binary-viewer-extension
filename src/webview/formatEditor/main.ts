@@ -164,7 +164,8 @@ function fieldToNode(f: FieldDefinition): EditNode {
       node.type = shorthand.base;
       node.size = f.items?.size !== undefined ? String(f.items.size) : '';
     } else {
-      node.count = f.count === undefined ? '' : String(f.count);
+      node.count =
+        f.count !== undefined ? String(f.count) : typeof f.countField === 'string' ? f.countField : '';
       node.type = f.items?.type ?? 'uint8';
       node.size =
         f.items?.size !== undefined ? String(f.items.size) : f.size !== undefined ? String(f.size) : '';
@@ -259,12 +260,21 @@ function nodeToField(node: EditNode): FieldDefinition {
     if (elemSize !== undefined) {
       items.size = elemSize;
     }
+    const countNum = num(node.count);
+    const countField = node.count.trim();
     const f: FieldDefinition = {
       name: node.name.trim(),
       type: 'array',
-      count: num(node.count) ?? 0,
       items,
     };
+    if (countNum !== undefined) {
+      f.count = countNum;
+    } else if (countField) {
+      // A non-numeric value names an earlier field to take the length from.
+      f.countField = countField;
+    } else {
+      f.count = 0;
+    }
     const off = num(node.offset);
     if (off !== undefined) {
       f.offset = off;
@@ -702,7 +712,7 @@ function render(): void {
   wrap.append(
     el('div', {
       class: 'fe-hint',
-      text: 'For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. In JSON you can also write the type as "float32[8]" (or "int16[24]", "Sample[100]" for a reusable structure).',
+      text: 'For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. In JSON you can also write the type as "float32[8]" (or "int16[24]", "Sample[100]" for a reusable structure). For a length-prefixed array, put the name of an earlier integer field in the count box instead of a number.',
     }),
   );
   const tree = el('div', { class: 'fe-tree' });
@@ -817,11 +827,16 @@ function typeSelect(value: string, onChange: (v: string) => void): HTMLSelectEle
   return sel;
 }
 
-function bindInput(node: EditNode, key: keyof EditNode, opts: { placeholder?: string; width?: number } = {}) {
+function bindInput(
+  node: EditNode,
+  key: keyof EditNode,
+  opts: { placeholder?: string; width?: number; title?: string } = {},
+) {
   const input = el('input', {
     type: 'text',
     value: String(node[key] ?? ''),
     placeholder: opts.placeholder ?? '',
+    title: opts.title ?? '',
     oninput: (e) => {
       (node[key] as string) = (e.target as HTMLInputElement).value;
       scheduleValidate();
@@ -868,7 +883,15 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
     head.append(typeSelect(node.type, (v) => (node.type = v)));
   } else if (node.kind === 'array') {
     head.append(
-      labelled('count', bindInput(node, 'count', { width: 60, placeholder: 'N' })),
+      labelled(
+        'count',
+        bindInput(node, 'count', {
+          width: 90,
+          placeholder: 'N or field',
+          title:
+            'A number for a fixed-length array, or the name of an earlier integer field to take the length from (length-prefixed array).',
+        }),
+      ),
       el('span', { class: 'fe-inline-label', text: 'of' }),
       typeSelect(node.type, (v) => (node.type = v)),
     );

@@ -81,6 +81,8 @@ export function computeFieldSize(field: FieldDefinition): number {
         throw new Error(`array field "${field.name}" is missing "items"`);
       }
       const each = computeFieldSize({ ...field.items, name: field.items.name || 'item' });
+      // A `countField`-sized array has no static size; the parser fixes it up
+      // from the decoded length prefix at parse time.
       return each * (field.count ?? 0);
     }
     case 'struct':

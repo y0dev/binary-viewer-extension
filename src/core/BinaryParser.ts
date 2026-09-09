@@ -6,7 +6,13 @@
  * objects (with depth for tree rendering). Pure — no I/O, no code execution.
  */
 
-import type { FieldDefinition, FormatDefinition, BitSpec, Endianness } from '../types/format';
+import type {
+  FieldDefinition,
+  FormatDefinition,
+  BitSpec,
+  Endianness,
+  TimestampEpoch,
+} from '../types/format';
 import type { ParsedNode, ParsedBit } from '../types/messages';
 import { formatScalar, getScalarType } from './DataTypes';
 import { computeFieldSize, computeStructSize, lookupEnumLabel } from './BinaryField';
@@ -22,10 +28,21 @@ export interface ByteWindow {
   fileSize: number;
 }
 
+export interface TimestampDefaults {
+  /** Epoch used for `timestamp` fields with no explicit `epoch`. Default 'unix'. */
+  epoch?: TimestampEpoch;
+  /** Render as a UTC ISO string (default) or the host's local time. */
+  utc?: boolean;
+}
+
 export interface ParseOptions {
   defaultEndianness: Endianness;
   /** Safety cap on total emitted nodes (protects the webview from huge arrays). */
   maxNodes?: number;
+  /** Max elements rendered per `array` field before a "… N more" summary row. 0 = no cap. */
+  maxArrayElements?: number;
+  /** Fallbacks for `timestamp` fields. */
+  timestamp?: TimestampDefaults;
 }
 
 interface Ctx {
@@ -34,9 +51,33 @@ interface Ctx {
   defEndian: Endianness;
   nodes: ParsedNode[];
   maxNodes: number;
+  maxArrayElements: number;
+  timestamp: TimestampDefaults;
   idSeq: number;
   /** Stack of enclosing containers; the last entry is the current parent. */
   stack: Array<{ id: string | null; path: string[] }>;
+}
+
+const DEFAULT_ARRAY_CAP = 4096;
+
+/** Milliseconds from the JS epoch to the start of a named epoch. */
+export function epochOffsetMs(epoch: TimestampEpoch | number | undefined): number {
+  if (typeof epoch === 'number') {
+    return epoch;
+  }
+  switch (epoch) {
+    case 'y2k':
+      return Date.UTC(2000, 0, 1);
+    case 'gps':
+      return Date.UTC(1980, 0, 6);
+    case 'mac':
+      return Date.UTC(1904, 0, 1);
+    case 'filetime':
+      return Date.UTC(1601, 0, 1);
+    case 'unix':
+    default:
+      return 0;
+  }
 }
 
 /** True when [abs, abs+size) lies fully inside the loaded window. */
@@ -69,6 +110,13 @@ export function parseFormat(
     defEndian: format.endianness ?? opts.defaultEndianness,
     nodes: [],
     maxNodes: opts.maxNodes ?? 20000,
+    maxArrayElements:
+      opts.maxArrayElements === undefined
+        ? DEFAULT_ARRAY_CAP
+        : opts.maxArrayElements <= 0
+          ? Number.POSITIVE_INFINITY
+          : opts.maxArrayElements,
+    timestamp: opts.timestamp ?? {},
     idSeq: 0,
     stack: [{ id: null, path: [] }],
   };
@@ -233,8 +281,30 @@ function parseField(ctx: Ctx, rawField: FieldDefinition, abs: number, depth: num
     value,
     detail: field.description ? `${field.description} — ${detail}` : detail,
     depth,
+    numericValue: typeof raw === 'number' && scalar.category === 'int' ? raw : undefined,
   });
   return size;
+}
+
+/**
+ * Resolve an `array` field's element count: an explicit `count` wins; otherwise
+ * `countField` names an earlier integer field whose decoded value is used.
+ * Returns `null` when `countField` is set but no such field was parsed.
+ */
+function resolveArrayCount(ctx: Ctx, field: FieldDefinition): number | null {
+  if (field.count !== undefined) {
+    return Math.max(0, Math.floor(field.count));
+  }
+  if (field.countField) {
+    for (let i = ctx.nodes.length - 1; i >= 0; i--) {
+      const n = ctx.nodes[i];
+      if (n.name === field.countField && typeof n.numericValue === 'number') {
+        return Math.max(0, Math.floor(n.numericValue));
+      }
+    }
+    return null;
+  }
+  return 0;
 }
 
 function describeScalar(raw: number | bigint | boolean, sizeBytes: number, category: string): string {
@@ -293,21 +363,26 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
 
 function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
   const item = field.items!;
-  const count = field.count ?? 0;
+  const resolved = resolveArrayCount(ctx, field);
+  const count = resolved ?? 0;
+  const countErr =
+    resolved === null ? `count field "${field.countField}" not found before this array` : undefined;
   const each = computeFieldSize({ ...item, name: item.name || 'item' });
   const size = field.size ?? each * count;
+  const via = field.count === undefined && field.countField ? ` ← ${field.countField}` : '';
   const node = pushNode(ctx, {
     name: field.name,
-    typeLabel: `${item.type ?? 'struct'}[${count}]`,
+    typeLabel: `${item.type ?? 'struct'}[${count}${via}]`,
     offset: abs,
     size,
     value: `${count} element${count === 1 ? '' : 's'}`,
     detail: field.description,
     depth,
     isContainer: true,
+    error: countErr,
   });
   ctx.stack.push({ id: node.id, path: node.path! });
-  const limit = Math.min(count, 4096);
+  const limit = Math.min(count, ctx.maxArrayElements);
   for (let i = 0; i < limit; i++) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
@@ -320,7 +395,9 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
       typeLabel: '',
       offset: abs + limit * each,
       size: 0,
-      value: `(${count - limit} more elements not shown)`,
+      value:
+        `… ${count - limit} more element${count - limit === 1 ? '' : 's'} not shown ` +
+        `(raise binaryViewer.structure.maxArrayElements)`,
       depth: depth + 1,
     });
   }
@@ -421,6 +498,7 @@ function parseEnum(ctx: Ctx, field: FieldDefinition, abs: number, depth: number)
     value: label ? `${label} (${raw.toString()})` : `${raw.toString()} (unknown)`,
     detail: field.description ? `${field.description} — ${rawHex}` : rawHex,
     depth,
+    numericValue: typeof raw === 'number' ? raw : undefined,
   });
   return sizeBytes;
 }
@@ -501,21 +579,23 @@ function parseTimestamp(ctx: Ctx, field: FieldDefinition, abs: number, depth: nu
   const le = fieldEndianLittle(ctx, field);
   const raw = readContainer(ctx, abs, sizeBytes, le);
   const rawNum = typeof raw === 'bigint' ? Number(raw) : raw;
-  const unitMs = cfg.unit === 'ms' ? 1 : 1000;
-  let epochMs = 0;
-  if (cfg.epoch === 'y2k') {
-    epochMs = Date.UTC(2000, 0, 1);
-  } else if (typeof cfg.epoch === 'number') {
-    epochMs = cfg.epoch;
-  }
+  const epoch = cfg.epoch ?? ctx.timestamp.epoch ?? 'unix';
+  const epochMs = epochOffsetMs(epoch);
+  // FILETIME counts 100-ns ticks; everything else is seconds unless unit === 'ms'.
+  const unitMs = epoch === 'filetime' ? 1e-4 : cfg.unit === 'ms' ? 1 : 1000;
   const date = new Date(epochMs + rawNum * unitMs);
-  const iso = Number.isFinite(date.getTime()) ? date.toISOString() : '(invalid)';
+  const utc = ctx.timestamp.utc ?? true;
+  const shown = !Number.isFinite(date.getTime())
+    ? '(invalid)'
+    : utc
+      ? date.toISOString()
+      : date.toLocaleString();
   pushNode(ctx, {
     name: field.name,
     typeLabel: `timestamp`,
     offset: abs,
     size: sizeBytes,
-    value: `${iso}`,
+    value: shown,
     detail: field.description ? `${field.description} — raw ${raw.toString()}` : `raw ${raw.toString()} @ ${offsetHex(abs)}`,
     depth,
   });

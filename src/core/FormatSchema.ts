@@ -9,6 +9,7 @@ import { isScalarType } from './DataTypes';
 import { parseBitRange } from './BitField';
 import { normalizeEndianness } from './Endianness';
 import { computeFieldSize } from './BinaryField';
+import { parseNumericInput } from './humanize';
 import { hasType, isBitFieldForm, isContainerForm, containerChildren } from './FieldShape';
 import { expandShorthandDeep } from './FieldSyntax';
 
@@ -285,8 +286,19 @@ function validateField(
         knownStructs,
       );
     }
-    if (field.count === undefined || field.count < 0) {
-      errors.push(`${path}: "array" requires a non-negative "count"`);
+    const hasCount = field.count !== undefined;
+    const hasCountField = typeof field.countField === 'string' && field.countField.trim() !== '';
+    if (field.countField !== undefined && !hasCountField) {
+      errors.push(`${path}: "countField" must be a non-empty field name`);
+    }
+    if (hasCount && hasCountField) {
+      warnings.push(`${path}: "count" and "countField" both set — "count" wins`);
+    }
+    if (hasCount && (field.count! < 0 || !Number.isInteger(field.count!))) {
+      errors.push(`${path}: "array" "count" must be a non-negative integer`);
+    }
+    if (!hasCount && !hasCountField) {
+      errors.push(`${path}: "array" requires a non-negative "count" (or a "countField")`);
     }
   }
 
@@ -347,6 +359,13 @@ export function validateFormat(input: unknown): ValidationResult {
   if (fmt.fileExtensions !== undefined) {
     if (!Array.isArray(fmt.fileExtensions) || fmt.fileExtensions.some((x) => typeof x !== 'string')) {
       errors.push('"fileExtensions" must be an array of strings');
+    }
+  }
+  if (fmt.baseAddress !== undefined) {
+    const okNum = typeof fmt.baseAddress === 'number' && Number.isFinite(fmt.baseAddress) && fmt.baseAddress >= 0;
+    const okStr = typeof fmt.baseAddress === 'string' && parseNumericInput(fmt.baseAddress) !== undefined;
+    if (!okNum && !okStr) {
+      errors.push('"baseAddress" must be a non-negative number or a "0x…" / decimal / "…h" string');
     }
   }
   if (fmt.magic !== undefined) {

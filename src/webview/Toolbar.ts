@@ -1,7 +1,7 @@
-import { Store } from './state';
+import { Store, displayAddr } from './state';
 import { el, clear } from './dom';
 import { post } from './vscodeApi';
-import { offsetHex, parseNumericInput } from '../core/humanize';
+import { parseNumericInput } from '../core/humanize';
 import type { Endianness } from '../types/format';
 
 export interface ToolbarCallbacks {
@@ -153,7 +153,12 @@ export class Toolbar {
       if (changed.has('showInspector')) {
         this.inspectorBtn.classList.toggle('bv-btn-active', this.store.state.showInspector);
       }
-      if (changed.has('caret') || changed.has('selection')) {
+      if (
+        changed.has('caret') ||
+        changed.has('selection') ||
+        changed.has('baseAddress') ||
+        changed.has('formatBaseAddress')
+      ) {
         this.syncOffset();
       }
       if (changed.has('formats') || changed.has('activeFormat') || changed.has('detectedFormat')) {
@@ -190,7 +195,7 @@ export class Toolbar {
 
   private syncOffset(): void {
     const s = this.store.state;
-    const parts = [offsetHex(s.caret)];
+    const parts = [displayAddr(s, s.caret)];
     if (s.selection.length > 1) {
       parts.push(`+${s.selection.length}`);
     }

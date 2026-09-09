@@ -1,7 +1,7 @@
-import { Store, selectBytes } from './state';
+import { Store, selectBytes, displayAddr } from './state';
 import { el, clear } from './dom';
 import { post } from './vscodeApi';
-import { offsetHex, humanFileSize } from '../core/humanize';
+import { humanFileSize } from '../core/humanize';
 import { hasFlagsColumn, hasDisplayColumn } from '../core/Sections';
 import type { ParsedSection } from '../types/messages';
 
@@ -29,7 +29,9 @@ export class SectionsView {
         changed.has('sections') ||
         changed.has('activeSectionName') ||
         changed.has('activeFormat') ||
-        changed.has('parseError')
+        changed.has('parseError') ||
+        changed.has('baseAddress') ||
+        changed.has('formatBaseAddress')
       ) {
         this.render();
       }
@@ -170,8 +172,8 @@ export class SectionsView {
 
     tr.append(
       el('td', { class: 'bv-section-name', text: row.name }),
-      el('td', { class: 'bv-mono', text: offsetHex(row.start) }),
-      el('td', { class: 'bv-mono', text: offsetHex(row.end) }),
+      el('td', { class: 'bv-mono', text: displayAddr(this.store.state, row.start) }),
+      el('td', { class: 'bv-mono', text: displayAddr(this.store.state, row.end) }),
       el('td', { class: 'bv-mono', text: row.error ? `<${row.error}>` : lenText }),
     );
     if (showFlags) {

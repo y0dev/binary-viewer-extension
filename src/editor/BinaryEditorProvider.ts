@@ -8,12 +8,14 @@ import { parseFormat } from '../core/BinaryParser';
 import { computeFieldSize } from '../core/BinaryField';
 import { buildSections } from '../core/Sections';
 import { resolveStructures } from '../core/FormatResolve';
+import { resolveBaseAddress } from '../core/humanize';
 import { searchBinary } from '../binary/BinarySearch';
-import type { FieldDefinition } from '../types/format';
+import type { FieldDefinition, TimestampEpoch } from '../types/format';
 import type {
   HostToWebview,
   WebviewToHost,
   ViewerConfig,
+  ViewMode,
   WebviewPersistedState,
 } from '../types/messages';
 
@@ -32,6 +34,9 @@ interface ResolvedConfig extends ViewerConfig {
   blockSizeBytes: number;
   cacheWindowBytes: number;
   autoDetect: boolean;
+  maxArrayElements: number;
+  timestampEpoch: TimestampEpoch;
+  timestampUTC: boolean;
 }
 
 export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider<BinaryDocument> {
@@ -215,6 +220,8 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
               showInspector: cfg.showInspector,
               blockSizeBytes: cfg.blockSizeBytes,
               maxSearchResults: cfg.maxSearchResults,
+              defaultView: cfg.defaultView,
+              baseAddress: cfg.baseAddress,
             },
             formats: this.formats.summaries(),
             detectedFormat: detected,
@@ -311,10 +318,15 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         formatName,
         nodes: [],
         sections: [],
+        baseAddress: null,
         error: `Format "${formatName}" not found`,
       });
       return;
     }
+    const formatBase =
+      loaded.definition.baseAddress !== undefined
+        ? resolveBaseAddress(loaded.definition.baseAddress)
+        : null;
     // Inline any reusable `structures` before parsing / sizing.
     const { format: def, errors: resolveErrors } = resolveStructures(loaded.definition);
 
@@ -336,7 +348,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const { nodes, error } = parseFormat(
       def,
       { baseOffset: 0, bytes, fileSize: entry.document.fileSize },
-      { defaultEndianness: endianness ?? cfg.defaultEndianness },
+      {
+        defaultEndianness: endianness ?? cfg.defaultEndianness,
+        maxArrayElements: cfg.maxArrayElements,
+        timestamp: { epoch: cfg.timestampEpoch, utc: cfg.timestampUTC },
+      },
     );
     const sections = buildSections(
       def,
@@ -344,7 +360,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       entry.document.fileSize,
     );
     const allErrors = [...resolveErrors, error].filter(Boolean).join('; ') || undefined;
-    this.post(entry, { type: 'parseResult', formatName, nodes, sections, error: allErrors });
+    this.post(entry, {
+      type: 'parseResult',
+      formatName,
+      nodes,
+      sections,
+      baseAddress: formatBase,
+      error: allErrors,
+    });
   }
 
   private async persist(entry: Entry, patch: Partial<WebviewPersistedState>): Promise<void> {
@@ -362,6 +385,8 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
   private readConfig(): ResolvedConfig {
     const c = vscode.workspace.getConfiguration('binaryViewer');
     const bpr = c.get<number>('bytesPerRow', 16);
+    const view = c.get<ViewMode>('defaultView', 'raw');
+    const epoch = c.get<TimestampEpoch>('timestamp.defaultEpoch', 'unix');
     return {
       bytesPerRow: (bpr === 8 || bpr === 32 ? bpr : 16) as 8 | 16 | 32,
       defaultEndianness: c.get<'little' | 'big'>('defaultEndianness', 'little'),
@@ -370,6 +395,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       cacheWindowBytes: Math.max(262144, c.get<number>('cacheWindowBytes', 8 * 1024 * 1024)),
       maxSearchResults: c.get<number>('maxSearchResults', 5000),
       autoDetect: c.get<boolean>('autoDetectFormat', true),
+      defaultView: view === 'structure' || view === 'sections' ? view : 'raw',
+      baseAddress: resolveBaseAddress(c.get<string>('baseAddress', '')),
+      maxArrayElements: Math.max(0, c.get<number>('structure.maxArrayElements', 1000)),
+      timestampEpoch: epoch,
+      timestampUTC: c.get<boolean>('timestamp.displayUTC', true),
     };
   }
 

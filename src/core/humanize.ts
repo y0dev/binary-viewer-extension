@@ -65,6 +65,20 @@ export function parseNumericInput(input: string): number | undefined {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
 }
 
+/**
+ * Resolve a base-address value (a number, or a "0x…"/decimal/"…h" string) to a
+ * non-negative integer. Returns 0 for empty / invalid input.
+ */
+export function resolveBaseAddress(input: number | string | undefined): number {
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input > 0 ? Math.floor(input) : 0;
+  }
+  if (typeof input === 'string') {
+    return parseNumericInput(input) ?? 0;
+  }
+  return 0;
+}
+
 /** Convert a bigint to a 0x-prefixed, byte-padded hex string. */
 export function bigintHex(value: bigint, bytes: number): string {
   const unsigned = value < 0n ? value + (1n << BigInt(bytes * 8)) : value;

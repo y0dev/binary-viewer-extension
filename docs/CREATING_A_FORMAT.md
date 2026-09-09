@@ -201,6 +201,9 @@ Matching binaries for each live in [`examples/binaries/`](../examples/binaries/)
   JSON. Define a record once in the **Reusable structures** section
   (`+ Add Structure Definition`) and pick its name as the element type. **⧉**
   duplicates any row.
+- For a **length-prefixed** array, put a field name (not a number) in the
+  array's **count** box — or `"countField": "n"` in JSON — to take the element
+  count from an earlier integer field `n`.
 - The editor's **advanced** box merges any extra JSON onto a primitive field —
   use it for `enum`, `timestamp`, `scale`/`bias`, or the bit-field `fields`
   array.

@@ -210,3 +210,65 @@ describe('BinaryParser', () => {
     assert.strictEqual(nodes[0].value, '2021-01-01T00:00:00.000Z');
   });
 });
+
+describe('BinaryParser — array countField (length prefix)', () => {
+  const fmt: FormatDefinition = {
+    name: 'lp',
+    endianness: 'little',
+    fields: [
+      { name: 'n', type: 'uint16', offset: 0 },
+      {
+        name: 'values',
+        type: 'array',
+        offset: 2,
+        countField: 'n',
+        items: { name: 'v', type: 'uint8' },
+      },
+      { name: 'trailer', type: 'uint8' },
+    ],
+  };
+
+  it('takes the element count from the named earlier field', () => {
+    const { nodes, error } = parseFormat(fmt, win([3, 0, 10, 11, 12, 0xff]), {
+      defaultEndianness: 'little',
+    });
+    assert.strictEqual(error, undefined);
+    const arr = nodes.find((n) => n.name === 'values')!;
+    assert.strictEqual(arr.isContainer, true);
+    assert.strictEqual(arr.value, '3 elements');
+    const elems = nodes.filter((n) => /^values\[\d+\]$/.test(n.name)).map((n) => n.value);
+    assert.deepStrictEqual(elems, ['10', '11', '12']);
+    // The field packed after the dynamic array lands at the right offset.
+    const trailer = nodes.find((n) => n.name === 'trailer')!;
+    assert.strictEqual(trailer.offset, 5);
+    assert.strictEqual(trailer.value, '255');
+  });
+
+  it('handles a zero-length prefix', () => {
+    const { nodes } = parseFormat(fmt, win([0, 0, 0x2a]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.filter((n) => /^values\[\d+\]$/.test(n.name)).length, 0);
+    assert.strictEqual(nodes.find((n) => n.name === 'trailer')!.offset, 2);
+  });
+
+  it('flags an unknown countField without throwing', () => {
+    const bad: FormatDefinition = {
+      name: 'bad',
+      fields: [{ name: 'xs', type: 'array', offset: 0, countField: 'missing', items: { name: 'v', type: 'uint8' } }],
+    };
+    const { nodes, error } = parseFormat(bad, win([1, 2, 3]), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    assert.match(nodes[0].error ?? '', /count field "missing" not found/);
+  });
+
+  it('an explicit count still wins over countField', () => {
+    const both: FormatDefinition = {
+      name: 'both',
+      fields: [
+        { name: 'n', type: 'uint8', offset: 0 },
+        { name: 'xs', type: 'array', offset: 1, count: 2, countField: 'n', items: { name: 'v', type: 'uint8' } },
+      ],
+    };
+    const { nodes } = parseFormat(both, win([9, 1, 2, 3, 4]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.filter((n) => /^xs\[\d+\]$/.test(n.name)).length, 2);
+  });
+});

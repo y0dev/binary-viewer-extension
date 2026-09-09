@@ -14,6 +14,7 @@
 │    │     └─ per-panel message router                                       │
 │    ├─ commands/*  (Go To, Search, Toggle*, Create/Edit/Import/Export,      │
 │    │              Generate…, Validate/Apply format file)                   │
+│    ├─ AdditionalExtensions  (reopen configured extensions as binary)       │
 │    └─ FormatEditorPanel  (WebviewPanel form editor)                        │
 │                                                                             │
 │  core/  ── pure, no vscode/node ── DataTypes, Endianness, BitField,        │

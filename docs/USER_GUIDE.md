@@ -167,6 +167,29 @@ JSON file name** — so dropping `firmware.json` into
 - **`binaryViewer.showBuiltinFormats`** — set to `false` to hide the shipped
   example formats from the dropdown and from auto-detection.
 
+## More settings
+
+- **`binaryViewer.defaultView`** — the tab a file opens on (`raw`, `structure`
+  or `sections`). `structure` / `sections` fall back to `raw` when no format
+  applies; whichever tab you last used for a given file always wins.
+- **`binaryViewer.baseAddress`** — an address (e.g. `0x08000000`, decimal, or
+  `…h`) that the offset / address columns, the status bar and **Go To** are shown
+  relative to, so they match a memory-mapped datasheet or linker map. A format
+  can carry its own `baseAddress`, which wins. Field offsets in a definition are
+  still written from `0`. With a base set, **Go To** accepts either a file offset
+  or a full address.
+- **`binaryViewer.structure.maxArrayElements`** (default `1000`) — how many
+  elements a single `array` field renders in the Structure view before the rest
+  collapse into one "… N more" row. Stops a huge `float32[200000]` from freezing
+  the tree. `0` removes the limit.
+- **`binaryViewer.additionalExtensions`** — extra file extensions (`s19`,
+  `.mot`, …) to open in the Binary Viewer automatically, on top of the built-in
+  list. A file you deliberately reopen as text stays text for the session.
+- **`binaryViewer.timestamp.defaultEpoch`** / **`binaryViewer.timestamp.displayUTC`**
+  — the epoch (`unix` / `y2k` / `gps` / `mac` / `filetime`) assumed for
+  `timestamp` fields that don't set their own, and whether decoded times show in
+  UTC or the host's local time zone.
+
 ## Themes
 
 The UI is drawn entirely with VS Code theme variables, so light, dark and

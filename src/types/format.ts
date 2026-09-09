@@ -8,6 +8,9 @@
 
 export type Endianness = 'little' | 'big';
 
+/** Named epochs understood by `timestamp` fields. */
+export type TimestampEpoch = 'unix' | 'y2k' | 'gps' | 'mac' | 'filetime';
+
 /** Every scalar type the parser understands out of the box. */
 export type ScalarTypeName =
   | 'uint8'
@@ -89,8 +92,15 @@ export interface FieldDefinition {
   size?: number;
   /** For string types: number of characters/code units. */
   length?: number;
-  /** For `array`: number of elements. */
+  /** For `array`: number of elements. Mutually exclusive with `countField`. */
   count?: number;
+  /**
+   * For `array`: take the element count from the decoded value of an earlier
+   * integer field with this name (a length prefix). The field must be parsed
+   * before this array — an earlier sibling, or a field in an enclosing
+   * structure. `count`, when present, wins.
+   */
+  countField?: string;
   /** For `array`: the element type (a nested field definition without a name is allowed). */
   items?: FieldDefinition;
   /**
@@ -111,8 +121,16 @@ export interface FieldDefinition {
     size?: 4 | 8;
     /** 's' (seconds, default) or 'ms'. */
     unit?: 's' | 'ms';
-    /** Epoch. 'unix' (default) or 'y2k' (2000-01-01) or a numeric epoch in ms. */
-    epoch?: 'unix' | 'y2k' | number;
+    /**
+     * Epoch. One of the named epochs below, or a numeric epoch in ms.
+     * When omitted, `binaryViewer.timestamp.defaultEpoch` is used.
+     *  - 'unix'     — 1970-01-01 UTC
+     *  - 'y2k'      — 2000-01-01 UTC
+     *  - 'gps'      — 1980-01-06 UTC (leap seconds ignored)
+     *  - 'mac'      — 1904-01-01 UTC (classic Mac / HFS+)
+     *  - 'filetime' — 1601-01-01 UTC, value counted in 100-ns ticks (Windows FILETIME)
+     */
+    epoch?: TimestampEpoch | number;
   };
   /** Display hint: 'hex' | 'dec' | 'bin' | 'auto'. */
   display?: 'hex' | 'dec' | 'bin' | 'auto';
@@ -175,6 +193,12 @@ export interface FormatDefinition {
   fileExtensions?: string[];
   /** Default endianness for all fields. Default: 'little'. */
   endianness?: Endianness;
+  /**
+   * Base address the offset / address columns are shown relative to (e.g.
+   * `0x08000000` for memory-mapped flash). A number, or a `0x`/decimal/`…h`
+   * string. Overrides the `binaryViewer.baseAddress` setting for this format.
+   */
+  baseAddress?: number | string;
   /** One or more magic-byte signatures. Any match counts. */
   magic?: MagicSpec | MagicSpec[];
   /**

@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.7.0",
+  "version": "0.9.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -47,7 +47,7 @@
       "description": "Workspace-defined binary formats under .vscode/binary-viewer are only loaded in trusted workspaces. Raw hex viewing and global formats work everywhere."
     }
   },
-  "activationEvents": [],
+  "activationEvents": ["onStartupFinished"],
   "contributes": {
     "customEditors": [
       {
@@ -146,6 +146,48 @@
           "enum": ["little", "big"],
           "default": "little",
           "description": "Default endianness used by the data inspector and by formats that do not specify one."
+        },
+        "binaryViewer.defaultView": {
+          "type": "string",
+          "enum": ["raw", "structure", "sections"],
+          "default": "raw",
+          "description": "Which tab a binary file opens on. 'structure' and 'sections' fall back to 'raw' when no format applies to the file. The last tab you used for a given file is remembered and takes precedence."
+        },
+        "binaryViewer.baseAddress": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Show the offset / address columns relative to this base address instead of `0` — e.g. `0x08000000` for memory-mapped flash, so addresses line up with the datasheet or linker map. Accepts `0x` hex, decimal, or `…h`. A format's own `baseAddress` property overrides this. Leave empty for plain file offsets."
+        },
+        "binaryViewer.structure.maxArrayElements": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "markdownDescription": "Maximum number of elements rendered per `array` field in the Structure view (the rest are summarised as one \"… N more\" row). Guards against a huge shorthand like `float32[200000]` locking up the tree. Set to `0` for no limit."
+        },
+        "binaryViewer.additionalExtensions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine-overridable",
+          "markdownDescription": "Extra file extensions (e.g. `s19`, `.mot`, `.pkg`) to open in the Binary Viewer automatically. The built-in list (`.bin .hex .img .dat .fw .rom .dump .raw .eeprom .nvram`) always works; this adds to it. A file opened as text can still be reopened with **Open With…**."
+        },
+        "binaryViewer.timestamp.defaultEpoch": {
+          "type": "string",
+          "enum": ["unix", "y2k", "gps", "mac", "filetime"],
+          "enumDescriptions": [
+            "1970-01-01 UTC (POSIX)",
+            "2000-01-01 UTC",
+            "1980-01-06 UTC (GPS, leap seconds ignored)",
+            "1904-01-01 UTC (classic Mac / HFS+)",
+            "1601-01-01 UTC, value counted in 100-ns ticks (Windows FILETIME)"
+          ],
+          "default": "unix",
+          "description": "Epoch assumed for `timestamp` fields that do not set their own `epoch`. A field's own timestamp.epoch always wins."
+        },
+        "binaryViewer.timestamp.displayUTC": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show decoded timestamps as a UTC ISO string. Turn off to show them in the host machine's local time zone."
         },
         "binaryViewer.showInspectorByDefault": {
           "type": "boolean",

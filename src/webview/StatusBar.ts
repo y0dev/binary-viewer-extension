@@ -1,7 +1,7 @@
-import { Store } from './state';
+import { Store, displayAddr } from './state';
 import { DataProvider } from './DataProvider';
 import { el } from './dom';
-import { offsetHex, humanFileSize } from '../core/humanize';
+import { humanFileSize } from '../core/humanize';
 
 export class StatusBar {
   private offsetEl: HTMLElement;
@@ -24,7 +24,13 @@ export class StatusBar {
     this.root.append(this.offsetEl, this.decEl, this.sizeEl, this.selEl, this.valEl);
 
     this.store.subscribe((_s, changed) => {
-      if (changed.has('caret') || changed.has('selection') || changed.has('fileSize')) {
+      if (
+        changed.has('caret') ||
+        changed.has('selection') ||
+        changed.has('fileSize') ||
+        changed.has('baseAddress') ||
+        changed.has('formatBaseAddress')
+      ) {
         this.render();
       }
     });
@@ -34,14 +40,15 @@ export class StatusBar {
 
   render(): void {
     const s = this.store.state;
-    this.offsetEl.textContent = `Offset: ${offsetHex(s.caret)}`;
+    this.offsetEl.textContent = `Offset: ${displayAddr(s, s.caret)}`;
     this.decEl.textContent = `Decimal: ${s.caret}`;
     this.sizeEl.textContent = `File Size: ${humanFileSize(s.fileSize)} (${s.fileSize.toLocaleString()} bytes)`;
 
     if (s.selection.length > 1) {
-      this.selEl.textContent = `Selected: ${s.selection.length} bytes [${offsetHex(
+      this.selEl.textContent = `Selected: ${s.selection.length} bytes [${displayAddr(
+        s,
         s.selection.start,
-      )} .. ${offsetHex(s.selection.start + s.selection.length - 1)}]`;
+      )} .. ${displayAddr(s, s.selection.start + s.selection.length - 1)}]`;
     } else {
       this.selEl.textContent = 'Selected: 1 byte';
     }

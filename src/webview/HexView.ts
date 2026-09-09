@@ -1,7 +1,6 @@
-import { Store } from './state';
+import { Store, displayAddr } from './state';
 import { DataProvider } from './DataProvider';
 import { VirtualGrid } from './VirtualGrid';
-import { offsetHex } from '../core/humanize';
 
 const HEX_LUT: string[] = [];
 for (let i = 0; i < 256; i++) {
@@ -89,7 +88,9 @@ export class HexView {
       } else if (
         changed.has('selection') ||
         changed.has('caret') ||
-        changed.has('activeNodeId')
+        changed.has('activeNodeId') ||
+        changed.has('baseAddress') ||
+        changed.has('formatBaseAddress')
       ) {
         this.render(true);
       }
@@ -155,7 +156,8 @@ export class HexView {
     this.sizer.style.height = `${this.grid.sizerHeight()}px`;
     const win = this.grid.windowFor(this.scroller.scrollTop, vh);
     const bpr = this.store.state.bytesPerRow;
-    const key = `${win.firstRow}:${win.rowCount}:${bpr}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}`;
+    const base = this.store.state.formatBaseAddress ?? this.store.state.baseAddress;
+    const key = `${win.firstRow}:${win.rowCount}:${bpr}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}`;
     if (!force && key === this.lastWindowKey) {
       return;
     }
@@ -186,7 +188,7 @@ export class HexView {
         break;
       }
       html += `<div class="bv-row" style="height:${rowH}px">`;
-      html += `<span class="bv-off">${offsetHex(rowOffset).slice(2)}</span>`;
+      html += `<span class="bv-off">${displayAddr(this.store.state, rowOffset).slice(2)}</span>`;
       html += '<span class="bv-hexcells">';
       for (let c = 0; c < bpr; c++) {
         const o = rowOffset + c;

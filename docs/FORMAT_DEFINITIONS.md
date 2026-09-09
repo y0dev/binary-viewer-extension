@@ -17,6 +17,7 @@ only describe a wrong layout.
   "author": "…",                       // optional
   "fileExtensions": [".fw", ".img"],   // optional, with or without the dot
   "endianness": "little",              // optional, default "little"
+  "baseAddress": "0x08000000",         // optional — offset columns shown relative to this
   "magic": { "offset": 0, "bytes": "46 57 01 00" },  // optional, see below
   "fields": [ /* FieldDefinition[] */ ],   // fields OR sections must be present
   "sections": [ /* SectionDefinition[] */ ] // optional, memory-map view
@@ -25,6 +26,15 @@ only describe a wrong layout.
 
 A format must define a non-empty `fields` array, a non-empty `sections` array,
 or both. A `sections`-only format is a pure memory map.
+
+### Base address
+
+`baseAddress` (a number, or a `"0x…"` / decimal / `"…h"` string) shifts every
+offset / address shown in the hex view, Structure table, Sections table, status
+bar and Go To — handy when the file is memory-mapped (e.g. `0x08000000` for
+internal flash) so addresses match the datasheet or linker map. It overrides the
+`binaryViewer.baseAddress` setting for this format. Field `offset`s in the
+definition are still written from `0` (the start of the file).
 
 ### Magic detection
 
@@ -188,12 +198,13 @@ round-trips shorthand you type by hand.
 | `offset` | all | byte offset — absolute at the top level, **relative to the parent** inside a structure. **Omit** to pack immediately after the previous sibling |
 | `size` | structure, `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width (structure: total size; omitted ⇒ computed from children) |
 | `length` | strings, `char` | number of characters / code units |
-| `count` | `array` | element count |
+| `count` | `array` | fixed element count |
+| `countField` | `array` | name of an earlier integer field to read the element count from (a length prefix); `count` wins if both are set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
 | `endianness` | scalars & multi-byte composites | `"little"` / `"big"` override |
 | `enum` | `enum` + any integer scalar | value→label map or `[{value,name}]` |
-| `timestamp` | `timestamp` | `{ size?: 4|8, unit?: "s"|"ms", epoch?: "unix"|"y2k"|<ms> }` |
+| `timestamp` | `timestamp` | `{ size?: 4|8, unit?: "s"|"ms", epoch?: "unix"\|"y2k"\|"gps"\|"mac"\|"filetime"\|<ms> }` |
 | `display` | integer scalars | `"hex"` / `"dec"` / `"bin"` / `"auto"` |
 | `scale`, `bias` | numeric scalars | shown value = `raw * scale + bias` |
 | `unit` | numeric scalars | label appended to the value (`"mV"`, `"°C"`) |
@@ -224,9 +235,27 @@ round-trips shorthand you type by hand.
 - `boolean` — one byte, `true` if non-zero
 - `enum` — integer of `size` bytes (default 4) mapped through `enum`
 - `flags` / `bitfield` — integer container of `size` bytes broken into bits
-- `timestamp` — integer epoch converted to an ISO-8601 string
+- `timestamp` — integer converted to a date string. `epoch` selects the origin:
+  `unix` (1970, default), `y2k` (2000), `gps` (1980-01-06), `mac` (1904), or
+  `filetime` (Windows, 100-ns ticks since 1601); a number is a custom epoch in
+  ms. When `epoch` is omitted the `binaryViewer.timestamp.defaultEpoch` setting
+  applies. `binaryViewer.timestamp.displayUTC` picks UTC (default) vs local time.
 - `struct` — nested record; `fields` offsets are relative to the struct's start
-- `array` — `count` elements of `items`
+- `array` — `count` elements of `items`; or set `countField` to the name of an
+  earlier integer field (in the same or an enclosing structure) to size the
+  array from a decoded length prefix:
+
+  ```jsonc
+  { "name": "n",      "type": "uint16", "offset": 0 },
+  { "name": "values", "type": "array",  "offset": 2,
+    "countField": "n", "items": { "name": "v", "type": "float32" } }
+  ```
+
+  A following packed field lands after the resolved run. The Structure view's
+  `binaryViewer.structure.maxArrayElements` cap still applies, so a corrupt
+  prefix can't explode the tree. A struct that *contains* a `countField` array
+  should give that struct an explicit `size` (or make the dynamic array its last
+  field), since the struct's auto-size can't include a run it doesn't know yet.
 
 ## Bit fields
 

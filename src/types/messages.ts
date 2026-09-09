@@ -14,6 +14,10 @@ export interface ViewerConfig {
   showInspector: boolean;
   blockSizeBytes: number;
   maxSearchResults: number;
+  /** Tab to open on when the file has no remembered view. */
+  defaultView: ViewMode;
+  /** Address shown for file offset 0 (from `binaryViewer.baseAddress`). */
+  baseAddress: number;
 }
 
 export interface FormatSummary {
@@ -44,6 +48,11 @@ export interface ParsedNode {
   path?: string[];
   /** Bit rows for flags/bitfield nodes. */
   bits?: ParsedBit[];
+  /**
+   * Decoded integer value, set for plain integer scalars and `enum` fields so a
+   * later `array` can use this field as its `countField` (length prefix).
+   */
+  numericValue?: number;
   error?: string;
 }
 
@@ -119,6 +128,8 @@ export type HostToWebview =
       formatName: string;
       nodes: ParsedNode[];
       sections: ParsedSection[];
+      /** The active format's own `baseAddress`, resolved to a number; null if it sets none. */
+      baseAddress: number | null;
       error?: string;
     }
   | { type: 'formats'; formats: FormatSummary[]; activeFormat: string | null }

@@ -1,5 +1,6 @@
 import type { Endianness } from '../types/format';
 import type { FormatSummary, ParsedNode, ParsedSection, ViewMode } from '../types/messages';
+import { offsetHex } from '../core/humanize';
 
 export interface Selection {
   /** Start byte offset (inclusive). */
@@ -37,6 +38,34 @@ export interface AppState {
 
   blockSizeBytes: number;
   maxSearchResults: number;
+
+  /** Address shown for file offset 0, from `binaryViewer.baseAddress`. */
+  baseAddress: number;
+  /** The active format's own `baseAddress`, if it sets one — overrides `baseAddress`. */
+  formatBaseAddress: number | null;
+}
+
+/** Effective base address: the active format's own value wins over the setting. */
+export function effectiveBase(state: AppState): number {
+  return state.formatBaseAddress ?? state.baseAddress;
+}
+
+/** Format a file offset for display, shifted by the effective base address. */
+export function displayAddr(state: AppState, offset: number): string {
+  return offsetHex(offset + effectiveBase(state));
+}
+
+/**
+ * Interpret a "Go To" value. With a base address in effect, a value that looks
+ * like an absolute address (>= base and in range once shifted) is treated as
+ * such; otherwise it is a plain file offset.
+ */
+export function resolveGotoTarget(state: AppState, entered: number): number {
+  const base = effectiveBase(state);
+  if (base > 0 && entered >= base && entered - base < state.fileSize) {
+    return entered - base;
+  }
+  return entered;
 }
 
 type Listener = (state: AppState, changed: Set<keyof AppState>) => void;

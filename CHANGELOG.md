@@ -1,5 +1,35 @@
 # Change Log
 
+## 0.9.0 — Display & decoding settings, length-prefixed arrays
+
+- **Length-prefixed arrays** — an `array` field can set `"countField": "<name>"`
+  instead of a fixed `count` to take its element count from an earlier integer
+  field's decoded value. A packed field after it lands at the right offset; the
+  Structure view's element cap still guards against a corrupt prefix. In the
+  form editor, type a field name (not a number) into an array row's **count**
+  box. Pure `core/BinaryParser`.
+- **`binaryViewer.baseAddress`** — show the offset / address columns, status bar
+  and **Go To** relative to a base address (e.g. `0x08000000` for mapped flash)
+  so they match a datasheet or linker map. A format may set its own
+  `baseAddress`, which wins. With a base in effect, **Go To** accepts a file
+  offset *or* a full address.
+- **`binaryViewer.structure.maxArrayElements`** (default `1000`) — cap on
+  elements rendered per `array` field in the Structure view; the rest collapse
+  into one "… N more" row. Stops a huge `float32[200000]` locking up the tree.
+  `0` = no limit.
+- **`binaryViewer.defaultView`** — which tab a file opens on (`raw` /
+  `structure` / `sections`); falls back to `raw` with no format, and the
+  last-used tab for a file still wins.
+- **`binaryViewer.additionalExtensions`** — extra file extensions (`s19`,
+  `.mot`, …) opened in the Binary Viewer automatically; reopening one as text
+  is respected for the session.
+- **`binaryViewer.timestamp.defaultEpoch`** (`unix` / `y2k` / `gps` / `mac` /
+  `filetime`) and **`binaryViewer.timestamp.displayUTC`** — epoch fallback for
+  `timestamp` fields with no `epoch`, and UTC vs local rendering. New `gps`,
+  `mac` and `filetime` epochs are also usable per field.
+
+_(150 unit tests total.)_
+
 ## 0.7.0 — Array shorthand & external format folders
 
 ### Array shorthand

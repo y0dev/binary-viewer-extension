@@ -52,7 +52,14 @@ in the hex view. Works with a fields-based format or a sections-only one.
   Flags / Display columns; click a row to select the region. Falls back to the
   top-level fields when a format defines no sections.
 - **Automatic format detection** by file extension and magic bytes; switch or
-  clear the format at any time without reopening the file.
+  clear the format at any time without reopening the file. Add your own
+  extensions with `binaryViewer.additionalExtensions`.
+- **Base address** — point `binaryViewer.baseAddress` (or a format's own
+  `baseAddress`) at `0x08000000` and every offset / address column, the status
+  bar and Go To read in mapped-flash addresses that match the datasheet.
+- **Timestamp epochs** — `timestamp` fields decode against `unix` / `y2k` /
+  `gps` / `mac` / `filetime`, shown in UTC or local time
+  (`binaryViewer.timestamp.*`).
 - **Binary search** — hex (`FF 00 A5 10`, `??` wildcards), text (optional
   case-insensitive), UTF-8, UTF-16, bit patterns (`10101010`); find
   next / previous / all, streamed so huge files don't block.
@@ -62,6 +69,8 @@ in the hex view. Works with a fields-based format or a sections-only one.
   (`"type": "Sample"`, or `"Sample[100]"` for an array of them).
 - **Array shorthand** — write any type as `<base>[<n>]`: `"float32[8]"`,
   `"int16[24]"`, `"Sample[100]"`, `"char[4]"`.
+- **Length-prefixed arrays** — `"countField": "n"` sizes an array from an earlier
+  integer field's decoded value instead of a fixed `count`.
 - **Format editor** — build fields, **arrays** (`+ Add Array` → count → element
   type), and nested/reusable structures visually; reorder, **duplicate** a row
   and its subtree, move in/out, collapse; live validation; import / export JSON.
@@ -147,12 +156,18 @@ save) and **↻ Apply to open binary** buttons. See
 | --- | --- | --- |
 | `binaryViewer.bytesPerRow` | `16` | Bytes per row in the raw view (8/16/32) |
 | `binaryViewer.defaultEndianness` | `little` | Inspector / format default |
+| `binaryViewer.defaultView` | `raw` | Tab a file opens on (`raw` / `structure` / `sections`; falls back to `raw` with no format; last-used tab wins) |
+| `binaryViewer.baseAddress` | `""` | Show offset / address columns relative to this base (e.g. `0x08000000`); a format's own `baseAddress` overrides it |
 | `binaryViewer.showInspectorByDefault` | `true` | Show the inspector on open |
 | `binaryViewer.blockSizeBytes` | `65536` | Range-read / cache granularity |
 | `binaryViewer.cacheWindowBytes` | `8388608` | Max host-side cache per file |
+| `binaryViewer.structure.maxArrayElements` | `1000` | Max elements rendered per `array` field in the Structure view (`0` = no limit) |
 | `binaryViewer.autoDetectFormat` | `true` | Detect a format on open |
+| `binaryViewer.additionalExtensions` | `[]` | Extra file extensions (e.g. `s19`, `.mot`) to open in the Binary Viewer automatically |
 | `binaryViewer.formatDirectories` | `[]` | Extra folders to load format `*.json` from — e.g. a shared/network drive (`~` and `${workspaceFolder}` expand) |
 | `binaryViewer.showBuiltinFormats` | `true` | Include the built-in example formats in the dropdown + detection |
+| `binaryViewer.timestamp.defaultEpoch` | `unix` | Epoch for `timestamp` fields with no `epoch` (`unix` / `y2k` / `gps` / `mac` / `filetime`) |
+| `binaryViewer.timestamp.displayUTC` | `true` | Show timestamps as UTC ISO; `false` = host local time |
 | `binaryViewer.maxSearchResults` | `5000` | Cap for *Find All* |
 
 ## Documentation

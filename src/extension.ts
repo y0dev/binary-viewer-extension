@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { initLogger, log } from './util/logger';
 import { FormatManager } from './formats/FormatManager';
 import { BinaryEditorProvider } from './editor/BinaryEditorProvider';
+import { registerAdditionalExtensions } from './editor/AdditionalExtensions';
 import { registerAllCommands } from './commands/register';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -16,6 +17,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(provider.register());
 
   registerAllCommands(context, provider, formats);
+  registerAdditionalExtensions(context);
 
   log().info('Binary Viewer activated');
 }
