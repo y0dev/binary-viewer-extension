@@ -76,6 +76,47 @@ fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'nested.fw'), buf);
 }
 
+// --- sample.wav : matches "WAV / RIFF Header" ---
+{
+  const dataBytes = 800;
+  const buf = Buffer.alloc(44 + dataBytes);
+  buf.write('RIFF', 0, 'ascii');
+  buf.writeUInt32LE(36 + dataBytes, 4);
+  buf.write('WAVE', 8, 'ascii');
+  buf.write('fmt ', 12, 'ascii');
+  buf.writeUInt32LE(16, 16); // Subchunk1Size (PCM)
+  buf.writeUInt16LE(1, 20); // AudioFormat = PCM
+  buf.writeUInt16LE(2, 22); // NumChannels = stereo
+  buf.writeUInt32LE(44100, 24); // SampleRate
+  buf.writeUInt32LE(44100 * 2 * 2, 28); // ByteRate
+  buf.writeUInt16LE(4, 32); // BlockAlign
+  buf.writeUInt16LE(16, 34); // BitsPerSample
+  buf.write('data', 36, 'ascii');
+  buf.writeUInt32LE(dataBytes, 40);
+  for (let i = 0; i < dataBytes; i += 2) buf.writeInt16LE(Math.round(3000 * Math.sin(i / 6)), 44 + i);
+  fs.writeFileSync(path.join(OUT, 'sample.wav'), buf);
+}
+
+// --- disk.mbr : matches "MBR Partition Table" ---
+{
+  const buf = Buffer.alloc(512);
+  for (let i = 0; i < 446; i++) buf[i] = (i * 73) & 0xff; // bootstrap filler
+  const part = (off, status, type, lba, count) => {
+    buf.writeUInt8(status, off);
+    buf.writeUInt8(0xfe, off + 1); buf.writeUInt8(0xff, off + 2); buf.writeUInt8(0xff, off + 3); // CHS first
+    buf.writeUInt8(type, off + 4);
+    buf.writeUInt8(0xfe, off + 5); buf.writeUInt8(0xff, off + 6); buf.writeUInt8(0xff, off + 7); // CHS last
+    buf.writeUInt32LE(lba, off + 8);
+    buf.writeUInt32LE(count, off + 12);
+  };
+  part(446, 0x80, 0x0c, 2048, 204800); // bootable FAT32 (LBA), 100 MiB
+  part(462, 0x00, 0x83, 206848, 2097152); // Linux, 1 GiB
+  part(478, 0x00, 0x00, 0, 0);
+  part(494, 0x00, 0x00, 0, 0);
+  buf.writeUInt16LE(0xaa55, 510);
+  fs.writeFileSync(path.join(OUT, 'disk.mbr'), buf);
+}
+
 // --- sample.dat : arbitrary binary, no matching format (raw-mode demo) ---
 {
   const buf = Buffer.alloc(4096);

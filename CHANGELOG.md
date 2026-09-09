@@ -18,6 +18,15 @@
   neither, negative structure/child offset, overlapping fields, field extending
   beyond a declared structure size, empty structure.
 - New builtin/example format `Nested Firmware (example)` + `examples/binaries/nested.fw`.
+- More example format definitions with matching binaries: `wav-header.json`
+  (nested RIFF sub-chunks), `mbr.json` (an array of nested partition structs,
+  magic at offset 510). New step-by-step guide `docs/CREATING_A_FORMAT.md`.
+- Marketplace-ready: extension id `devdoesit.binary-structure-inspector`, logo,
+  screenshot-led README, `CONTRIBUTING.md` for build instructions.
+- Cross-platform install: `@vscode/vsce` (and its optional native `keytar`
+  dependency) removed from `devDependencies` — packaging now runs it via `npx`,
+  so `npm install` needs no build toolchain on WSL/Linux. Added `.gitattributes`
+  (LF for text, `binary` for fixtures/assets), `.nvmrc`, and `engines.node`.
 
 ## 0.1.0 — Initial release
 

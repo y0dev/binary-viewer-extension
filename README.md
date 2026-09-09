@@ -123,10 +123,11 @@ builtin**, so a repository can ship its proprietary layouts in
 ## Documentation
 
 - [User guide](docs/USER_GUIDE.md)
+- [**Creating a binary format** — step-by-step walkthrough](docs/CREATING_A_FORMAT.md)
 - [Format-definition reference](docs/FORMAT_DEFINITIONS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contributing / building from source](CONTRIBUTING.md)
-- [`examples/`](examples/) — sample format definitions and matching binaries
+- [`examples/`](examples/) — six sample format definitions and matching binaries
 
 ## Author
 

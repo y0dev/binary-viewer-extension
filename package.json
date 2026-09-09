@@ -24,7 +24,8 @@
   },
   "qna": false,
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.85.0",
+    "node": ">=18"
   },
   "categories": [
     "Visualization",
@@ -158,6 +159,7 @@
     }
   },
   "scripts": {
+    "preinstall": "node scripts/check-node.js",
     "vscode:prepublish": "node esbuild.js --production && npm run check-types",
     "esbuild": "node esbuild.js",
     "check-types": "tsc -p tsconfig.json && tsc -p tsconfig.webview.json",
@@ -171,7 +173,8 @@
     "test": "npm run test:unit",
     "gen-fixtures": "node scripts/gen-fixtures.js",
     "gen-icon": "node scripts/gen-icon.js",
-    "package": "npm run check-types && node esbuild.js --production && vsce package --no-dependencies"
+    "gen-screenshots": "node scripts/gen-screenshots.js",
+    "package": "npm run check-types && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
@@ -180,7 +183,6 @@
     "@typescript-eslint/eslint-plugin": "^7.4.0",
     "@typescript-eslint/parser": "^7.4.0",
     "@vscode/test-electron": "^2.3.9",
-    "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.2",
     "eslint": "^8.57.0",
     "glob": "^10.3.10",

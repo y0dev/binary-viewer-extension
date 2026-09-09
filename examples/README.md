@@ -1,10 +1,17 @@
 # Examples
 
+New to authoring formats? Follow the step-by-step
+[**Creating a binary format**](../docs/CREATING_A_FORMAT.md) walkthrough — it
+builds `wav-header.json` from scratch against `binaries/sample.wav`.
+
 ## Format definitions — `formats/`
 
 | File | Matches | Highlights |
 | --- | --- | --- |
-| `firmware.json` | `.fw` / `.img`, magic `46 57 01 00` | flags with an enum sub-field, unix timestamp, scaled size |
+| `wav-header.json` | `.wav`, magic `52 49 46 46` ("RIFF") | **nested sub-chunks**, `enum`, ASCII tags, `unit` — the walkthrough format |
+| `nested-firmware.json` | `.fw`, magic `46 57 01 00` | **multi-level nesting**, a bit-field inside a nested struct, `timestamp` |
+| `mbr.json` | `.mbr`, magic `55 AA` **@ offset 510** | an **array of nested structures**, magic at a non-zero offset |
+| `firmware.json` | `.fw` / `.img`, magic `46 57 01 00` | `flags` with an enum sub-field, unix timestamp, scaled size |
 | `eeprom.json` | `.eeprom` / `.dump`, magic `CA FE`, **big-endian** | MAC address `bytes[6]`, `enum` region, `scale`/`unit` calibration, 32-bit flags |
 | `packet.json` | `.pkt` / `.dat` / `.raw`, magic `A5 5A`, **big-endian** | 64-bit millisecond timestamp, 1e-7 lat/lon scaling, status bit-field |
 
@@ -13,14 +20,17 @@ a workspace (see below).
 
 ## Sample binaries — `binaries/`
 
-Regenerate with `node scripts/gen-examples.js`.
+Regenerate with `npm run gen-examples` (or `node scripts/gen-examples.js`).
 
-| File | Open in | Try |
-| --- | --- | --- |
-| `firmware.bin` | Binary Viewer | Structure view auto-detects the builtin *Firmware Image (example)*; click **Load Address** to highlight bytes `0C..0F` |
-| `config.eeprom` | Binary Viewer | Import `formats/eeprom.json`, then Structure view; expand **Feature Bits** |
-| `telemetry.pkt` | Binary Viewer | Import `formats/packet.json`; check the **Timestamp** and scaled **Latitude** |
-| `sample.dat` | Binary Viewer | No format matches — stays in Raw mode. Search ASCII `BINARY VIEWER DEMO`, or Go To `0x400` |
+| File | Try |
+| --- | --- |
+| `sample.wav` | Auto-detects *WAV / RIFF Header*. Structure view → expand **fmt chunk**, click **SampleRate** to highlight its bytes |
+| `nested.fw` | Auto-detects *Nested Firmware (example)*. Expand **Header → Flags** for the bit grid; click **LoadAddress** |
+| `disk.mbr` | Import `formats/mbr.json`. Structure view → expand **Partitions[0]**; note the magic is at `0x1FE`, not `0x0` |
+| `firmware.bin` | Auto-detects *Firmware Image (example)*; click **Load Address** to highlight bytes `0C..0F` |
+| `config.eeprom` | Import `formats/eeprom.json`, then Structure view; expand **Feature Bits** |
+| `telemetry.pkt` | Import `formats/packet.json`; check the **Timestamp** and scaled **Latitude** |
+| `sample.dat` | No format matches — stays in Raw mode. Search ASCII `BINARY VIEWER DEMO`, or Go To `0x400` |
 
 ## Workspace format layout — `workspace-setup/`
 
@@ -33,6 +43,9 @@ with the code and override any global definition of the same name:
     binary-viewer/
       formats/
         firmware.json
+        nested-firmware.json
+        wav-header.json
+        mbr.json
         eeprom.json
         packet.json
 ```

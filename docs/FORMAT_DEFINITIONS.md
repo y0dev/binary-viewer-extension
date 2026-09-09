@@ -4,6 +4,9 @@ A format definition is a **plain JSON object**. There is no expression language
 and nothing in a definition is ever executed — an invalid or hostile file can
 only describe a wrong layout.
 
+> New to this? The [**Creating a binary format**](CREATING_A_FORMAT.md)
+> walkthrough builds one field-by-field in the editor against a real file.
+
 ## Top-level shape
 
 ```jsonc

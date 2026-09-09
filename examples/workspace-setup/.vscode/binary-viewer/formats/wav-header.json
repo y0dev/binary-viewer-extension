@@ -1,0 +1,48 @@
+{
+  "name": "WAV / RIFF Header",
+  "description": "Canonical 44-byte WAVE PCM header. Little-endian, ASCII chunk tags, one enum and two nested sub-chunks - a good first nested format to build by hand.",
+  "version": "1.0.0",
+  "fileExtensions": [".wav"],
+  "endianness": "little",
+  "magic": { "offset": 0, "bytes": "52 49 46 46" },
+  "fields": [
+    { "name": "ChunkID", "type": "ascii", "offset": 0, "length": 4, "description": "\"RIFF\"" },
+    { "name": "ChunkSize", "type": "uint32", "offset": 4, "description": "Total file size minus 8 bytes" },
+    { "name": "Format", "type": "ascii", "offset": 8, "length": 4, "description": "\"WAVE\"" },
+    {
+      "name": "fmt chunk",
+      "offset": 12,
+      "description": "The format sub-chunk describing the audio stream",
+      "fields": [
+        { "name": "SubchunkID", "type": "ascii", "offset": 0, "length": 4, "description": "\"fmt \"" },
+        { "name": "SubchunkSize", "type": "uint32", "offset": 4, "description": "16 for PCM" },
+        {
+          "name": "AudioFormat",
+          "type": "enum",
+          "offset": 8,
+          "size": 2,
+          "enum": {
+            "1": "PCM",
+            "3": "IEEE float",
+            "6": "A-law",
+            "7": "mu-law",
+            "65534": "extensible"
+          }
+        },
+        { "name": "NumChannels", "type": "uint16", "offset": 10 },
+        { "name": "SampleRate", "type": "uint32", "offset": 12, "unit": "Hz" },
+        { "name": "ByteRate", "type": "uint32", "offset": 16, "unit": "B/s" },
+        { "name": "BlockAlign", "type": "uint16", "offset": 20, "unit": "bytes" },
+        { "name": "BitsPerSample", "type": "uint16", "offset": 22, "unit": "bits" }
+      ]
+    },
+    {
+      "name": "data chunk",
+      "offset": 36,
+      "fields": [
+        { "name": "SubchunkID", "type": "ascii", "offset": 0, "length": 4, "description": "\"data\"" },
+        { "name": "SubchunkSize", "type": "uint32", "offset": 4, "unit": "bytes" }
+      ]
+    }
+  ]
+}

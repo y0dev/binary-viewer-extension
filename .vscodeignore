@@ -14,7 +14,9 @@ media/**
 **/.eslintrc.json
 esbuild.js
 .gitignore
+.gitattributes
 .editorconfig
+.nvmrc
 .mocharc.json
 **/*.vsix
 test/fixtures/generated/**

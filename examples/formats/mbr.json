@@ -1,0 +1,49 @@
+{
+  "name": "MBR Partition Table",
+  "description": "The classic 512-byte Master Boot Record: a bootstrap blob, an array of four 16-byte partition entries (nested structure inside an array) and the 0xAA55 signature at offset 510.",
+  "version": "1.0.0",
+  "fileExtensions": [".mbr"],
+  "endianness": "little",
+  "magic": { "offset": 510, "bytes": "55 AA" },
+  "fields": [
+    { "name": "Bootstrap", "type": "bytes", "offset": 0, "size": 446, "description": "Boot code" },
+    {
+      "name": "Partitions",
+      "type": "array",
+      "offset": 446,
+      "count": 4,
+      "items": {
+        "name": "Partition",
+        "fields": [
+          {
+            "name": "Status",
+            "type": "enum",
+            "offset": 0,
+            "size": 1,
+            "enum": { "0": "inactive", "128": "bootable" }
+          },
+          { "name": "CHS First", "type": "bytes", "offset": 1, "size": 3 },
+          {
+            "name": "Type",
+            "type": "enum",
+            "offset": 4,
+            "size": 1,
+            "enum": {
+              "0": "empty",
+              "7": "NTFS / exFAT",
+              "11": "FAT32 (CHS)",
+              "12": "FAT32 (LBA)",
+              "131": "Linux",
+              "142": "Linux LVM",
+              "238": "GPT protective"
+            }
+          },
+          { "name": "CHS Last", "type": "bytes", "offset": 5, "size": 3 },
+          { "name": "LBA First", "type": "uint32", "offset": 8, "unit": "sectors" },
+          { "name": "Sector Count", "type": "uint32", "offset": 12, "unit": "sectors" }
+        ]
+      }
+    },
+    { "name": "Signature", "type": "uint16", "offset": 510, "display": "hex" }
+  ]
+}

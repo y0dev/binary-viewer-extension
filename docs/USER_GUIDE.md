@@ -93,7 +93,8 @@ bare hex value. Out-of-range input is rejected with a message.
 
 ## Working with formats
 
-See [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md) for the schema. Quick tour:
+For a guided build, follow [CREATING_A_FORMAT.md](CREATING_A_FORMAT.md); for the
+full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
 
 - **Binary Viewer: Create Binary Format** opens the form editor. Fill in the
   name, endianness, optional file extensions and magic bytes, then add fields
