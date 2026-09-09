@@ -69,6 +69,13 @@ interface Model {
   /** Raw JSON text for the `sections` array (memory-map view). '' == none. */
   sectionsJson: string;
   sectionsError?: string;
+  /** 'form' = the visual tree editor; 'json' = edit the whole definition as text. */
+  mode: 'form' | 'json';
+  /** The full definition as text, authoritative while `mode === 'json'`. */
+  jsonText: string;
+  jsonError?: string;
+  /** True when the loaded definition has fields the form can't fully represent. */
+  formLossy: boolean;
 }
 
 let model: Model;
@@ -192,12 +199,72 @@ function fieldToNode(f: FieldDefinition): EditNode {
   return node;
 }
 
+/**
+ * True when the visual tree editor can round-trip every field. The form has no
+ * UI for an array whose element is itself an array or an inline structure
+ * (multi-dimensional arrays, `items: { fields: [...] }`) — those must be edited
+ * as JSON so no detail is silently dropped.
+ */
+function formCanRepresent(def: FormatDefinition | null): boolean {
+  if (!def) {
+    return true;
+  }
+  const STRING_OR_SIZED = new Set(['char', 'ascii', 'utf8', 'utf16', 'string', 'bytes', 'hex', 'binary', 'padding']);
+  const itemIsComplex = (items: FieldDefinition | undefined): boolean => {
+    if (!items) {
+      return false;
+    }
+    if (items.type === 'array') {
+      return true;
+    }
+    const sh = parseArrayShorthand(items.type);
+    if (sh && !STRING_OR_SIZED.has(sh.base)) {
+      return true;
+    }
+    return Array.isArray(items.fields) && !looksLikeBitSpecs(items.fields);
+  };
+  const walk = (fields: FieldDefinition[] | undefined): boolean => {
+    for (const f of fields ?? []) {
+      const sh = parseArrayShorthand(f.type);
+      const isArray = f.type === 'array' || (sh && !STRING_OR_SIZED.has(sh.base));
+      if (isArray && itemIsComplex(f.items)) {
+        return false;
+      }
+      if (f.items && !walk([f.items])) {
+        return false;
+      }
+      if (Array.isArray(f.fields) && !looksLikeBitSpecs(f.fields) && !walk(f.fields as FieldDefinition[])) {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (!walk(def.fields)) {
+    return false;
+  }
+  for (const body of Object.values(def.structures ?? {})) {
+    if (!walk(body.fields)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function starterJsonText(): string {
+  return JSON.stringify(
+    { name: 'New Binary Format', endianness: 'little', fields: [{ name: 'magic', type: 'uint32', offset: 0 }] },
+    null,
+    2,
+  );
+}
+
 function toModel(def: FormatDefinition | null): Model {
   const magic: MagicSpec | undefined = def
     ? Array.isArray(def.magic)
       ? def.magic[0]
       : def.magic
     : undefined;
+  const lossy = !formCanRepresent(def);
   return {
     name: def?.name ?? 'New Binary Format',
     description: def?.description ?? '',
@@ -219,6 +286,10 @@ function toModel(def: FormatDefinition | null): Model {
       def?.sections && def.sections.length
         ? JSON.stringify(def.sections, null, 2)
         : '',
+    mode: lossy ? 'json' : 'form',
+    jsonText: def ? JSON.stringify(def, null, 2) : starterJsonText(),
+    jsonError: undefined,
+    formLossy: lossy,
   };
 }
 
@@ -321,7 +392,21 @@ function nodeToField(node: EditNode): FieldDefinition {
   return f;
 }
 
+let lastGoodDef: FormatDefinition = { name: 'New Binary Format', fields: [] };
+
 function buildDefinition(): FormatDefinition {
+  if (model.mode === 'json') {
+    model.jsonError = undefined;
+    try {
+      const parsed = JSON.parse(model.jsonText);
+      const def = (Array.isArray(parsed) ? parsed[0] : parsed) as FormatDefinition;
+      lastGoodDef = def;
+      return def;
+    } catch (e) {
+      model.jsonError = (e as Error).message;
+      return lastGoodDef;
+    }
+  }
   const def: FormatDefinition = {
     name: model.name.trim(),
     fields: model.tree.map(nodeToField),
@@ -553,7 +638,12 @@ function scheduleValidate(): void {
     clearTimeout(debounce);
   }
   debounce = window.setTimeout(() => {
-    post({ type: 'validate', format: buildDefinition() });
+    const def = buildDefinition();
+    if (model.mode === 'json' && model.jsonError) {
+      showErrors(['JSON syntax error: ' + model.jsonError]);
+      return;
+    }
+    post({ type: 'validate', format: def });
   }, 250);
 }
 
@@ -568,6 +658,9 @@ function collectAdvErrors(list: EditNode[], pathPrefix: string, out: string[]): 
 }
 
 function updatePreview(): void {
+  if (model.mode === 'json' || !previewBox) {
+    return;
+  }
   const def = buildDefinition();
   previewBox.textContent = JSON.stringify(def, null, 2);
   const advErrors: string[] = [];
@@ -633,6 +726,40 @@ function render(): void {
       text: 'Definitions are pure data and are stored as JSON in global storage. Nothing here executes code.',
     }),
   );
+
+  // ---- form / JSON toggle ----
+  wrap.append(
+    el('div', { class: 'fe-tabs' }, [
+      el('button', {
+        class: 'fe-tab' + (model.mode === 'form' ? ' active' : ''),
+        text: 'Form editor',
+        onclick: () => switchMode('form'),
+      }),
+      el('button', {
+        class: 'fe-tab' + (model.mode === 'json' ? ' active' : ''),
+        text: 'JSON',
+        onclick: () => switchMode('json'),
+      }),
+    ]),
+  );
+
+  if (model.mode === 'json') {
+    renderJsonMode(wrap);
+    app.append(wrap);
+    updatePreview();
+    scheduleValidate();
+    return;
+  }
+
+  if (model.formLossy) {
+    wrap.append(
+      el('div', {
+        class: 'fe-warn',
+        text:
+          'This format has fields the form can’t fully show — a multi-dimensional array, or an array whose element is an inline structure. Editing here may drop that detail. Use the JSON tab to keep it.',
+      }),
+    );
+  }
 
   // ---- meta ----
   wrap.append(el('h2', { text: 'Format' }));
@@ -794,6 +921,92 @@ function render(): void {
   app.append(wrap);
   updatePreview();
   post({ type: 'validate', format: buildDefinition() });
+}
+
+function renderJsonMode(wrap: HTMLElement): void {
+  wrap.append(
+    el('div', {
+      class: 'fe-hint',
+      text: 'Edit the whole definition as JSON — a single object, or an array of objects. Everything the form supports plus multi-dimensional arrays, countField, and reusable structures. Switch to the form when it can represent what you have.',
+    }),
+  );
+  const ta = el('textarea', {
+    class: 'fe-json',
+    value: model.jsonText,
+    spellcheck: false,
+    oninput: (e) => {
+      model.jsonText = (e.target as HTMLTextAreaElement).value;
+      scheduleValidate();
+    },
+  }) as HTMLTextAreaElement;
+  wrap.append(ta);
+  wrap.append(
+    el('div', { class: 'fe-row fe-add-row' }, [
+      el('button', {
+        class: 'secondary',
+        text: 'Open JSON file…',
+        onclick: () => post({ type: 'openJsonFile' }),
+      }),
+      el('button', {
+        class: 'secondary',
+        text: 'Reformat',
+        onclick: () => {
+          try {
+            model.jsonText = JSON.stringify(JSON.parse(model.jsonText), null, 2);
+            model.jsonError = undefined;
+          } catch (err) {
+            model.jsonError = (err as Error).message;
+          }
+          render();
+        },
+      }),
+    ]),
+  );
+
+  wrap.append(el('h2', { text: 'Validation' }));
+  errorBox = el('div', { class: 'fe-errors' });
+  wrap.append(errorBox);
+
+  wrap.append(
+    el('div', { class: 'fe-actions' }, [
+      el('button', { text: 'Save', onclick: () => post({ type: 'save', format: buildDefinition() }) }),
+      el('button', {
+        class: 'secondary',
+        text: 'Validate',
+        onclick: () => post({ type: 'validate', format: buildDefinition() }),
+      }),
+      el('button', { class: 'secondary', text: 'Close', onclick: () => post({ type: 'cancel' }) }),
+    ]),
+  );
+}
+
+function switchMode(to: 'form' | 'json'): void {
+  if (to === model.mode) {
+    return;
+  }
+  if (to === 'json') {
+    // Capture the current form state as text.
+    model.jsonText = JSON.stringify(buildDefinition(), null, 2);
+    model.jsonError = undefined;
+    model.mode = 'json';
+    render();
+    return;
+  }
+  // json -> form: parse and rebuild the form model.
+  let parsed: FormatDefinition;
+  try {
+    const raw = JSON.parse(model.jsonText);
+    parsed = (Array.isArray(raw) ? raw[0] : raw) as FormatDefinition;
+  } catch (e) {
+    model.jsonError = (e as Error).message;
+    showErrors(['Fix the JSON before switching to the form: ' + model.jsonError]);
+    return;
+  }
+  const carriedText = model.jsonText;
+  model = toModel(parsed);
+  model.jsonText = carriedText;
+  model.mode = 'form';
+  render();
 }
 
 const BASE_TYPES = () => [...(init?.scalarTypes ?? []), ...(init?.compositeTypes ?? [])];

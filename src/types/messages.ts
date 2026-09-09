@@ -185,6 +185,7 @@ export type FormatEditorToHost =
   | { type: 'ready' }
   | { type: 'save'; format: FormatDefinition }
   | { type: 'validate'; format: FormatDefinition }
+  | { type: 'openJsonFile' }
   | { type: 'cancel' };
 
 export type FormatEditorFromHost =

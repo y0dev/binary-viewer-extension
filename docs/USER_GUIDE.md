@@ -129,7 +129,14 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
   `array`, `struct`, `timestamp`) take their extra properties as a small JSON
   snippet in the row's **advanced** disclosure. A live JSON preview and
   validation panel update as you type. **Save** writes it to global storage.
+- **Form ⟷ JSON tabs.** The editor has a **JSON** tab that edits the whole
+  definition as text (one object, or an array of them). It opens there
+  automatically for things the form can't draw — a multi-dimensional array, or
+  an array of an inline structure. **Open JSON file…** on that tab loads a
+  definition from anywhere on disk.
 - **Edit** an existing format the same way (built-ins open as an editable copy).
+  If the active format was applied from a file outside a scanned folder, **Edit
+  Format** offers **Locate JSON…** to pick it.
 - **Duplicate** pre-fills the editor with `… (copy)`.
 - **Import / Export** move definitions as `.json` files.
 - **Editing the JSON by hand?** When a `.vscode/binary-viewer/formats/*.json`

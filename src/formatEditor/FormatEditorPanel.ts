@@ -110,6 +110,28 @@ export class FormatEditorPanel {
         break;
       }
 
+      case 'openJsonFile': {
+        const picks = await vscode.window.showOpenDialog({
+          canSelectMany: false,
+          openLabel: 'Edit this format',
+          filters: { 'Binary format JSON': ['json'] },
+        });
+        if (!picks || picks.length === 0) {
+          return;
+        }
+        try {
+          const raw = await vscode.workspace.fs.readFile(picks[0]);
+          const parsed = JSON.parse(Buffer.from(raw).toString('utf8'));
+          const def = (Array.isArray(parsed) ? parsed[0] : parsed) as FormatDefinition;
+          this.load({ format: def, editing: false });
+        } catch (e) {
+          void vscode.window.showErrorMessage(
+            `Couldn't read that format JSON: ${(e as Error).message}`,
+          );
+        }
+        break;
+      }
+
       case 'cancel':
         this.panel.dispose();
         break;

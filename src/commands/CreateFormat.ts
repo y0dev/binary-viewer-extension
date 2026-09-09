@@ -57,6 +57,36 @@ export function registerFormatAuthoringCommands(
         editing = def ? formats.get(def.name)?.source !== 'builtin' : true;
       }
       if (!def) {
+        // The active format may have been applied from a JSON file that lives
+        // outside any scanned folder — let the user point at it.
+        if (typeof nameArg === 'string') {
+          const locate = 'Locate JSON…';
+          const choice = await vscode.window.showWarningMessage(
+            `"${nameArg}" isn't in a scanned formats folder, so there's nothing to open. Pick its JSON file to edit it.`,
+            locate,
+          );
+          if (choice !== locate) {
+            return;
+          }
+          const picks = await vscode.window.showOpenDialog({
+            canSelectMany: false,
+            openLabel: 'Edit this format',
+            filters: { 'Binary format JSON': ['json'] },
+          });
+          if (!picks || picks.length === 0) {
+            return;
+          }
+          try {
+            const raw = await vscode.workspace.fs.readFile(picks[0]);
+            const parsed = JSON.parse(Buffer.from(raw).toString('utf8'));
+            const fromFile = (Array.isArray(parsed) ? parsed[0] : parsed) as FormatDefinition;
+            FormatEditorPanel.show(context, formats, { format: fromFile, editing: false });
+          } catch (e) {
+            void vscode.window.showErrorMessage(
+              `Couldn't read that format JSON: ${(e as Error).message}`,
+            );
+          }
+        }
         return;
       }
       if (!editing) {

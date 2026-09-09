@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.9.4
+
+- **Format editor: Form ⟷ JSON toggle.** The editor now has a "JSON" tab that
+  edits the whole definition as text (single object or an array), live-validated,
+  Save/Validate work from either tab. It opens on the JSON tab automatically when
+  the definition has something the form can't fully show — a multi-dimensional
+  array, or an array whose element is an inline structure — with a warning if you
+  switch such a format to the form tab.
+- **Fix — "Edit Format" did nothing for some formats.** A format applied from a
+  JSON file outside any scanned folder isn't registered by name, so the button
+  silently returned. It now offers **Locate JSON…** to pick the file, and the
+  JSON tab has an **Open JSON file…** button for the same.
+
 ## 0.9.3
 
 - **`binaryViewer.structure.maxArrayElements` is now the real limit.** A separate

@@ -47,6 +47,11 @@ table.fe-fields input[type=text] { width: 100%; }
 .fe-preview { font-family: var(--vscode-editor-font-family, monospace); background: var(--vscode-textCodeBlock-background); padding: 10px; border-radius: 3px; white-space: pre; overflow: auto; max-height: 320px; }
 .fe-actions { display: flex; gap: 10px; position: sticky; bottom: 0; padding: 10px 0; background: var(--vscode-editor-background); }
 .fe-hint { opacity: 0.7; font-size: 0.85em; }
+.fe-tabs { display: flex; gap: 4px; }
+.fe-tab { padding: 4px 12px; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid var(--vscode-button-border, transparent); border-radius: 3px; }
+.fe-tab.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.fe-warn { border: 1px solid var(--vscode-inputValidation-warningBorder, #b80); background: var(--vscode-inputValidation-warningBackground, rgba(200,140,0,0.12)); padding: 8px 10px; border-radius: 3px; white-space: pre-wrap; font-size: 0.9em; }
+.fe-json { min-height: 380px; }
 
 /* ---- nested-structure tree editor ---- */
 .fe-tree { display: flex; flex-direction: column; gap: 6px; }
