@@ -727,7 +727,7 @@ function render(): void {
     }),
   );
 
-  // ---- form / JSON toggle ----
+  // ---- form / JSON toggle + load-from-file (both modes) ----
   wrap.append(
     el('div', { class: 'fe-tabs' }, [
       el('button', {
@@ -739,6 +739,13 @@ function render(): void {
         class: 'fe-tab' + (model.mode === 'json' ? ' active' : ''),
         text: 'JSON',
         onclick: () => switchMode('json'),
+      }),
+      el('span', { class: 'fe-spacer' }),
+      el('button', {
+        class: 'secondary',
+        title: 'Start from an existing binary-format JSON file instead of the blank template',
+        text: 'Open JSON file…',
+        onclick: () => post({ type: 'openJsonFile' }),
       }),
     ]),
   );
@@ -942,11 +949,6 @@ function renderJsonMode(wrap: HTMLElement): void {
   wrap.append(ta);
   wrap.append(
     el('div', { class: 'fe-row fe-add-row' }, [
-      el('button', {
-        class: 'secondary',
-        text: 'Open JSON file…',
-        onclick: () => post({ type: 'openJsonFile' }),
-      }),
       el('button', {
         class: 'secondary',
         text: 'Reformat',

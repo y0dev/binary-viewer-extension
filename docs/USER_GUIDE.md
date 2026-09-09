@@ -132,8 +132,9 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
 - **Form ⟷ JSON tabs.** The editor has a **JSON** tab that edits the whole
   definition as text (one object, or an array of them). It opens there
   automatically for things the form can't draw — a multi-dimensional array, or
-  an array of an inline structure. **Open JSON file…** on that tab loads a
-  definition from anywhere on disk.
+  an array of an inline structure. **Open JSON file…** (next to the tabs, in
+  either mode) starts the editor from an existing definition on disk instead of
+  the blank template.
 - **Edit** an existing format the same way (built-ins open as an editable copy).
   If the active format was applied from a file outside a scanned folder, **Edit
   Format** offers **Locate JSON…** to pick it.

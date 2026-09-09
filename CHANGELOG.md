@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.9.5
+
+- **"Open JSON file…" is now always in reach.** It sits next to the Form / JSON
+  tabs in both modes, so when you run **Create Binary Format** and land in the
+  blank editor you can load an existing definition from disk instead of building
+  from scratch — handy when nothing was generated for the file.
+
 ## 0.9.4
 
 - **Format editor: Form ⟷ JSON toggle.** The editor now has a "JSON" tab that
