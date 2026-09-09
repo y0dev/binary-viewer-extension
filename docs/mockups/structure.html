@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../media/style.css" />
+  <link rel="stylesheet" href="frame.css" />
+  <title>Structure view mockup</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const app = document.getElementById('app');
+    const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+    // ---- toolbar ----
+    const tb = h('div', 'bv-toolbar');
+    const seg = h('div', 'bv-segmented');
+    seg.append(h('button', 'bv-seg', 'Raw'), h('button', 'bv-seg bv-seg-active', 'Structure'));
+    tb.append(seg);
+    const tool = (label, ...opts) => {
+      const w = h('span', 'bv-tool'); w.append(h('label', 'bv-label', label));
+      const s = h('select', 'bv-select'); opts.forEach((o) => s.append(h('option', null, o))); w.append(s); return w;
+    };
+    tb.append(tool('Bytes:', '16'), tool('Endian:', 'Little Endian'),
+              tool('Format:', 'Format: Nested Firmware (example) (detected)'));
+    tb.append(h('span', 'bv-spacer'));
+    tb.append(h('button', 'bv-btn bv-btn-active', 'Inspector'), h('button', 'bv-btn', 'Search'), h('button', 'bv-btn', 'Go To'));
+    tb.append(h('span', 'bv-offset-readout bv-mono', '0x0000000C  +4'));
+    app.append(tb);
+
+    const body = h('div', 'bv-body');
+    const main = h('div', 'bv-main');
+
+    const struct = h('div', 'bv-structure');
+    const stb = h('div', 'bv-struct-toolbar');
+    stb.append(h('span', 'bv-struct-fmt', 'Format: Nested Firmware (example)'), h('span', 'bv-spacer'),
+      h('button', 'bv-btn bv-btn-sm', 'Expand all'), h('button', 'bv-btn bv-btn-sm', 'Collapse all'),
+      h('button', 'bv-btn bv-btn-sm', 'Edit Format'));
+    struct.append(stb);
+
+    const bc = h('div', 'bv-breadcrumb');
+    bc.append(h('span', 'bv-crumb bv-crumb-root', 'Nested Firmware (example)'),
+      h('span', 'bv-crumb-sep', '›'), h('span', 'bv-crumb', 'ImageInfo'),
+      h('span', 'bv-crumb-sep', '›'), h('span', 'bv-crumb bv-crumb-active', 'LoadAddress'));
+    struct.append(bc);
+
+    const wrap = h('div', 'bv-struct-wrap');
+    const table = h('table', 'bv-struct-table');
+    const thead = h('thead');
+    const htr = h('tr');
+    ['Name', 'Offset', 'Type', 'Value / Size'].forEach((t) => htr.append(h('th', null, t)));
+    thead.append(htr); table.append(thead);
+    const tb2 = h('tbody');
+
+    // name, offset, type, value, {depth, container, active, arrow}
+    const rowspec = [
+      ['Nested Firmware (example)', '0x00000000', 'format', '3 top-level, 24 bytes', { depth: 0, container: true, root: true }],
+      ['Header', '0x00000000', 'struct', '8 bytes', { depth: 1, container: true }],
+      ['Magic', '0x00000000', 'uint32', '0x00015746', { depth: 2 }],
+      ['Version', '0x00000004', 'uint16', '1799', { depth: 2 }],
+      ['Flags', '0x00000006', 'flags[2]', '0x0013  0000000000010011', { depth: 2, container: true }],
+      ['ImageInfo', '0x00000008', 'struct', '12 bytes', { depth: 1, container: true }],
+      ['ImageSize', '0x00000008', 'uint32', '20480 bytes', { depth: 2 }],
+      ['LoadAddress', '0x0000000C', 'uint32', '0x08000000', { depth: 2, active: true }],
+      ['EntryPoint', '0x00000010', 'uint32', '0x08000131', { depth: 2 }],
+      ['Checksum', '0x00000014', 'uint32', '0xDEADBEEF', { depth: 1 }],
+    ];
+    for (const [name, off, type, val, o] of rowspec) {
+      const tr = h('tr', 'bv-struct-row'
+        + (o.container ? ' bv-struct-container' : '')
+        + (o.root ? ' bv-struct-root' : '')
+        + (o.active ? ' bv-struct-active' : ''));
+      const td0 = h('td');
+      td0.style.paddingLeft = (o.depth * 14 + 8) + 'px';
+      td0.append(h('span', 'bv-disclosure' + (o.container ? '' : ' bv-disclosure-empty'), o.container ? '▼' : ''));
+      td0.append(h('span', 'bv-node-name', name));
+      tr.append(td0,
+        h('td', 'bv-mono', off),
+        h('td', 'bv-mono bv-dim', type),
+        h('td', 'bv-struct-val' + (o.container ? ' bv-dim' : ''), val));
+      tb2.append(tr);
+
+      if (name === 'Flags') {
+        const gr = h('tr', 'bv-bit-grid-row');
+        const gtd = h('td'); gtd.style.paddingLeft = (o.depth * 14 + 3 * 14) + 'px';
+        gtd.append(h('span', 'bv-dim', 'Bit '), h('span', 'bv-mono', '15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0'));
+        gr.append(gtd, h('td'), h('td'), h('td'));
+        tb2.append(gr);
+        [['bit 0', 'Compressed', 'true'], ['bit 1', 'Signed', 'true'],
+         ['bit 6-4', 'Stage', 'app (1)']].forEach(([b, n, v]) => {
+          const br = h('tr', 'bv-bit-row');
+          const bt = h('td', 'bv-bit-name'); bt.style.paddingLeft = (o.depth * 14 + 3 * 14) + 'px';
+          bt.textContent = b + '  ' + n;
+          br.append(bt, h('td'), h('td'), h('td', null, v));
+          tb2.append(br);
+        });
+      }
+    }
+    table.append(tb2);
+    wrap.append(table);
+    struct.append(wrap);
+    main.append(struct);
+
+    // inspector — shows the bytes the selected field maps to
+    const insp = h('div', 'bv-inspector');
+    insp.append(h('div', 'bv-inspector-title', 'Data Inspector'));
+    const ib = h('div', 'bv-inspector-body');
+    const section = (title, rowsData) => {
+      const s = h('div', 'bv-insp-section');
+      s.append(h('div', 'bv-insp-head', title));
+      const rr = h('div', 'bv-insp-rows');
+      rowsData.forEach(([k, v]) => {
+        const row = h('div', 'bv-insp-row');
+        row.append(h('span', 'bv-insp-k', k), h('span', 'bv-insp-v', v));
+        rr.append(row);
+      });
+      s.append(rr); return s;
+    };
+    ib.append(section('Field', [
+      ['Path', 'Header › ImageInfo › LoadAddress'],
+      ['Offset', '0x0000000C'], ['Type', 'uint32'], ['Size', '4 bytes'],
+    ]));
+    ib.append(section('Selected Range', [
+      ['Offset', '0x0000000C'], ['Length', '4 bytes'], ['Hex', '00 00 00 08'],
+    ]));
+    ib.append(section('Little Endian', [
+      ['uint32', '134217728  (0x08000000)'], ['int32', '134217728'], ['float32', '3.9443e-34'],
+    ]));
+    ib.append(section('Big Endian', [
+      ['uint32', '8  (0x00000008)'], ['float32', '1.1210e-44'],
+    ]));
+    insp.append(ib);
+
+    body.append(main, insp);
+    app.append(body);
+
+    const st = h('div', 'bv-status');
+    ['Offset: 0x0000000C', 'Decimal: 12', 'File Size: 64 B (64 bytes)',
+     'Selected: 4 bytes [0x0000000C .. 0x0000000F]', "Value: 0x00 (0) '.'"]
+      .forEach((t) => st.append(h('span', 'bv-stat', t)));
+    app.append(st);
+  </script>
+</body>
+</html>

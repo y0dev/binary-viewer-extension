@@ -15,5 +15,8 @@ media/**
 esbuild.js
 .gitignore
 .editorconfig
+.mocharc.json
 **/*.vsix
 test/fixtures/generated/**
+docs/mockups/**
+CONTRIBUTING.md

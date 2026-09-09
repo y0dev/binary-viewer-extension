@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../media/style.css" />
+  <link rel="stylesheet" href="frame.css" />
+  <title>Raw view mockup</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    // Bytes: the first 6 rows of a real ELF64 executable header.
+    const HEX = `
+      7F 45 4C 46 02 01 01 00 00 00 00 00 00 00 00 00
+      02 00 3E 00 01 00 00 00 40 2A 00 00 00 00 00 00
+      40 00 00 00 00 00 00 00 78 4B 01 00 00 00 00 00
+      00 00 00 00 40 00 38 00 0D 00 40 00 22 00 21 00
+      06 00 00 00 04 00 00 00 40 00 00 00 00 00 00 00
+      40 00 00 00 00 00 00 00 40 00 00 00 00 00 00 00
+      A8 02 00 00 00 00 00 00 A8 02 00 00 00 00 00 00
+      08 00 00 00 00 00 00 00 03 00 00 00 04 00 00 00
+      E0 02 00 00 00 00 00 00 E0 02 00 00 00 00 00 00
+      E0 02 00 00 00 00 00 00 1C 00 00 00 00 00 00 00
+      1C 00 00 00 00 00 00 00 01 00 00 00 00 00 00 00
+      01 00 00 00 05 00 00 00 00 00 00 00 00 00 00 00
+      00 00 00 00 00 00 00 00 00 10 00 00 00 00 00 00
+      00 10 00 00 00 00 00 00 D8 24 00 00 00 00 00 00
+      D8 24 00 00 00 00 00 00 00 10 00 00 00 00 00 00
+      01 00 00 00 06 00 00 00 D0 3D 00 00 00 00 00 00
+      D0 4D 00 00 00 00 00 00 D0 4D 00 00 00 00 00 00
+      68 02 00 00 00 00 00 00 70 02 00 00 00 00 00 00
+      00 10 00 00 00 00 00 00 02 00 00 00 06 00 00 00
+      E8 3D 00 00 00 00 00 00 E8 4D 00 00 00 00 00 00
+      E8 4D 00 00 00 00 00 00 D0 01 00 00 00 00 00 00
+      D0 01 00 00 00 00 00 00 08 00 00 00 00 00 00 00
+      04 00 00 00 04 00 00 00 54 03 00 00 00 00 00 00
+      54 03 00 00 00 00 00 00 54 03 00 00 00 00 00 00
+      44 00 00 00 00 00 00 00 44 00 00 00 00 00 00 00
+      04 00 00 00 00 00 00 00 47 4E 55 00 02 00 00 C0`;
+    const bytes = HEX.trim().split(/\s+/).map((h) => parseInt(h, 16));
+    const BPR = 16;
+    const SEL_START = 0x18, SEL_LEN = 8;      // e_entry field
+    const CARET = 0x18;
+
+    const app = document.getElementById('app');
+    const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+    const hx = (n, w) => n.toString(16).toUpperCase().padStart(w, '0');
+    const asc = (b) => (b >= 0x20 && b <= 0x7e ? String.fromCharCode(b) : '.');
+
+    // ---- toolbar ----
+    const tb = h('div', 'bv-toolbar');
+    const seg = h('div', 'bv-segmented');
+    seg.append(h('button', 'bv-seg bv-seg-active', 'Raw'), h('button', 'bv-seg', 'Structure'));
+    tb.append(seg);
+    const tool = (label, ...opts) => {
+      const w = h('span', 'bv-tool'); w.append(h('label', 'bv-label', label));
+      const s = h('select', 'bv-select'); opts.forEach((o) => s.append(h('option', null, o))); w.append(s); return w;
+    };
+    tb.append(tool('Bytes:', '16'), tool('Endian:', 'Little Endian'), tool('Format:', 'Format: (none)'));
+    tb.append(h('span', 'bv-spacer'));
+    const insBtn = h('button', 'bv-btn bv-btn-active', 'Inspector');
+    tb.append(insBtn, h('button', 'bv-btn', 'Search'), h('button', 'bv-btn', 'Go To'));
+    tb.append(h('span', 'bv-offset-readout bv-mono', '0x00000018  +8'));
+    app.append(tb);
+
+    // ---- body: hex + inspector ----
+    const body = h('div', 'bv-body');
+    const main = h('div', 'bv-main');
+
+    const hex = h('div', 'bv-hex');
+    const header = h('div', 'bv-hex-header');
+    const hi = h('div', 'bv-hex-header-inner');
+    hi.append(h('span', 'bv-off', 'Offset'));
+    const hcells = h('span', 'bv-hexcells');
+    for (let c = 0; c < BPR; c++) {
+      const cell = h('span', 'bv-cell bv-colhead' + (c > 0 && c % 8 === 0 ? ' bv-split' : ''), hx(c, 2));
+      hcells.append(cell);
+    }
+    hi.append(hcells, h('span', 'bv-asc-sep'), h('span', 'bv-ascii bv-colhead', 'ASCII'));
+    header.append(hi);
+
+    const scroller = h('div', 'bv-hex-scroller');
+    const layer = h('div', 'bv-hex-layer');
+    layer.style.position = 'static';
+    const rows = Math.ceil(bytes.length / BPR);
+    for (let r = 0; r < rows; r++) {
+      const off = r * BPR;
+      const row = h('div', 'bv-row'); row.style.height = '19px';
+      row.append(h('span', 'bv-off', hx(off, 8)));
+      const hc = h('span', 'bv-hexcells');
+      for (let c = 0; c < BPR; c++) {
+        const o = off + c;
+        let cls = 'bv-cell' + (c > 0 && c % 8 === 0 ? ' bv-split' : '');
+        if (o >= SEL_START && o < SEL_START + SEL_LEN) cls += ' bv-selected';
+        if (o === CARET) cls += ' bv-caret';
+        hc.append(h('span', cls, o < bytes.length ? hx(bytes[o], 2) : '  '));
+      }
+      const ac = h('span', 'bv-ascii');
+      for (let c = 0; c < BPR; c++) {
+        const o = off + c;
+        let cls = 'bv-ac';
+        if (o >= SEL_START && o < SEL_START + SEL_LEN) cls += ' bv-selected';
+        if (o === CARET) cls += ' bv-caret';
+        ac.append(h('span', cls, o < bytes.length ? asc(bytes[o]) : ' '));
+      }
+      row.append(hc, h('span', 'bv-asc-sep'), ac);
+      layer.append(row);
+    }
+    scroller.append(layer);
+    hex.append(header, scroller);
+    main.append(hex);
+
+    // ---- inspector ----
+    const insp = h('div', 'bv-inspector');
+    insp.append(h('div', 'bv-inspector-title', 'Data Inspector'));
+    const ib = h('div', 'bv-inspector-body');
+    const section = (title, rowsData) => {
+      const s = h('div', 'bv-insp-section');
+      s.append(h('div', 'bv-insp-head', title));
+      const rr = h('div', 'bv-insp-rows');
+      rowsData.forEach(([k, v]) => {
+        const row = h('div', 'bv-insp-row');
+        row.append(h('span', 'bv-insp-k', k), h('span', 'bv-insp-v', v));
+        rr.append(row);
+      });
+      s.append(rr); return s;
+    };
+    ib.append(section('Selected Byte', [
+      ['Offset', '0x00000018'], ['Decimal', '24'], ['Hex', '40'],
+      ['Binary', '01000000'], ['Octal', '0o100'], ['Unsigned (uint8)', '64'],
+      ['Signed (int8)', '64'], ['ASCII', "'@'"],
+    ]));
+    ib.append(section('Interpret at caret (Little Endian)', [
+      ['int16', '10816'], ['uint16', '10816'], ['int32', '10816'],
+      ['uint32', '10816  (0x00002A40)'], ['int64', '10816'],
+      ['uint64', '10816  (0x0000000000002A40)'], ['float32', '1.5152e-41'],
+      ['float64', '5.3438e-320'],
+    ]));
+    ib.append(section('Selected Range', [
+      ['Offset', '0x00000018'], ['Length', '8 bytes'], ['End', '0x00000020'],
+      ['Hex', '40 2A 00 00 00 00 00 00'],
+    ]));
+    ib.append(section('Big Endian', [
+      ['uint32', '1076101120  (0x402A0000)'], ['uint64', '4623086885038718976'],
+      ['float64', '13.078125'],
+    ]));
+    insp.append(ib);
+
+    body.append(main, insp);
+    app.append(body);
+
+    // ---- status bar ----
+    const st = h('div', 'bv-status');
+    ['Offset: 0x00000018', 'Decimal: 24', 'File Size: 84.8 KB (86,832 bytes)',
+     'Selected: 8 bytes [0x00000018 .. 0x0000001F]', "Value: 0x40 (64) '@'"]
+      .forEach((t) => st.append(h('span', 'bv-stat', t)));
+    app.append(st);
+  </script>
+</body>
+</html>
