@@ -28,7 +28,9 @@
   `timestamp` fields with no `epoch`, and UTC vs local rendering. New `gps`,
   `mac` and `filetime` epochs are also usable per field.
 
-_(150 unit tests total.)_
+## 0.8.0
+
+- Version skipped — the same changes shipped as 0.9.0.
 
 ## 0.7.0 — Array shorthand & external format folders
 
@@ -51,7 +53,9 @@ _(150 unit tests total.)_
 - Both settings reload formats live on change. Validate / Apply buttons now also
   recognise a format `.json` opened from an external folder.
 
-_(130 unit tests total.)_
+## 0.6.0
+
+- Version skipped — the same changes shipped as 0.7.0.
 
 ## 0.5.0 — Format authoring workflow
 
@@ -108,7 +112,9 @@ _(130 unit tests total.)_
 - `Generate … From File` with a struct element now emits a `structures.Record`
   + a reference to it.
 
-_(115 unit tests total.)_
+## 0.4.0
+
+- Version skipped — the same changes shipped as 0.5.0.
 
 ## 0.3.0 — Sections / memory-map view
 

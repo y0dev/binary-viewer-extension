@@ -50,7 +50,7 @@ Extension Development Host with `examples/binaries/` loaded.
 | `npm run lint` | ESLint over `src/` |
 | `npm test` | Unit tests (parsing, bit fields, nested structures, detection, search, large-file range reads 1 MB → 1 GB sparse) |
 | `npm run test:integration` | Downloads a VS Code build and runs the extension-host suite |
-| `npm run package` | Production bundle + `npx @vscode/vsce package` → `binary-structure-inspector-<version>.vsix` |
+| `npm run package` | Delete any old `*.vsix`, then production bundle + `npx @vscode/vsce package` → `binary-structure-inspector-<version>.vsix` |
 | `npm run gen-fixtures` | Regenerate large test fixtures (`--huge` also makes 100 MB + 1 GB sparse) |
 | `npm run gen-examples` | Regenerate the committed example binaries in `examples/binaries/` |
 | `npm run gen-icon` | Regenerate `media/icon.png` (pure Node, no image deps) |

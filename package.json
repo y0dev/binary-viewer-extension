@@ -247,7 +247,7 @@
     "gen-fixtures": "node scripts/gen-fixtures.js",
     "gen-icon": "node scripts/gen-icon.js",
     "gen-screenshots": "node scripts/gen-screenshots.js",
-    "package": "npm run check-types && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies"
+    "package": "node scripts/clean-vsix.js && npm run check-types && node esbuild.js --production && npx --yes @vscode/vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
