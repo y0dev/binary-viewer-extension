@@ -328,6 +328,52 @@ describe('BinaryParser — nested-array element stride', () => {
     assert.strictEqual(nodes.find((n) => n.name === 'tail')!.offset, 7);
   });
 
+  it('keeps outer offsets correct for a large 3D array that hits the render caps', () => {
+    // [2][4][40000] int16 = 640 000 bytes; far past maxArrayElements / maxNodes.
+    const n = 2 * 4 * 40000 * 2;
+    const fmt: FormatDefinition = {
+      name: 'big3d',
+      endianness: 'little',
+      fields: [
+        {
+          name: 'vol',
+          type: 'array',
+          offset: 0,
+          count: 2,
+          items: {
+            name: 'plane',
+            type: 'array',
+            count: 4,
+            items: { name: 'row', type: 'array', count: 40000, items: { name: 'c', type: 'int16' } },
+          },
+        },
+      ],
+    };
+    const window = { baseOffset: 0, bytes: new Uint8Array(n), fileSize: n };
+    const { nodes } = parseFormat(fmt, window, { defaultEndianness: 'little' });
+
+    const vol = nodes.find((x) => x.name === 'vol')!;
+    assert.strictEqual(vol.size, n); // 640 000
+    // Both planes are placed even though every inner row was truncated.
+    assert.deepStrictEqual(
+      nodes.filter((x) => /^vol\[\d+\]$/.test(x.name)).map((x) => [x.offset, x.size]),
+      [
+        [0, 320000],
+        [320000, 320000],
+      ],
+    );
+    // Rows within the first plane keep the 40000 * 2 = 80000 stride.
+    assert.deepStrictEqual(
+      nodes.filter((x) => /^vol\[0\]\[\d+\]$/.test(x.name)).map((x) => x.offset),
+      [0, 80000, 160000, 240000],
+    );
+    // First row of the second plane lands right after the first plane.
+    assert.strictEqual(
+      nodes.find((x) => x.name === 'vol[1][0]')!.offset,
+      320000,
+    );
+  });
+
   it('grows a struct size when a countField child consumes more than its static size', () => {
     const fmt: FormatDefinition = {
       name: 'aos',

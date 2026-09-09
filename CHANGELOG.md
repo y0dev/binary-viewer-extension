@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.9.2
+
+- **Fix — large multi-dimensional arrays (follow-up to 0.9.1).** When a nested
+  array was big enough to exhaust the structure node budget *mid-parse*, the
+  outer elements were still mis-sized: the running-cursor size was trusted even
+  though the element loop had stopped early. The cursor size is now used only
+  when every element was parsed; otherwise the exact static size wins. A
+  truncated array always emits a "… N more not shown" row that names the limit
+  that stopped it (element cap vs node budget). Verified on `int16[2][4][40000]`.
+
 ## 0.9.1
 
 - **Fix — nested (multi-dimensional) array offsets.** An `array` whose elements

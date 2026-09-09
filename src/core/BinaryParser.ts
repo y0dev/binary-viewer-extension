@@ -398,6 +398,7 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   ctx.stack.push({ id: node.id, path: node.path! });
   const limit = Math.min(count, ctx.maxArrayElements);
   let cursor = abs;
+  let parsed = 0;
   for (let i = 0; i < limit; i++) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
@@ -409,23 +410,28 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
       depth + 1,
     );
     cursor += consumed || staticEach;
+    parsed++;
   }
-  if (limit < count) {
+  if (parsed < count) {
+    const more = count - parsed;
+    const why =
+      limit < count
+        ? ' (raise binaryViewer.structure.maxArrayElements)'
+        : ' (structure node budget reached)';
     pushNode(ctx, {
       name: `${field.name}[…]`,
       typeLabel: '',
       offset: cursor,
       size: 0,
-      value:
-        `… ${count - limit} more element${count - limit === 1 ? '' : 's'} not shown ` +
-        `(raise binaryViewer.structure.maxArrayElements)`,
+      value: `… ${more} more element${more === 1 ? '' : 's'} not shown${why}`,
       depth: depth + 1,
     });
   }
   ctx.stack.pop();
-  // When every element was parsed and the size wasn't pinned, trust the real
-  // consumed total (fixes runtime-sized element strides).
-  if (field.size === undefined && limit === count) {
+  // Only trust the running cursor when *every* element was parsed (not stopped
+  // by the element cap or the node budget); otherwise fall back to the static
+  // estimate, which stays correct for a fully fixed-size array.
+  if (field.size === undefined && parsed === count && count > 0) {
     size = cursor - abs;
     node.size = size;
   }
