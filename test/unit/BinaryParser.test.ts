@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { parseFormat, ByteWindow } from '../../src/core/BinaryParser';
+import { hasParseTimeSize } from '../../src/core/BinaryField';
 import type { FormatDefinition } from '../../src/types/format';
 
 function win(bytes: number[], fileSize = bytes.length): ByteWindow {
@@ -271,6 +272,56 @@ describe('BinaryParser — array countField (length prefix)', () => {
     const { nodes } = parseFormat(both, win([9, 1, 2, 3, 4]), { defaultEndianness: 'little' });
     assert.strictEqual(nodes.filter((n) => /^xs\[\d+\]$/.test(n.name)).length, 2);
   });
+
+  it('hasParseTimeSize spots a countField array so the decode window can widen', () => {
+    // Plain fixed layout — window can be sized statically.
+    assert.strictEqual(
+      hasParseTimeSize([
+        { name: 'a', type: 'uint32' },
+        { name: 'b', type: 'array', count: 4, items: { name: 'i', type: 'uint8' } },
+      ]),
+      false,
+    );
+    // Top-level countField array.
+    assert.strictEqual(
+      hasParseTimeSize([
+        { name: 'n', type: 'uint16' },
+        { name: 'xs', type: 'array', countField: 'n', items: { name: 'i', type: 'uint8' } },
+      ]),
+      true,
+    );
+    // Buried inside nested arrays / a struct.
+    assert.strictEqual(
+      hasParseTimeSize([
+        {
+          name: 'grid',
+          type: 'array',
+          count: 2,
+          items: { name: 'row', type: 'array', countField: 'cols', items: { name: 'c', type: 'int16' } },
+        },
+      ]),
+      true,
+    );
+    assert.strictEqual(
+      hasParseTimeSize([
+        {
+          name: 'rec',
+          fields: [
+            { name: 'k', type: 'uint8' },
+            { name: 'vals', type: 'array', countField: 'k', items: { name: 'v', type: 'uint8' } },
+          ],
+        },
+      ]),
+      true,
+    );
+    // countField overridden by an explicit count is static again.
+    assert.strictEqual(
+      hasParseTimeSize([
+        { name: 'xs', type: 'array', count: 3, countField: 'n', items: { name: 'i', type: 'uint8' } },
+      ]),
+      false,
+    );
+  });
 });
 
 describe('BinaryParser — nested-array element stride', () => {
@@ -371,6 +422,53 @@ describe('BinaryParser — nested-array element stride', () => {
     assert.strictEqual(
       nodes.find((x) => x.name === 'vol[1][0]')!.offset,
       320000,
+    );
+  });
+
+  it('renders every element up to maxArrayElements without the node budget cutting in', () => {
+    // [2][4][40000] int16. At cap 5000 the setting decides: 2*4*5000 = 40 000
+    // leaf rows should all be emitted (the old 20 000 node budget truncated it).
+    const n = 2 * 4 * 40000 * 2;
+    const fmt: FormatDefinition = {
+      name: 'big3d',
+      endianness: 'little',
+      fields: [
+        {
+          name: 'vol',
+          type: 'array',
+          offset: 0,
+          count: 2,
+          items: {
+            name: 'plane',
+            type: 'array',
+            count: 4,
+            items: { name: 'row', type: 'array', count: 40000, items: { name: 'c', type: 'int16' } },
+          },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(
+      fmt,
+      { baseOffset: 0, bytes: new Uint8Array(n), fileSize: n },
+      { defaultEndianness: 'little', maxArrayElements: 5000 },
+    );
+    assert.strictEqual(
+      nodes.filter((x) => /^vol\[\d+\]\[\d+\]\[\d+\]$/.test(x.name)).length,
+      2 * 4 * 5000,
+    );
+    // Every truncation here is the element cap, never the node budget.
+    for (const s of nodes.filter((x) => /\[…\]$/.test(x.name))) {
+      assert.ok(/maxArrayElements/.test(s.value), s.value);
+    }
+    // With no cap, all 320 000 leaves load.
+    const uncapped = parseFormat(
+      fmt,
+      { baseOffset: 0, bytes: new Uint8Array(n), fileSize: n },
+      { defaultEndianness: 'little', maxArrayElements: 0 },
+    );
+    assert.strictEqual(
+      uncapped.nodes.filter((x) => /^vol\[\d+\]\[\d+\]\[\d+\]$/.test(x.name)).length,
+      2 * 4 * 40000,
     );
   });
 

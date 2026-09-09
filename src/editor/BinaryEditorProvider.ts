@@ -5,7 +5,7 @@ import { FormatManager } from '../formats/FormatManager';
 import { getNonce } from '../util/nonce';
 import { log } from '../util/logger';
 import { parseFormat } from '../core/BinaryParser';
-import { computeFieldSize } from '../core/BinaryField';
+import { computeFieldSize, hasParseTimeSize } from '../core/BinaryField';
 import { buildSections } from '../core/Sections';
 import { resolveStructures } from '../core/FormatResolve';
 import { resolveBaseAddress } from '../core/humanize';
@@ -332,6 +332,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
     let extent = HEADER_MIN_WINDOW;
     let cursor = 0;
+    let indeterminate = hasParseTimeSize(def.fields as FieldDefinition[] | undefined);
     for (const f of (def.fields ?? []) as FieldDefinition[]) {
       try {
         const at = f.offset ?? cursor;
@@ -339,8 +340,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         extent = Math.max(extent, at + sz);
         cursor = at + sz;
       } catch {
-        /* variable size; keep default extent */
+        indeterminate = true;
       }
+    }
+    if (indeterminate) {
+      // A `countField` / variable-size field means the real extent isn't known
+      // until parse time — read as much of the file as the window budget allows
+      // so those elements decode instead of showing "outside loaded window".
+      extent = entry.document.fileSize;
     }
     const windowLen = Math.min(Math.max(extent, HEADER_MIN_WINDOW), HEADER_MAX_WINDOW, entry.document.fileSize);
     const bytes = await entry.document.cache.getRange(0, windowLen);

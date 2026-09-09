@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -162,7 +162,7 @@
           "type": "number",
           "default": 1000,
           "minimum": 0,
-          "markdownDescription": "Maximum number of elements rendered per `array` field in the Structure view (the rest are summarised as one \"… N more\" row). Guards against a huge shorthand like `float32[200000]` locking up the tree. Set to `0` for no limit."
+          "markdownDescription": "Maximum number of elements rendered per `array` field in the Structure view (the rest are summarised as one \"… N more\" row). This is the authoritative limit — raise it to see more, even for large nested arrays; a bigger Structure tree parses and renders more slowly. Set to `0` for no limit (a ~1,000,000-node safety backstop still applies)."
         },
         "binaryViewer.additionalExtensions": {
           "type": "array",

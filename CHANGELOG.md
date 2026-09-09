@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.9.3
+
+- **`binaryViewer.structure.maxArrayElements` is now the real limit.** A separate
+  internal node budget (20 000) could stop a large / deeply-nested array well
+  before the configured per-array cap was reached — so raising the setting did
+  nothing past that point. The budget now scales with the setting
+  (`maxArrayElements × 50`, floor 100 000, hard ceiling 1 000 000 as a backstop
+  against `[cap][cap][cap]`-style blow-ups) and `0` (no cap) parses up to the
+  ceiling. Every element up to the setting is loaded and shown; a "… N more"
+  row only appears when the cap itself — or, rarely, the ceiling — is hit.
+- **Fix — `countField` arrays past the first 4 KB showed "outside loaded
+  window".** The decode window was sized from `computeFieldSize`, which reports
+  `0` for a `countField` array (its length isn't known until parse time), so
+  only the 4 KB header was read. A format with any parse-time-sized field now
+  reads up to the whole file (bounded at 8 MB) so those elements decode.
+
 ## 0.9.2
 
 - **Fix — large multi-dimensional arrays (follow-up to 0.9.1).** When a nested

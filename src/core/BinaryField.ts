@@ -33,6 +33,27 @@ export function computeStructSize(field: FieldDefinition): number {
   return field.size ?? end;
 }
 
+/**
+ * True when any field in the tree is sized only at parse time — an `array`
+ * with `countField` and no fixed `count`. Callers that need to bound a read
+ * ahead of parsing (the editor's decode window) must widen it in that case,
+ * since `computeFieldSize` reports 0 for such a field.
+ */
+export function hasParseTimeSize(fields: readonly FieldDefinition[] | undefined): boolean {
+  for (const f of fields ?? []) {
+    if (f.type === 'array' && f.countField && f.count === undefined) {
+      return true;
+    }
+    if (f.items && hasParseTimeSize([f.items])) {
+      return true;
+    }
+    if (Array.isArray(f.fields) && hasParseTimeSize(f.fields as FieldDefinition[])) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Bytes consumed by a field. Returns 0 for zero-length, throws on unknowable. */
 export function computeFieldSize(field: FieldDefinition): number {
   // Normalise "float32[8]"-style shorthand first.

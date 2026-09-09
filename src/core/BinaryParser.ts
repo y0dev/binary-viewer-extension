@@ -99,23 +99,36 @@ function slice(ctx: Ctx, abs: number, size: number): Uint8Array {
   return ctx.win.bytes.subarray(start, start + size);
 }
 
+/** Absolute backstop against pathological nesting (`[cap][cap][cap]`, …). */
+const NODE_CEILING = 1_000_000;
+
 export function parseFormat(
   format: FormatDefinition,
   win: ByteWindow,
   opts: ParseOptions,
 ): { nodes: ParsedNode[]; error?: string } {
+  const arrayCap =
+    opts.maxArrayElements === undefined
+      ? DEFAULT_ARRAY_CAP
+      : opts.maxArrayElements <= 0
+        ? Number.POSITIVE_INFINITY
+        : opts.maxArrayElements;
+  // The node budget is only a safety net — `maxArrayElements` is the real limit.
+  // Scale it well past what the configured cap yields for a normally-shaped
+  // structure so the *setting* decides how much is shown, not this.
+  const maxNodes =
+    opts.maxNodes ??
+    (arrayCap === Number.POSITIVE_INFINITY
+      ? NODE_CEILING
+      : Math.min(NODE_CEILING, Math.max(100_000, arrayCap * 50)));
+
   const ctx: Ctx = {
     win,
     view: new DataView(win.bytes.buffer, win.bytes.byteOffset, win.bytes.byteLength),
     defEndian: format.endianness ?? opts.defaultEndianness,
     nodes: [],
-    maxNodes: opts.maxNodes ?? 20000,
-    maxArrayElements:
-      opts.maxArrayElements === undefined
-        ? DEFAULT_ARRAY_CAP
-        : opts.maxArrayElements <= 0
-          ? Number.POSITIVE_INFINITY
-          : opts.maxArrayElements,
+    maxNodes,
+    maxArrayElements: arrayCap,
     timestamp: opts.timestamp ?? {},
     idSeq: 0,
     stack: [{ id: null, path: [] }],

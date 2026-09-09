@@ -180,8 +180,10 @@ JSON file name** — so dropping `firmware.json` into
   or a full address.
 - **`binaryViewer.structure.maxArrayElements`** (default `1000`) — how many
   elements a single `array` field renders in the Structure view before the rest
-  collapse into one "… N more" row. Stops a huge `float32[200000]` from freezing
-  the tree. `0` removes the limit.
+  collapse into one "… N more" row. This setting is authoritative — raise it and
+  you get that many, even for a large nested array. `0` removes the limit (the
+  parser still stops at ~1 000 000 total nodes as a safety backstop). Bigger
+  values load and render more, so expect a slower Structure tab.
 - **`binaryViewer.additionalExtensions`** — extra file extensions (`s19`,
   `.mot`, …) to open in the Binary Viewer automatically, on top of the built-in
   list. A file you deliberately reopen as text stays text for the session.
