@@ -23,6 +23,8 @@ const HEADER_MAX_WINDOW = 8 * 1024 * 1024;
 interface Entry {
   document: BinaryDocument;
   panel: vscode.WebviewPanel;
+  /** Last selection reported by the webview, for commands that act on it. */
+  selection?: { offset: number; length: number };
 }
 
 interface ResolvedConfig extends ViewerConfig {
@@ -73,6 +75,21 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
   activeDocument(): BinaryDocument | undefined {
     return this.activeEntry?.document;
+  }
+
+  /** Last byte selection in the active editor, if any. */
+  activeSelection(): { offset: number; length: number } | undefined {
+    const sel = this.activeEntry?.selection;
+    return sel && sel.length > 0 ? sel : undefined;
+  }
+
+  /** Read a byte range from the active document (for scaffolding a format). */
+  async readActive(offset: number, length: number): Promise<Uint8Array | undefined> {
+    const doc = this.activeEntry?.document;
+    if (!doc) {
+      return undefined;
+    }
+    return doc.cache.getRange(offset, length);
   }
 
   /** Apply a structure format to the active editor (invoked from a command). */
@@ -247,7 +264,13 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           break;
         }
 
+        case 'generateFormat': {
+          await vscode.commands.executeCommand('binaryViewer.generateFormat');
+          break;
+        }
+
         case 'selectionChanged':
+          entry.selection = { offset: msg.offset, length: msg.length };
           break;
 
         case 'log':

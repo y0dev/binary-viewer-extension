@@ -563,6 +563,13 @@ body {
   flex-direction: column;
   gap: 10px;
   align-items: flex-start;
+  max-width: 640px;
+}
+
+.bv-empty-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .bv-error {

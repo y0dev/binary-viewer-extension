@@ -60,6 +60,11 @@ in the hex view. Works with a fields-based format or a sections-only one.
 - **Format editor** — build and nest structures visually (`+ Add Field` /
   `+ Add Structure`, move in/out, reorder), with live validation. Import / export
   definitions as JSON.
+- **Generate a format from a binary** — *Binary Viewer: Generate Binary Format
+  From File* scaffolds a starter JSON: a whole-file skeleton, or — from a
+  selection — a repeating `array` with the element count computed for you (so a
+  large table becomes one `items` template to edit, not thousands of fields).
+  It opens the JSON for you to finish by hand.
 - Native VS Code look — theme variables throughout, so light, dark and
   high-contrast all work.
 
@@ -120,6 +125,7 @@ builtin**, so a repository can ship its proprietary layouts in
 | Binary Viewer: Show Field in Raw View | — |
 | Binary Viewer: Select Binary Format | — |
 | Binary Viewer: Create / Edit / Duplicate / Delete Binary Format | — |
+| Binary Viewer: Generate Binary Format From File | — |
 | Binary Viewer: Import / Export / Reload Binary Formats | — |
 
 ## Settings

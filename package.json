@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -79,6 +79,7 @@
       { "command": "binaryViewer.showFieldInRawView", "title": "Show Field in Raw View", "category": "Binary Viewer" },
       { "command": "binaryViewer.selectFormat", "title": "Select Binary Format", "category": "Binary Viewer" },
       { "command": "binaryViewer.createFormat", "title": "Create Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.generateFormat", "title": "Generate Binary Format From File", "category": "Binary Viewer" },
       { "command": "binaryViewer.editFormat", "title": "Edit Binary Format", "category": "Binary Viewer" },
       { "command": "binaryViewer.duplicateFormat", "title": "Duplicate Binary Format", "category": "Binary Viewer" },
       { "command": "binaryViewer.deleteFormat", "title": "Delete Binary Format", "category": "Binary Viewer" },
@@ -97,7 +98,8 @@
         { "command": "binaryViewer.toggleSectionsView", "when": "binaryViewer.active" },
         { "command": "binaryViewer.toggleInspector", "when": "binaryViewer.active" },
         { "command": "binaryViewer.showFieldInRawView", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.selectFormat", "when": "binaryViewer.active" }
+        { "command": "binaryViewer.selectFormat", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.generateFormat", "when": "binaryViewer.active" }
       ],
       "explorer/context": [
         {

@@ -147,6 +147,7 @@ export type WebviewToHost =
   | { type: 'search'; query: SearchQuery }
   | { type: 'persistState'; state: WebviewPersistedState }
   | { type: 'openFormatEditor'; formatName?: string }
+  | { type: 'generateFormat' }
   | { type: 'selectionChanged'; offset: number; length: number }
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string };
 

@@ -107,12 +107,23 @@ export class StructureView {
         el('div', { class: 'bv-empty' }, [
           el('p', { text: 'No structure format applied.' }),
           s.formats.length
-            ? el('p', { text: 'Pick a format from the toolbar above, or create one:' })
-            : el('p', { text: 'Create a binary format to decode this file:' }),
-          el('button', {
-            class: 'bv-btn',
-            text: '+ Create Binary Format',
-            onclick: () => post({ type: 'openFormatEditor' }),
+            ? el('p', { text: 'Pick a format from the toolbar above, or start one:' })
+            : el('p', { text: 'Start a binary format to decode this file:' }),
+          el('div', { class: 'bv-empty-actions' }, [
+            el('button', {
+              class: 'bv-btn',
+              text: '+ Create Binary Format',
+              onclick: () => post({ type: 'openFormatEditor' }),
+            }),
+            el('button', {
+              class: 'bv-btn',
+              text: 'Generate from file / selection…',
+              onclick: () => post({ type: 'generateFormat' }),
+            }),
+          ]),
+          el('p', {
+            class: 'bv-dim',
+            text: 'Tip: select a large repeating region in Raw first, then "Generate" to scaffold an array.',
           }),
         ]),
       );

@@ -114,6 +114,11 @@ bare hex value. Out-of-range input is rejected with a message.
 For a guided build, follow [CREATING_A_FORMAT.md](CREATING_A_FORMAT.md); for the
 full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
 
+- **Binary Viewer: Generate Binary Format From File** scaffolds a valid starter
+  JSON and opens it for hand-editing — a whole-file skeleton, or, from a byte
+  selection, a repeating `array` with the element count computed for you. Ideal
+  when a file holds a large table: you edit one `items` template instead of
+  thousands of fields.
 - **Binary Viewer: Create Binary Format** opens the form editor. Fill in the
   name, endianness, optional file extensions and magic bytes, then add fields
   (name, type, offset — leave blank to pack after the previous field — size,

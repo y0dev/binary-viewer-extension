@@ -55,12 +55,19 @@ export class SectionsView {
           el('p', {
             text: 'Add a "sections" array to the format definition (each entry: name, start, length, and optional flags / display).',
           }),
-          el('button', {
-            class: 'bv-btn',
-            text: s.activeFormat ? 'Edit Format' : '+ Create Binary Format',
-            onclick: () =>
-              post({ type: 'openFormatEditor', formatName: s.activeFormat ?? undefined }),
-          }),
+          el('div', { class: 'bv-empty-actions' }, [
+            el('button', {
+              class: 'bv-btn',
+              text: s.activeFormat ? 'Edit Format' : '+ Create Binary Format',
+              onclick: () =>
+                post({ type: 'openFormatEditor', formatName: s.activeFormat ?? undefined }),
+            }),
+            el('button', {
+              class: 'bv-btn',
+              text: 'Generate from file…',
+              onclick: () => post({ type: 'generateFormat' }),
+            }),
+          ]),
         ]),
       );
       return;

@@ -7,6 +7,7 @@ import { registerViewCommands } from './ToggleView';
 import { registerFormatAuthoringCommands } from './CreateFormat';
 import { registerImportExportCommands } from './ImportExportFormat';
 import { registerReloadFormats } from './ReloadFormats';
+import { registerGenerateFormat } from './GenerateFormat';
 
 export function registerAllCommands(
   context: vscode.ExtensionContext,
@@ -20,6 +21,7 @@ export function registerAllCommands(
     ...registerFormatAuthoringCommands(context, formats),
     ...registerImportExportCommands(formats),
     registerReloadFormats(formats),
+    registerGenerateFormat(provider, formats),
     vscode.commands.registerCommand('binaryViewer.openWith', async (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (!target) {

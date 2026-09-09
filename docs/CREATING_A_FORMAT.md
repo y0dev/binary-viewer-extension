@@ -10,6 +10,42 @@ option.
 
 ---
 
+## Shortcut: generate a skeleton, then edit by hand
+
+If you'd rather not start from a blank editor, run **Binary Viewer: Generate
+Binary Format From File** (also on the Structure/Sections empty-state buttons).
+It writes a *valid starter JSON*, applies it, and opens it for you to finish.
+
+Two modes:
+
+- **Whole-file skeleton** — `magic` from the first 4 bytes plus a `header` /
+  `body` placeholder (`bytes` fields with `TODO` descriptions). Replace them with
+  the real fields.
+- **From the current selection** — select a region in Raw first, then:
+  - *Array of a scalar type* (`uint16`, `float32`, …) — the element count is
+    `selection ÷ sizeof(type)`.
+  - *Array of opaque byte records* / *Array of struct records* — you give the
+    record size; the count is `selection ÷ recordSize` and the leftover bytes
+    are reported. You get **one `items` template** to flesh out, e.g.
+
+    ```jsonc
+    { "name": "records", "type": "array", "offset": 4096, "count": 8192,
+      "items": { "name": "record", "fields": [
+        { "name": "field0", "type": "uint32", "offset": 0, "description": "TODO" },
+        { "name": "rest",   "type": "bytes",  "offset": 4, "size": 12, "description": "TODO" }
+      ] } }
+    ```
+
+    Editing `items` once decodes all 8192 records — no need to hand-write them.
+
+The generated file lands in global storage (`Edit JSON` jumps straight to
+`"items"`); move it into `.vscode/binary-viewer/formats/` to share it with a
+repo.
+
+---
+
+## Walkthrough: build it by hand
+
 ## 1. Open the file and read the bytes
 
 Right-click `sample.wav` → **Open With… → Binary Viewer**. In **Raw** mode you

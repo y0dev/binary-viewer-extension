@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.4.0 — Generate a format from a binary
+
+- New command **Binary Viewer: Generate Binary Format From File** (also on the
+  Structure / Sections empty-state buttons). Scaffolds a *valid* starter JSON,
+  saves it to global storage, applies it, and opens it for hand-editing:
+  - **Whole-file skeleton** — `magic` from the first bytes + `header` / `body`
+    placeholders.
+  - **From the current selection** — an `array` whose element count is computed
+    from the selection: pick a scalar type, or give a record size for opaque
+    `bytes` / a `struct` stub. The point is large repeating data — you edit one
+    `items` template instead of thousands of fields; leftover bytes are reported.
+- Pure `core/FormatScaffold.ts` + 8 unit tests (92 total).
+
 ## 0.3.0 — Sections / memory-map view
 
 - New **Sections** tab (`Ctrl/Cmd+Alt+M`, command *Binary Viewer: Toggle
