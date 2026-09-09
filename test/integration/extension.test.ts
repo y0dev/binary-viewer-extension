@@ -38,6 +38,8 @@ describe('Binary Viewer integration', () => {
       'binaryViewer.toggleInspector',
       'binaryViewer.createFormat',
       'binaryViewer.generateFormat',
+      'binaryViewer.validateFormatFile',
+      'binaryViewer.applyFormatFile',
       'binaryViewer.toggleSectionsView',
       'binaryViewer.editFormat',
       'binaryViewer.importFormat',

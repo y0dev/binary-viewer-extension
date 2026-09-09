@@ -37,6 +37,14 @@ or both. A `sections`-only format is a pure memory map.
 
 `bytes` / `mask` accept space- or comma-separated hex, with or without `0x`.
 
+**Loading & precedence.** Definitions are read from three places — builtin,
+global storage (`<globalStorage>/binary-viewer/formats/*.json`) and the
+workspace (`.vscode/binary-viewer/formats/*.json`, trusted workspaces only). A
+workspace file **shadows** a global/builtin one that collides with it **by
+format `name` or by JSON file name**. All three locations are watched, so new /
+edited / deleted files are picked up automatically (or via **Reload Binary
+Formats** / the ↻ button).
+
 **Detection order** when a file is opened:
 1. workspace formats, then global, then builtin
 2. a format is a candidate if its extension matches **or** a magic entry matches
@@ -86,6 +94,41 @@ Validation rejects, with a clear message:
 - **overlapping** fields within a structure;
 - a field that **extends beyond** a structure's declared `size`;
 - an empty structure.
+
+## Reusable structures
+
+Define a record layout once under a top-level `structures` map, then set a
+field's (or an array element's) `"type"` to the structure's name. The extension
+inlines it before parsing, so it behaves exactly like an inline nested
+structure — this is the easy way to describe a **large array of records**:
+
+```jsonc
+{
+  "name": "Sensor Log",
+  "endianness": "little",
+  "structures": {
+    "Sample": {
+      "fields": [
+        { "name": "timestamp", "type": "uint32", "offset": 0 },
+        { "name": "channel",   "type": "uint8",  "offset": 4 },
+        { "name": "value",     "type": "int16",  "offset": 6 }
+      ]
+    }
+  },
+  "fields": [
+    { "name": "count",   "type": "uint32", "offset": 0 },
+    { "name": "samples", "type": "array",  "offset": 4,
+      "count": 100000, "items": { "name": "sample", "type": "Sample" } }
+  ]
+}
+```
+
+- A `structures` entry is `{ "fields": [...], "size"?, "endianness"?, "description"? }`.
+  Child offsets are relative to the structure, like any nested structure.
+- A structure may reference another structure; **cycles are rejected** with a
+  clear error, as are references to an undefined name.
+- `structures` is optional and adds nothing to the wire protocol — it is
+  resolved to inline `fields` before parsing.
 
 ## FieldDefinition
 
@@ -193,31 +236,47 @@ Bit  7  6  5  4  3  2  1  0
 }
 ```
 
-See [`examples/formats/`](../examples/formats/) for `firmware.json`,
-`eeprom.json` (big-endian, MAC address, scaled calibration values),
-`packet.json` (network-order telemetry with a 64-bit millisecond timestamp) and
-`nested-firmware.json` (nested `Header` / `ImageInfo` structures), and
-[`examples/binaries/`](../examples/binaries/) for files that match them.
+See [`examples/formats/`](../examples/formats/) for worked definitions —
+`wav-header.json` (nested RIFF sub-chunks), `nested-firmware.json` (multi-level
+nesting + a `sections` array), `mbr.json` (an array of nested structs, magic at
+offset 510), `sensor-log.json` (a reusable `structures` map for an array of
+records), `flash-layout.json` (a sections-only memory map), `firmware.json`
+(`flags` + timestamp), `eeprom.json` (big-endian, MAC address, scaled
+calibration) and `packet.json` (network-order telemetry, 64-bit ms timestamp) —
+plus matching files in [`examples/binaries/`](../examples/binaries/).
 
-## The form editor
+## Ways to build a definition
+
+| Route | When |
+| --- | --- |
+| **Binary Viewer: Generate Binary Format From File** | fastest start — scaffolds a whole-file skeleton, or a computed `array` from a selection (large repeating data). See [CREATING_A_FORMAT.md](CREATING_A_FORMAT.md). |
+| **Binary Viewer: Create / Edit Binary Format** (form editor) | visual, tree-based, with live validation |
+| Hand-write the JSON | full control; use the **✓ Validate** / **↻ Apply** editor-title buttons |
+
+### The form editor
 
 Fields and structures are edited as a **tree**. Each row has Name, Offset,
 Size, and (for primitives) Type / Length / Endianness. Use:
 
-- **`+ Add Field`** / **`+ Add Structure`** at the top level, and the same pair
-  of buttons inside every structure;
-- **↑ / ↓** to reorder within the same parent;
-- **⇥** to move a field into the structure immediately above it;
-- **⇤** to move a field out of its structure (placing it right after it);
-- the **▶/▼** toggle to collapse a structure while editing.
+- **`+ Add Field`** / **`+ Add Array`** / **`+ Add Structure`** at the top level,
+  and the same three inside every structure;
+- **Reusable structures** — a top-level section with **`+ Add Structure
+  Definition`**. Any structure you define here appears in every type dropdown
+  (grouped under *structures*), so an array of records is just
+  `+ Add Array` → count → pick the structure as the element type;
+- **↑ / ↓** reorder within the same parent, **⧉** duplicates a row (and its
+  whole subtree), **⇥** / **⇤** move a field into / out of the structure above;
+- the **▶/▼** toggle collapses a structure while editing;
+- the **Sections (memory map)** box takes a raw JSON `sections` array (with an
+  "insert example section" helper).
 
 A live JSON preview shows the exact object that will be saved, and the
-validation panel lists overlap / offset / size / "type-or-fields" errors as you
-type.
+validation panel lists overlap / offset / size / "type-or-fields" / structure-
+reference errors as you type.
 
-Extra properties for `flags`/`bitfield`/`enum`/`array`/`timestamp` go in a
-primitive row's **advanced** disclosure as a JSON fragment that is merged onto
-the field, e.g.:
+Extra properties for `flags`/`bitfield`/`enum`/`timestamp` go in a primitive
+row's **advanced** disclosure as a JSON fragment that is merged onto the field,
+e.g.:
 
 ```jsonc
 { "fields": [ { "name": "Enabled", "bits": "0" }, { "name": "Mode", "bits": "1-3" } ] }
@@ -268,10 +327,10 @@ Behaviour:
 ## Future-proofing
 
 The schema already carries the shape for nested structures, arrays,
-variable-length data, calculated/checksum fields, pointer/address fields and
-enum/register definitions. Planned importers (C `struct`, DWARF, ELF, S-record,
-Intel HEX) and features (conditional/dynamic offsets, CRC validation, memory-map
-visualization) are additive — they become new `type` handlers, never a
+variable-length data, calculated/checksum fields, pointer/address fields,
+enum/register definitions and the `sections` memory map. Planned importers
+(C `struct`, DWARF, ELF, S-record, Intel HEX) and features (conditional/dynamic
+offsets, CRC validation) are additive — they become new `type` handlers, never a
 code-execution hook.
 
 **Reusable named structures** (a future feature) would add a top-level
@@ -287,4 +346,5 @@ code-execution hook.
 The recursive parser and `computeFieldSize` already handle inline nested
 structures, so this only needs a *resolver pass* that expands each named
 reference into an inline `fields` array before parsing — no change to the
-parser or the message protocol.
+parser or the message protocol. **(Implemented — see "Reusable structures"
+above.)**

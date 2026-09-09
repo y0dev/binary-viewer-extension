@@ -164,7 +164,22 @@ export function scaffoldArray(opts: ArrayScaffoldOptions): ArrayScaffoldResult {
   const count = Math.floor(opts.totalBytes / elementSize);
   const remainder = opts.totalBytes - count * elementSize;
 
-  const items = buildItems(opts.element);
+  // For a struct element, define it once under `structures` and reference it —
+  // that is exactly the pattern that makes big arrays maintainable.
+  let structures: Record<string, { fields: FieldDefinition[] }> | undefined;
+  let items: FieldDefinition;
+  if (opts.element.kind === 'struct') {
+    const size = Math.floor(opts.element.recordSize);
+    const body: FieldDefinition[] = [{ name: 'field0', type: 'uint32', offset: 0, description: 'TODO' }];
+    if (size > 4) {
+      body.push({ name: 'rest', type: 'bytes', offset: 4, size: size - 4, description: 'TODO: split into fields' });
+    }
+    structures = { Record: { fields: body } };
+    items = { name: 'item', type: 'Record' };
+  } else {
+    items = buildItems(opts.element);
+  }
+
   const arrayField: FieldDefinition = {
     name: 'records',
     type: 'array',
@@ -173,7 +188,7 @@ export function scaffoldArray(opts: ArrayScaffoldOptions): ArrayScaffoldResult {
     items,
     description: `${count} x ${elementSize}-byte record${count === 1 ? '' : 's'} generated from a ${opts.totalBytes}-byte selection${
       remainder ? ` (${remainder} trailing byte${remainder === 1 ? '' : 's'} left over)` : ''
-    }. Edit "items" once to decode every record.`,
+    }. ${structures ? 'Edit the "Record" structure once' : 'Edit "items" once'} to decode every record.`,
   };
 
   const fields: FieldDefinition[] = [];
@@ -186,6 +201,7 @@ export function scaffoldArray(opts: ArrayScaffoldOptions): ArrayScaffoldResult {
   const format: FormatDefinition = {
     ...baseMeta(opts.name, opts.fileName),
     endianness: opts.endianness ?? 'little',
+    ...(structures ? { structures } : {}),
     fields,
   };
   if (opts.includeMagic && opts.header) {

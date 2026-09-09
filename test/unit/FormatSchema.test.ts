@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { validateFormat, parseMagicBytes } from '../../src/core/FormatSchema';
+import { validateFormat, parseMagicBytes, validateFormatText } from '../../src/core/FormatSchema';
 import { BUILTIN_FORMATS } from '../../src/formats/BuiltinFormats';
 
 describe('FormatSchema.validateFormat', () => {
@@ -58,5 +58,45 @@ describe('FormatSchema.validateFormat', () => {
     assert.deepStrictEqual(parseMagicBytes('0x46,0x57'), [0x46, 0x57]);
     assert.deepStrictEqual(parseMagicBytes('7F454C46'.replace(/(..)/g, '$1 ').trim()), [0x7f, 0x45, 0x4c, 0x46]);
     assert.throws(() => parseMagicBytes('ZZ'));
+  });
+});
+
+describe('FormatSchema.validateFormatText (for the Validate button)', () => {
+  it('reports a JSON syntax error rather than throwing', () => {
+    const r = validateFormatText('{ "name": "x", }not json');
+    assert.strictEqual(r.ok, false);
+    assert.ok(/Invalid JSON/.test(r.errors[0]));
+  });
+
+  it('accepts a single valid definition and returns its name', () => {
+    const r = validateFormatText(
+      JSON.stringify({ name: 'Hdr', fields: [{ name: 'm', type: 'uint32', offset: 0 }] }),
+    );
+    assert.strictEqual(r.ok, true);
+    assert.deepStrictEqual(r.names, ['Hdr']);
+    assert.deepStrictEqual(r.errors, []);
+  });
+
+  it('validates an array of definitions with an index prefix on each message', () => {
+    const r = validateFormatText(
+      JSON.stringify([
+        { name: 'Good', fields: [{ name: 'a', type: 'uint8', offset: 0 }] },
+        { name: 'Bad', fields: [{ name: 'a', type: 'nope', offset: 0 }] },
+      ]),
+    );
+    assert.strictEqual(r.ok, false);
+    assert.deepStrictEqual(r.names, ['Good', 'Bad']);
+    assert.ok(r.errors.some((m) => m.startsWith('[1] ')));
+  });
+
+  it('surfaces warnings without failing validation', () => {
+    const r = validateFormatText(
+      JSON.stringify({
+        name: 'x',
+        sections: [{ name: 's', start: 0, length: 4, end: 8 }],
+      }),
+    );
+    assert.strictEqual(r.ok, true);
+    assert.ok(r.warnings.length >= 1);
   });
 });

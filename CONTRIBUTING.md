@@ -60,13 +60,18 @@ Extension Development Host with `examples/binaries/` loaded.
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
 
-- `src/core/` — pure, dependency-free binary logic (data types, bit fields,
-  parser, format schema, detection, search matcher). Unit-testable without an
+- `src/core/` — pure, dependency-free logic: data types, bit fields, field-shape
+  classification, the parser, `FormatSchema` (+ `validateFormatText`),
+  `FormatResolve` (inline reusable `structures`), `FormatDetector`,
+  `FormatMerge` (name/filename precedence), `Sections` (memory-map rows),
+  `FormatScaffold`, the search matcher, `humanize`. Unit-testable without an
   extension host.
 - `src/binary/` — Node `fs` range reader + bounded cache + streaming search.
-- `src/formats/` — format discovery, storage, precedence.
-- `src/editor/`, `src/commands/`, `src/formatEditor/` — extension host.
-- `src/webview/` — the hex/structure UI (bundled separately by esbuild).
+- `src/formats/` — format discovery, storage, debounced watchers.
+- `src/editor/`, `src/commands/`, `src/formatEditor/` — extension host
+  (`commands/` includes `GenerateFormat` and `FormatFileActions`).
+- `src/webview/` — the Raw / Structure / Sections UI; `src/webview/formatEditor/`
+  is a separate bundle. Three esbuild outputs total.
 
 ## Tests
 

@@ -7,6 +7,7 @@ import { log } from '../util/logger';
 import { parseFormat } from '../core/BinaryParser';
 import { computeFieldSize } from '../core/BinaryField';
 import { buildSections } from '../core/Sections';
+import { resolveStructures } from '../core/FormatResolve';
 import { searchBinary } from '../binary/BinarySearch';
 import type { FieldDefinition } from '../types/format';
 import type {
@@ -44,11 +45,20 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     this.context.subscriptions.push(
       this.formats.onDidChange(() => {
         for (const e of this.entries) {
+          const active = e.document.activeFormatName;
+          // Drop the active format if its file was removed / renamed away.
+          if (active && !this.formats.get(active)) {
+            e.document.activeFormatName = null;
+          }
           this.post(e, {
             type: 'formats',
             formats: this.formats.summaries(),
             activeFormat: e.document.activeFormatName,
           });
+          // Re-decode in place when the applied format's definition changed.
+          if (e.document.activeFormatName) {
+            void this.doParse(e, e.document.activeFormatName);
+          }
         }
       }),
     );
@@ -269,6 +279,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           break;
         }
 
+        case 'reloadFormats': {
+          await vscode.commands.executeCommand('binaryViewer.reloadFormats');
+          break;
+        }
+
         case 'selectionChanged':
           entry.selection = { offset: msg.offset, length: msg.length };
           break;
@@ -300,7 +315,9 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       });
       return;
     }
-    const def = loaded.definition;
+    // Inline any reusable `structures` before parsing / sizing.
+    const { format: def, errors: resolveErrors } = resolveStructures(loaded.definition);
+
     let extent = HEADER_MIN_WINDOW;
     let cursor = 0;
     for (const f of (def.fields ?? []) as FieldDefinition[]) {
@@ -326,7 +343,8 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       nodes.map((n) => ({ name: n.name, offset: n.offset, size: n.size, depth: n.depth })),
       entry.document.fileSize,
     );
-    this.post(entry, { type: 'parseResult', formatName, nodes, sections, error });
+    const allErrors = [...resolveErrors, error].filter(Boolean).join('; ') || undefined;
+    this.post(entry, { type: 'parseResult', formatName, nodes, sections, error: allErrors });
   }
 
   private async persist(entry: Entry, patch: Partial<WebviewPersistedState>): Promise<void> {

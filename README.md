@@ -57,13 +57,16 @@ in the hex view. Works with a fields-based format or a sections-only one.
   case-insensitive), UTF-8, UTF-16, bit patterns (`10101010`); find
   next / previous / all, streamed so huge files don't block.
 - **Go To Offset** — `0x1000`, `4096`, or `1000h`.
-- **Format editor** — build and nest structures visually (`+ Add Field` /
-  `+ Add Structure`, move in/out, reorder), with live validation. Import / export
-  definitions as JSON.
+- **Reusable structures** — define a record layout once under a top-level
+  `structures` map, then use its name as a field's or an array element's `type`.
+  The easy way to describe a large array of records.
+- **Format editor** — build fields, **arrays** (`+ Add Array` → count → element
+  type), and nested/reusable structures visually; reorder, **duplicate** a row
+  and its subtree, move in/out, collapse; live validation; import / export JSON.
 - **Generate a format from a binary** — *Binary Viewer: Generate Binary Format
   From File* scaffolds a starter JSON: a whole-file skeleton, or — from a
-  selection — a repeating `array` with the element count computed for you (so a
-  large table becomes one `items` template to edit, not thousands of fields).
+  selection — a repeating `array` (for a struct element it defines a reusable
+  `Record` and references it, so you edit one block, not thousands of fields).
   It opens the JSON for you to finish by hand.
 - Native VS Code look — theme variables throughout, so light, dark and
   high-contrast all work.
@@ -88,9 +91,14 @@ Read-only by design in this version.
 
 Formats are plain JSON — there is no expression language and nothing in a
 definition is executed. They load with precedence **workspace → global →
-builtin**, so a repository can ship its proprietary layouts in
-`.vscode/binary-viewer/formats/*.json` and have them override the globals
-(workspace formats load only in trusted workspaces). See
+builtin**: a workspace file in `.vscode/binary-viewer/formats/*.json` shadows a
+global one when they collide **by format `name` or by file name**, so a repo can
+ship its proprietary layouts and have them win (workspace formats load only in
+trusted workspaces). New / edited / deleted JSON in either location is picked up
+automatically; the **↻** button next to the format dropdown and *Binary Viewer:
+Reload Binary Formats* force a rescan. While hand-editing a format `.json`, the
+editor title bar gains **✓ Validate** (JSON + schema check, also on save) and
+**↻ Apply to open binary** buttons. See
 [FORMAT_DEFINITIONS.md](docs/FORMAT_DEFINITIONS.md) for the full schema.
 
 ```jsonc
@@ -126,6 +134,7 @@ builtin**, so a repository can ship its proprietary layouts in
 | Binary Viewer: Select Binary Format | — |
 | Binary Viewer: Create / Edit / Duplicate / Delete Binary Format | — |
 | Binary Viewer: Generate Binary Format From File | — |
+| Binary Viewer: Validate / Apply Binary Format File | title-bar buttons on a format `.json` |
 | Binary Viewer: Import / Export / Reload Binary Formats | — |
 
 ## Settings
@@ -147,7 +156,7 @@ builtin**, so a repository can ship its proprietary layouts in
 - [Format-definition reference](docs/FORMAT_DEFINITIONS.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Contributing / building from source](CONTRIBUTING.md)
-- [`examples/`](examples/) — six sample format definitions and matching binaries
+- [`examples/`](examples/) — eight sample format definitions and matching binaries
 
 ## Author
 

@@ -103,7 +103,14 @@ function isBitSpecArray(fields: FieldDefinition[] | BitSpec[] | undefined): fiel
   return Array.isArray(fields) && fields.length > 0 && 'bits' in (fields[0] as object);
 }
 
-function validateStructure(field: FieldDefinition, path: string, result: ValidationResult): void {
+const NO_STRUCTS: ReadonlySet<string> = new Set();
+
+function validateStructure(
+  field: FieldDefinition,
+  path: string,
+  result: ValidationResult,
+  knownStructs: ReadonlySet<string> = NO_STRUCTS,
+): void {
   const { errors } = result;
   const label = field.name ? `structure "${field.name}"` : 'structure';
 
@@ -129,7 +136,9 @@ function validateStructure(field: FieldDefinition, path: string, result: Validat
     return;
   }
 
-  children.forEach((child, i) => validateField(child, `${path}.fields[${i}]`, result));
+  children.forEach((child, i) =>
+    validateField(child, `${path}.fields[${i}]`, result, knownStructs),
+  );
 
   // Resolve each child's byte range (relative to this structure) for overlap
   // and size-overflow checks. Skip a child whose size cannot be determined.
@@ -184,7 +193,12 @@ function cap(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
-function validateField(field: FieldDefinition, path: string, result: ValidationResult): void {
+function validateField(
+  field: FieldDefinition,
+  path: string,
+  result: ValidationResult,
+  knownStructs: ReadonlySet<string> = NO_STRUCTS,
+): void {
   const { errors, warnings } = result;
   if (!field || typeof field !== 'object') {
     errors.push(`${path} must be an object`);
@@ -198,6 +212,7 @@ function validateField(field: FieldDefinition, path: string, result: ValidationR
   const bitForm = isBitFieldForm(field);
   const hasFieldsArray = Array.isArray(field.fields);
   const containerForm = isContainerForm(field);
+  const structRef = typeof field.type === 'string' && knownStructs.has(field.type);
 
   // A field must be exactly one of: primitive (type), nested structure (fields),
   // or the bit-field form (type + { bits } entries).
@@ -213,15 +228,29 @@ function validateField(field: FieldDefinition, path: string, result: ValidationR
     return;
   }
 
+  // ---- reference to a reusable structure ------------------------------
+  if (structRef) {
+    if (field.offset !== undefined && (typeof field.offset !== 'number' || field.offset < 0)) {
+      errors.push(`${path}.offset must be a non-negative number`);
+    }
+    if (field.endianness !== undefined && normalizeEndianness(field.endianness) === undefined) {
+      errors.push(`${path}.endianness must be "little" or "big"`);
+    }
+    return;
+  }
+
   // ---- nested structure -------------------------------------------------
   if (containerForm) {
-    validateStructure(field, path, result);
+    validateStructure(field, path, result, knownStructs);
     return;
   }
 
   // ---- primitive / composite -----------------------------------------
-  if (!isKnownType(field.type)) {
-    errors.push(`${path}.type "${field.type}" is not a known type`);
+  if (!isKnownType(field.type) && !knownStructs.has(field.type ?? '')) {
+    errors.push(
+      `${path}.type "${field.type}" is not a known type` +
+        (knownStructs.size ? ' or a defined structure' : ''),
+    );
   }
   if (field.offset !== undefined && (typeof field.offset !== 'number' || field.offset < 0 || !Number.isFinite(field.offset))) {
     errors.push(`${path}.offset must be a non-negative number`);
@@ -248,7 +277,12 @@ function validateField(field: FieldDefinition, path: string, result: ValidationR
     if (!field.items || typeof field.items !== 'object') {
       errors.push(`${path}: "array" requires "items" (element definition)`);
     } else {
-      validateField({ ...field.items, name: field.items.name ?? 'item' }, `${path}.items`, result);
+      validateField(
+        { ...field.items, name: field.items.name ?? 'item' },
+        `${path}.items`,
+        result,
+        knownStructs,
+      );
     }
     if (field.count === undefined || field.count < 0) {
       errors.push(`${path}: "array" requires a non-negative "count"`);
@@ -319,13 +353,15 @@ export function validateFormat(input: unknown): ValidationResult {
     list.forEach((m, i) => validateMagic(m, `magic[${i}]`, errors));
   }
 
+  const structNames = validateStructuresMap(fmt.structures, result);
+
   const hasFields = Array.isArray(fmt.fields) && fmt.fields.length > 0;
   const hasSections = Array.isArray(fmt.sections) && fmt.sections.length > 0;
 
   if (fmt.fields !== undefined && !Array.isArray(fmt.fields)) {
     errors.push('"fields" must be an array');
   } else if (hasFields) {
-    fmt.fields!.forEach((f, i) => validateField(f, `fields[${i}]`, result));
+    fmt.fields!.forEach((f, i) => validateField(f, `fields[${i}]`, result, structNames));
   }
 
   if (fmt.sections !== undefined) {
@@ -338,6 +374,103 @@ export function validateFormat(input: unknown): ValidationResult {
 
   result.valid = errors.length === 0;
   return result;
+}
+
+/** Collect struct references made anywhere in a list of fields. */
+function collectStructRefs(
+  fields: FieldDefinition[] | undefined,
+  names: ReadonlySet<string>,
+  out: Set<string>,
+): void {
+  for (const f of fields ?? []) {
+    if (typeof f?.type === 'string' && names.has(f.type) && !Array.isArray(f.fields)) {
+      out.add(f.type);
+    }
+    if (Array.isArray(f?.fields) && !isBitSpecArray(f.fields)) {
+      collectStructRefs(f.fields as FieldDefinition[], names, out);
+    }
+    if (f?.items) {
+      collectStructRefs([f.items], names, out);
+    }
+  }
+}
+
+/** Validate the `structures` map (shape + each body + reference cycles). Returns the set of names. */
+function validateStructuresMap(
+  structures: unknown,
+  result: ValidationResult,
+): ReadonlySet<string> {
+  const { errors, warnings } = result;
+  if (structures === undefined) {
+    return NO_STRUCTS;
+  }
+  if (typeof structures !== 'object' || structures === null || Array.isArray(structures)) {
+    errors.push('"structures" must be an object of { name: { fields: [...] } }');
+    return NO_STRUCTS;
+  }
+  const entries = Object.entries(structures as Record<string, unknown>);
+  const names = new Set(entries.map(([n]) => n));
+
+  for (const [name, raw] of entries) {
+    const path = `structures["${name}"]`;
+    if (name.trim() === '') {
+      errors.push('a structure name must not be empty');
+    }
+    if (isKnownType(name)) {
+      warnings.push(`${path}: name shadows the builtin type "${name}"`);
+    }
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      errors.push(`${path} must be an object with a "fields" array`);
+      continue;
+    }
+    const body = raw as { fields?: unknown; size?: unknown; endianness?: unknown };
+    if (!Array.isArray(body.fields) || body.fields.length === 0) {
+      errors.push(`${path}.fields must be a non-empty array`);
+      continue;
+    }
+    if (
+      body.size !== undefined &&
+      (typeof body.size !== 'number' || !Number.isInteger(body.size) || body.size < 0)
+    ) {
+      errors.push(`${path}.size must be a non-negative integer`);
+    }
+    if (body.endianness !== undefined && normalizeEndianness(body.endianness) === undefined) {
+      errors.push(`${path}.endianness must be "little" or "big"`);
+    }
+    (body.fields as FieldDefinition[]).forEach((f, i) =>
+      validateField(f, `${path}.fields[${i}]`, result, names),
+    );
+  }
+
+  // Cycle detection over the reference graph.
+  const graph: Record<string, string[]> = {};
+  for (const [name, raw] of entries) {
+    const refs = new Set<string>();
+    collectStructRefs((raw as { fields?: FieldDefinition[] })?.fields, names, refs);
+    graph[name] = [...refs];
+  }
+  const state: Record<string, 0 | 1 | 2> = {};
+  const walk = (n: string, trail: string[]): void => {
+    state[n] = 1;
+    for (const m of graph[n] ?? []) {
+      if (!(m in graph)) {
+        continue;
+      }
+      if (state[m] === 1) {
+        errors.push(`Recursive structure reference: ${[...trail, n, m].join(' -> ')}`);
+      } else if (state[m] !== 2) {
+        walk(m, [...trail, n]);
+      }
+    }
+    state[n] = 2;
+  };
+  for (const n of Object.keys(graph)) {
+    if (state[n] !== 2) {
+      walk(n, []);
+    }
+  }
+
+  return names;
 }
 
 const FLAGS_RE = /^[rwxa\- ]*$/i;
@@ -401,4 +534,40 @@ function normNumeric(v: unknown): number | undefined {
     return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
   }
   return undefined;
+}
+
+export interface FormatTextResult {
+  ok: boolean;
+  /** `name` of each definition found (in order). */
+  names: string[];
+  errors: string[];
+  warnings: string[];
+}
+
+/**
+ * Validate the raw text of a format JSON file — a single definition or an
+ * array of them. Reports a JSON syntax error as an error rather than throwing.
+ */
+export function validateFormatText(text: string): FormatTextResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    return { ok: false, names: [], errors: [`Invalid JSON: ${(e as Error).message}`], warnings: [] };
+  }
+  const list: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const names: string[] = [];
+  list.forEach((item, i) => {
+    const prefix = list.length > 1 ? `[${i}] ` : '';
+    const n = (item as { name?: unknown })?.name;
+    if (typeof n === 'string' && n.trim()) {
+      names.push(n);
+    }
+    const r = validateFormat(item);
+    r.errors.forEach((m) => errors.push(prefix + m));
+    r.warnings.forEach((m) => warnings.push(prefix + m));
+  });
+  return { ok: errors.length === 0, names, errors, warnings };
 }

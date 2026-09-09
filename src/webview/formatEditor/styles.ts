@@ -57,6 +57,9 @@ table.fe-fields input[type=text] { width: 100%; }
   background: var(--vscode-editor-background);
 }
 .fe-node-struct { background: var(--vscode-editorWidget-background); border-color: var(--vscode-focusBorder); }
+.fe-node-array { background: var(--vscode-editorWidget-background); }
+.fe-node-structdef { background: var(--vscode-editorWidget-background); border-color: var(--vscode-focusBorder); border-style: dashed; }
+select optgroup { font-style: italic; }
 .fe-node-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .fe-node-line2 { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; margin-top: 4px; }
 .fe-children { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }

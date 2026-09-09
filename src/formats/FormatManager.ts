@@ -3,18 +3,28 @@ import type { FormatDefinition, LoadedFormat } from '../types/format';
 import type { FormatSummary } from '../types/messages';
 import { BUILTIN_FORMATS } from './BuiltinFormats';
 import { FormatStorage } from './FormatStorage';
+import { mergeFormats } from '../core/FormatMerge';
 import { detectFormats, DetectionCandidate } from '../core/FormatDetector';
 import { log } from '../util/logger';
 
 /**
- * Aggregates formats from three sources and resolves precedence:
- *   workspace  >  global  >  builtin
- * A workspace format with the same name as a global/builtin one replaces it.
+ * Aggregates format definitions from three sources and resolves precedence:
+ *
+ *   workspace (.vscode/binary-viewer/formats)  >  global storage  >  builtin
+ *
+ * A workspace definition replaces a global/builtin one when it collides **by
+ * format name OR by JSON file name** — so dropping `firmware.json` into a
+ * workspace shadows the global `firmware.json` even if the `name` fields differ.
+ *
+ * New / edited / deleted files in either location are picked up automatically
+ * (debounced file watchers) and via `reload()` (the "Reload Binary Formats"
+ * command).
  */
 export class FormatManager implements vscode.Disposable {
   readonly storage: FormatStorage;
   private formats: LoadedFormat[] = [];
   private watchers: vscode.FileSystemWatcher[] = [];
+  private reloadTimer: NodeJS.Timeout | undefined;
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
 
@@ -23,14 +33,15 @@ export class FormatManager implements vscode.Disposable {
   }
 
   async initialize(): Promise<void> {
+    await this.storage.ensureGlobalDir();
     await this.reload();
     this.setupWatchers();
     this.context.subscriptions.push(
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         this.setupWatchers();
-        void this.reload();
+        this.scheduleReload();
       }),
-      vscode.workspace.onDidGrantWorkspaceTrust(() => void this.reload()),
+      vscode.workspace.onDidGrantWorkspaceTrust(() => this.scheduleReload()),
     );
   }
 
@@ -41,12 +52,23 @@ export class FormatManager implements vscode.Disposable {
     this.watchers = [];
     for (const glob of this.storage.allWatchableGlobs()) {
       const w = vscode.workspace.createFileSystemWatcher(glob);
-      const trigger = () => void this.reload();
+      const trigger = () => this.scheduleReload();
       w.onDidChange(trigger);
       w.onDidCreate(trigger);
       w.onDidDelete(trigger);
       this.watchers.push(w);
     }
+  }
+
+  /** Coalesce bursts of file events (a save can fire several) into one reload. */
+  private scheduleReload(): void {
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+    }
+    this.reloadTimer = setTimeout(() => {
+      this.reloadTimer = undefined;
+      void this.reload();
+    }, 150);
   }
 
   async reload(): Promise<void> {
@@ -67,14 +89,13 @@ export class FormatManager implements vscode.Disposable {
       log().error(`Loading workspace formats failed: ${(e as Error).message}`);
     }
 
-    const byName = new Map<string, LoadedFormat>();
-    for (const f of [...builtin, ...global, ...workspace]) {
-      byName.set(f.definition.name, f); // later wins => workspace overrides global overrides builtin
-    }
-    this.formats = [...byName.values()].sort((a, b) =>
+    this.formats = mergeFormats([builtin, global, workspace]).sort((a, b) =>
       a.definition.name.localeCompare(b.definition.name),
     );
-    log().info(`Loaded ${this.formats.length} binary formats (${workspace.length} workspace, ${global.length} global, ${builtin.length} builtin).`);
+    log().info(
+      `Loaded ${this.formats.length} binary formats ` +
+        `(${workspace.length} workspace, ${global.length} global, ${builtin.length} builtin).`,
+    );
     this._onDidChange.fire();
   }
 
@@ -104,6 +125,9 @@ export class FormatManager implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.reloadTimer) {
+      clearTimeout(this.reloadTimer);
+    }
     for (const w of this.watchers) {
       w.dispose();
     }

@@ -24,14 +24,16 @@ let init: FormatEditorInit | null = null;
 let seq = 1;
 const uid = () => `e${seq++}`;
 
-/** A node in the working tree: a primitive field or a nested structure. */
+/** A node in the working tree: a primitive field, a nested structure, or an array. */
 interface EditNode {
   id: string;
-  kind: 'field' | 'struct';
+  kind: 'field' | 'struct' | 'array';
   name: string;
   offset: string;
-  // field-only
+  /** field: data type or a structure name. array: the element type. */
   type: string;
+  /** array only: element count. */
+  count: string;
   size: string;
   length: string;
   endianness: string;
@@ -39,6 +41,15 @@ interface EditNode {
   advanced: string;
   advancedError?: string;
   // struct-only
+  children: EditNode[];
+  collapsed: boolean;
+}
+
+/** A reusable structure definition (the `structures` map). */
+interface EditStruct {
+  id: string;
+  name: string;
+  description: string;
   children: EditNode[];
   collapsed: boolean;
 }
@@ -52,6 +63,7 @@ interface Model {
   endianness: 'little' | 'big';
   magicOffset: string;
   magicBytes: string;
+  structs: EditStruct[];
   tree: EditNode[];
   /** Raw JSON text for the `sections` array (memory-map view). '' == none. */
   sectionsJson: string;
@@ -99,13 +111,14 @@ function isNestedStructure(f: FieldDefinition): boolean {
   return !f.type || f.type === 'struct';
 }
 
-function emptyNode(kind: 'field' | 'struct'): EditNode {
+function emptyNode(kind: EditNode['kind']): EditNode {
   return {
     id: uid(),
     kind,
-    name: kind === 'struct' ? 'NewStruct' : 'field',
+    name: kind === 'struct' ? 'NewStruct' : kind === 'array' ? 'items' : 'field',
     offset: '',
     type: 'uint8',
+    count: kind === 'array' ? '4' : '',
     size: '',
     length: '',
     endianness: '',
@@ -113,6 +126,18 @@ function emptyNode(kind: 'field' | 'struct'): EditNode {
     advanced: '',
     children: [],
     collapsed: false,
+  };
+}
+
+function emptyStruct(): EditStruct {
+  return { id: uid(), name: 'Record', description: '', children: [emptyNode('field')], collapsed: false };
+}
+
+function cloneNode(n: EditNode): EditNode {
+  return {
+    ...n,
+    id: uid(),
+    children: n.children.map(cloneNode),
   };
 }
 
@@ -125,6 +150,17 @@ function fieldToNode(f: FieldDefinition): EditNode {
     node.endianness = f.endianness ?? '';
     node.description = f.description ?? '';
     node.children = (f.fields as FieldDefinition[]).map(fieldToNode);
+    return node;
+  }
+  if (f.type === 'array') {
+    const node = emptyNode('array');
+    node.name = f.name ?? '';
+    node.offset = f.offset === undefined ? '' : String(f.offset);
+    node.count = f.count === undefined ? '' : String(f.count);
+    node.type = f.items?.type ?? 'uint8';
+    node.size = f.items?.size !== undefined ? String(f.items.size) : f.size !== undefined ? String(f.size) : '';
+    node.endianness = f.endianness ?? '';
+    node.description = f.description ?? '';
     return node;
   }
   const node = emptyNode('field');
@@ -160,6 +196,13 @@ function toModel(def: FormatDefinition | null): Model {
     endianness: def?.endianness ?? 'little',
     magicOffset: magic ? String(magic.offset) : '',
     magicBytes: magic?.bytes ?? '',
+    structs: Object.entries(def?.structures ?? {}).map(([name, body]) => ({
+      id: uid(),
+      name,
+      description: body.description ?? '',
+      collapsed: false,
+      children: (body.fields ?? []).map(fieldToNode),
+    })),
     tree: (def?.fields ?? []).map(fieldToNode),
     sectionsJson:
       def?.sections && def.sections.length
@@ -190,6 +233,31 @@ function nodeToField(node: EditNode): FieldDefinition {
     const sz = num(node.size);
     if (sz !== undefined) {
       f.size = sz;
+    }
+    if (node.endianness === 'little' || node.endianness === 'big') {
+      f.endianness = node.endianness;
+    }
+    if (node.description.trim()) {
+      f.description = node.description.trim();
+    }
+    return f;
+  }
+
+  if (node.kind === 'array') {
+    const items: FieldDefinition = { name: 'item', type: node.type.trim() };
+    const elemSize = num(node.size);
+    if (elemSize !== undefined) {
+      items.size = elemSize;
+    }
+    const f: FieldDefinition = {
+      name: node.name.trim(),
+      type: 'array',
+      count: num(node.count) ?? 0,
+      items,
+    };
+    const off = num(node.offset);
+    if (off !== undefined) {
+      f.offset = off;
     }
     if (node.endianness === 'little' || node.endianness === 'big') {
       f.endianness = node.endianness;
@@ -239,6 +307,21 @@ function buildDefinition(): FormatDefinition {
     fields: model.tree.map(nodeToField),
     endianness: model.endianness,
   };
+
+  const structs: Record<string, { fields: FieldDefinition[]; description?: string }> = {};
+  for (const s of model.structs) {
+    const key = s.name.trim();
+    if (!key || s.children.length === 0) {
+      continue;
+    }
+    structs[key] = { fields: s.children.map(nodeToField) };
+    if (s.description.trim()) {
+      structs[key].description = s.description.trim();
+    }
+  }
+  if (Object.keys(structs).length) {
+    def.structures = structs;
+  }
   if (model.description.trim()) {
     def.description = model.description.trim();
   }
@@ -292,14 +375,31 @@ interface Location {
   index: number;
 }
 
-function locate(id: string, list: EditNode[] = model.tree): Location | null {
+function locateIn(id: string, list: EditNode[]): Location | null {
   for (let i = 0; i < list.length; i++) {
     if (list[i].id === id) {
       return { list, index: i };
     }
-    const deeper = locate(id, list[i].children);
+    const deeper = locateIn(id, list[i].children);
     if (deeper) {
       return deeper;
+    }
+  }
+  return null;
+}
+
+function locate(id: string, list?: EditNode[]): Location | null {
+  if (list) {
+    return locateIn(id, list);
+  }
+  const inTree = locateIn(id, model.tree);
+  if (inTree) {
+    return inTree;
+  }
+  for (const s of model.structs) {
+    const hit = locateIn(id, s.children);
+    if (hit) {
+      return hit;
     }
   }
   return null;
@@ -324,6 +424,17 @@ function deleteNode(id: string): void {
     return;
   }
   loc.list.splice(loc.index, 1);
+  changed();
+}
+
+function duplicateNode(id: string): void {
+  const loc = locate(id);
+  if (!loc) {
+    return;
+  }
+  const copy = cloneNode(loc.list[loc.index]);
+  copy.name = copy.name ? `${copy.name}_copy` : 'field_copy';
+  loc.list.splice(loc.index + 1, 0, copy);
   changed();
 }
 
@@ -378,7 +489,7 @@ function findWithParent(
   return null;
 }
 
-function addChild(structId: string, kind: 'field' | 'struct'): void {
+function addChild(structId: string, kind: EditNode['kind']): void {
   const loc = locate(structId);
   if (!loc) {
     return;
@@ -389,7 +500,18 @@ function addChild(structId: string, kind: 'field' | 'struct'): void {
   changed();
 }
 
-function addTop(kind: 'field' | 'struct'): void {
+/** Add a child to a top-level reusable-structure definition. */
+function addStructChild(structDefId: string, kind: EditNode['kind']): void {
+  const s = model.structs.find((x) => x.id === structDefId);
+  if (!s) {
+    return;
+  }
+  s.collapsed = false;
+  s.children.push(emptyNode(kind));
+  changed();
+}
+
+function addTop(kind: EditNode['kind']): void {
   model.tree.push(emptyNode(kind));
   changed();
 }
@@ -430,6 +552,9 @@ function updatePreview(): void {
   previewBox.textContent = JSON.stringify(def, null, 2);
   const advErrors: string[] = [];
   collectAdvErrors(model.tree, '', advErrors);
+  for (const s of model.structs) {
+    collectAdvErrors(s.children, `${s.name || 'structure'} > `, advErrors);
+  }
   if (model.sectionsError) {
     advErrors.push(`sections: invalid JSON — ${model.sectionsError}`);
   }
@@ -536,8 +661,28 @@ function render(): void {
     ]),
   );
 
+  // ---- reusable structures ----
+  wrap.append(el('h2', { text: 'Reusable structures' }));
+  wrap.append(
+    el('div', {
+      class: 'fe-hint',
+      text: 'Define a record layout once here, then pick its name as the "type" of a field or an array element. Ideal for large arrays of records. Child offsets are relative to the structure.',
+    }),
+  );
+  const structsWrap = el('div', { class: 'fe-tree' });
+  for (const s of model.structs) {
+    renderStructDef(structsWrap, s);
+  }
+  wrap.append(structsWrap);
+  wrap.append(
+    addRow(0, [['+ Add Structure Definition', () => {
+      model.structs.push(emptyStruct());
+      changed();
+    }]]),
+  );
+
   // ---- fields tree ----
-  wrap.append(el('h2', { text: 'Fields & structures' }));
+  wrap.append(el('h2', { text: 'Fields' }));
   wrap.append(
     el('div', {
       class: 'fe-hint',
@@ -550,9 +695,10 @@ function render(): void {
   }
   wrap.append(tree);
   wrap.append(
-    el('div', { class: 'fe-row fe-add-row' }, [
-      el('button', { class: 'secondary', text: '+ Add Field', onclick: () => addTop('field') }),
-      el('button', { class: 'secondary', text: '+ Add Structure', onclick: () => addTop('struct') }),
+    addRow(0, [
+      ['+ Add Field', () => addTop('field')],
+      ['+ Add Array', () => addTop('array')],
+      ['+ Add Structure', () => addTop('struct')],
     ]),
   );
 
@@ -624,7 +770,36 @@ function render(): void {
   post({ type: 'validate', format: buildDefinition() });
 }
 
-const ALL_TYPES = () => [...(init?.scalarTypes ?? []), ...(init?.compositeTypes ?? [])];
+const BASE_TYPES = () => [...(init?.scalarTypes ?? []), ...(init?.compositeTypes ?? [])];
+const structNames = () =>
+  model.structs.map((s) => s.name.trim()).filter((n) => n && !BASE_TYPES().includes(n));
+const ALL_TYPES = () => [...BASE_TYPES(), ...structNames()];
+
+/** A <select> of every data type, with the user's reusable structures grouped separately. */
+function typeSelect(value: string, onChange: (v: string) => void): HTMLSelectElement {
+  const sel = el('select', {
+    onchange: (e) => {
+      onChange((e.target as HTMLSelectElement).value);
+      scheduleValidate();
+    },
+  }) as HTMLSelectElement;
+  for (const t of BASE_TYPES()) {
+    sel.append(el('option', { value: t, text: t }));
+  }
+  const structs = structNames();
+  if (structs.length) {
+    const group = el('optgroup', { label: 'structures' });
+    for (const t of structs) {
+      group.append(el('option', { value: t, text: t }));
+    }
+    sel.append(group);
+  }
+  if (value && !ALL_TYPES().includes(value)) {
+    sel.append(el('option', { value, text: `${value} (?)` }));
+  }
+  sel.value = value;
+  return sel;
+}
 
 function bindInput(node: EditNode, key: keyof EditNode, opts: { placeholder?: string; width?: number } = {}) {
   const input = el('input', {
@@ -662,6 +837,11 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
       }),
       el('span', { class: 'fe-badge', text: 'STRUCT' }),
     );
+  } else if (node.kind === 'array') {
+    head.append(
+      el('span', { class: 'fe-toggle fe-toggle-empty', text: '' }),
+      el('span', { class: 'fe-badge', text: 'ARRAY' }),
+    );
   } else {
     head.append(el('span', { class: 'fe-toggle fe-toggle-empty', text: '' }));
   }
@@ -669,27 +849,23 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
   head.append(bindInput(node, 'name', { placeholder: 'name', width: 150 }));
 
   if (node.kind === 'field') {
-    const typeSel = el('select', {
-      onchange: (e) => {
-        node.type = (e.target as HTMLSelectElement).value;
-        scheduleValidate();
-      },
-    }) as HTMLSelectElement;
-    for (const t of ALL_TYPES()) {
-      typeSel.append(el('option', { value: t, text: t }));
-    }
-    if (!ALL_TYPES().includes(node.type)) {
-      typeSel.append(el('option', { value: node.type, text: node.type }));
-    }
-    typeSel.value = node.type;
-    head.append(typeSel);
+    head.append(typeSelect(node.type, (v) => (node.type = v)));
+  } else if (node.kind === 'array') {
+    head.append(
+      labelled('count', bindInput(node, 'count', { width: 60, placeholder: 'N' })),
+      el('span', { class: 'fe-inline-label', text: 'of' }),
+      typeSelect(node.type, (v) => (node.type = v)),
+    );
   } else {
     head.append(el('span', { class: 'fe-badge-type', text: 'structure' }));
   }
 
   head.append(
     labelled('offset', bindInput(node, 'offset', { placeholder: 'auto', width: 70 })),
-    labelled('size', bindInput(node, 'size', { placeholder: node.kind === 'struct' ? 'auto' : '', width: 60 })),
+    labelled(
+      node.kind === 'array' ? 'elem size' : 'size',
+      bindInput(node, 'size', { placeholder: node.kind === 'struct' ? 'auto' : '', width: 60 }),
+    ),
   );
 
   if (node.kind === 'field') {
@@ -715,6 +891,7 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
     el('span', { class: 'fe-node-actions' }, [
       iconBtn('↑', 'Move up', () => moveNode(node.id, -1)),
       iconBtn('↓', 'Move down', () => moveNode(node.id, 1)),
+      iconBtn('⧉', 'Duplicate', () => duplicateNode(node.id)),
       iconBtn('⇤', 'Move out of structure', () => outdentNode(node.id)),
       iconBtn('⇥', 'Move into previous structure', () => indentNode(node.id)),
       iconBtn('✕', 'Delete', () => deleteNode(node.id)),
@@ -754,17 +931,84 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
       renderNode(kids, child, depth + 1);
     }
     kids.append(
-      el('div', { class: 'fe-row fe-add-row', style: `margin-left:${(depth + 1) * 18}px` }, [
-        el('button', {
-          class: 'secondary icon-text',
-          text: '+ Field',
-          onclick: () => addChild(node.id, 'field'),
-        }),
-        el('button', {
-          class: 'secondary icon-text',
-          text: '+ Structure',
-          onclick: () => addChild(node.id, 'struct'),
-        }),
+      addRow((depth + 1) * 18, [
+        ['+ Field', () => addChild(node.id, 'field')],
+        ['+ Array', () => addChild(node.id, 'array')],
+        ['+ Structure', () => addChild(node.id, 'struct')],
+      ]),
+    );
+    parent.append(kids);
+  }
+}
+
+function addRow(marginLeft: number, buttons: [string, () => void][]): HTMLElement {
+  return el(
+    'div',
+    { class: 'fe-row fe-add-row', style: `margin-left:${marginLeft}px` },
+    buttons.map(([text, onclick]) => el('button', { class: 'secondary icon-text', text, onclick })),
+  );
+}
+
+function renderStructDef(parent: HTMLElement, s: EditStruct): void {
+  const card = el('div', { class: 'fe-node fe-node-structdef' });
+  const head = el('div', { class: 'fe-node-head' }, [
+    el('span', {
+      class: 'fe-toggle',
+      text: s.collapsed ? '▶' : '▼',
+      onclick: () => {
+        s.collapsed = !s.collapsed;
+        render();
+      },
+    }),
+    el('span', { class: 'fe-badge', text: 'DEF' }),
+    (() => {
+      const input = el('input', {
+        type: 'text',
+        value: s.name,
+        placeholder: 'StructureName',
+        oninput: (e) => {
+          s.name = (e.target as HTMLInputElement).value;
+          scheduleValidate();
+        },
+      }) as HTMLInputElement;
+      input.style.width = '180px';
+      return input;
+    })(),
+    labelled(
+      'description',
+      (() => {
+        const input = el('input', {
+          type: 'text',
+          value: s.description,
+          oninput: (e) => {
+            s.description = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }) as HTMLInputElement;
+        input.style.width = '260px';
+        return input;
+      })(),
+    ),
+    el('span', { class: 'fe-node-actions' }, [
+      iconBtn('✕', 'Delete structure definition', () => {
+        model.structs = model.structs.filter((x) => x.id !== s.id);
+        changed();
+      }),
+    ]),
+  ]);
+  card.append(head);
+  parent.append(card);
+
+  if (!s.collapsed) {
+    const kids = el('div', { class: 'fe-children' });
+    for (const child of s.children) {
+      renderNode(kids, child, 1);
+    }
+    kids.append(
+      addRow(18, [
+        ['+ Field', () => addStructChild(s.id, 'field')],
+        ['+ Array', () => addStructChild(s.id, 'array')],
+        ['+ Structure', () => addStructChild(s.id, 'struct')],
       ]),
     );
     parent.append(kids);

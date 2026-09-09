@@ -91,7 +91,7 @@ describe('FormatScaffold', () => {
     assert.deepStrictEqual(arr.items, { name: 'entry', type: 'bytes', size: 48 });
   });
 
-  it('scaffoldArray (struct) emits a valid fill-in template', () => {
+  it('scaffoldArray (struct) defines a reusable structure and references it', () => {
     const r = scaffoldArray({
       name: 'x',
       fileName: 'recs.bin',
@@ -100,9 +100,11 @@ describe('FormatScaffold', () => {
       element: { kind: 'struct', recordSize: 32 },
     });
     assert.deepStrictEqual(validateFormat(r.format).errors, []);
-    const items = r.format.fields![r.format.fields!.length - 1].items!;
-    assert.ok(Array.isArray(items.fields));
-    const inner = items.fields as { name: string }[];
+    assert.strictEqual(r.count, 10);
+    const arr = r.format.fields![r.format.fields!.length - 1];
+    assert.deepStrictEqual(arr.items, { name: 'item', type: 'Record' });
+    assert.ok(r.format.structures && r.format.structures.Record);
+    const inner = r.format.structures!.Record.fields as { name: string }[];
     assert.deepStrictEqual(inner.map((f) => f.name), ['field0', 'rest']);
   });
 

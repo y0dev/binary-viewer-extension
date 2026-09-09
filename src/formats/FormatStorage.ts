@@ -63,12 +63,20 @@ export class FormatStorage {
     );
   }
 
+  /** Glob patterns to watch for created / changed / deleted format files. */
   allWatchableGlobs(): vscode.RelativePattern[] {
-    const globs: vscode.RelativePattern[] = [];
+    const globs: vscode.RelativePattern[] = [
+      // Global storage (non-recursive watcher on direct *.json children).
+      new vscode.RelativePattern(this.globalDir, '*.json'),
+    ];
     for (const f of vscode.workspace.workspaceFolders ?? []) {
       globs.push(new vscode.RelativePattern(f, `${WORKSPACE_REL}/*.json`));
     }
     return globs;
+  }
+
+  async ensureGlobalDir(): Promise<void> {
+    await this.ensureDir(this.globalDir);
   }
 
   async loadGlobal(): Promise<LoadedFormat[]> {

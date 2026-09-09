@@ -1,0 +1,40 @@
+{
+  "name": "Sensor Log",
+  "description": "A header followed by a large array of fixed 8-byte samples, decoded through a reusable \"Sample\" structure instead of a repeated fields block.",
+  "version": "1.0.0",
+  "fileExtensions": [".slog"],
+  "endianness": "little",
+  "magic": { "offset": 0, "bytes": "53 4C 4F 47" },
+  "structures": {
+    "Sample": {
+      "description": "One measurement record",
+      "fields": [
+        { "name": "timestamp", "type": "uint32", "offset": 0, "description": "ms since boot" },
+        { "name": "channel", "type": "uint8", "offset": 4 },
+        {
+          "name": "flags",
+          "type": "uint8",
+          "offset": 5,
+          "fields": [
+            { "name": "valid", "bits": "0" },
+            { "name": "clipped", "bits": "1" },
+            { "name": "range", "bits": "4-6", "enum": { "0": "1x", "1": "10x", "2": "100x" } }
+          ]
+        },
+        { "name": "value", "type": "int16", "offset": 6 }
+      ]
+    }
+  },
+  "fields": [
+    { "name": "Magic", "type": "ascii", "offset": 0, "length": 4 },
+    { "name": "Version", "type": "uint16", "offset": 4 },
+    { "name": "SampleCount", "type": "uint16", "offset": 6 },
+    {
+      "name": "Samples",
+      "type": "array",
+      "offset": 8,
+      "count": 32,
+      "items": { "name": "sample", "type": "Sample" }
+    }
+  ]
+}

@@ -26,21 +26,38 @@ Two modes:
     `selection ÷ sizeof(type)`.
   - *Array of opaque byte records* / *Array of struct records* — you give the
     record size; the count is `selection ÷ recordSize` and the leftover bytes
-    are reported. You get **one `items` template** to flesh out, e.g.
+    are reported. A struct element is emitted as a **reusable structure** you
+    edit once:
 
     ```jsonc
-    { "name": "records", "type": "array", "offset": 4096, "count": 8192,
-      "items": { "name": "record", "fields": [
-        { "name": "field0", "type": "uint32", "offset": 0, "description": "TODO" },
-        { "name": "rest",   "type": "bytes",  "offset": 4, "size": 12, "description": "TODO" }
-      ] } }
+    {
+      "structures": {
+        "Record": {
+          "fields": [
+            { "name": "field0", "type": "uint32", "offset": 0, "description": "TODO" },
+            { "name": "rest",   "type": "bytes",  "offset": 4, "size": 12, "description": "TODO" }
+          ]
+        }
+      },
+      "fields": [
+        { "name": "records", "type": "array", "offset": 4096, "count": 8192,
+          "items": { "name": "item", "type": "Record" } }
+      ]
+    }
     ```
 
-    Editing `items` once decodes all 8192 records — no need to hand-write them.
+    Fill in `Record` once and all 8192 rows decode — see
+    [FORMAT_DEFINITIONS.md → Reusable structures](FORMAT_DEFINITIONS.md#reusable-structures).
 
 The generated file lands in global storage (`Edit JSON` jumps straight to
 `"items"`); move it into `.vscode/binary-viewer/formats/` to share it with a
 repo.
+
+While you refine the JSON by hand, use the **✓ Validate** and **↻ Apply to open
+binary** buttons in the editor title bar (also CodeLenses at the top of the
+file): Validate checks syntax + schema and lists problems; Apply saves, reloads
+and re-decodes the open binary so you see each change immediately. Validate also
+runs on save.
 
 ---
 
@@ -179,9 +196,12 @@ Matching binaries for each live in [`examples/binaries/`](../examples/binaries/)
 - A field is **either** a `type` (primitive) **or** a `fields` array (structure) —
   never both. The one exception is the bit-field form
   `{ "type": "uint8", "fields": [ { "name": "...", "bits": "0" } ] }`.
+- Use **`+ Add Array`** for repeating data and the **Reusable structures**
+  section (`+ Add Structure Definition`) for a record layout — then pick the
+  structure name as the array's element type. **⧉** duplicates any row.
 - The editor's **advanced** box merges any extra JSON onto a primitive field —
-  use it for `enum`, `items` (array element), `timestamp`, `scale`/`bias`, or the
-  bit-field `fields` array.
+  use it for `enum`, `timestamp`, `scale`/`bias`, or the bit-field `fields`
+  array.
 - If the Structure view shows `<reads past end of file>` on a field, its
   `offset` + size is beyond the file — check the offsets against the hex view.
 - Use **Binary Viewer: Import / Export Binary Format** to move definitions

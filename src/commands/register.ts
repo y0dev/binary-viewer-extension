@@ -8,6 +8,7 @@ import { registerFormatAuthoringCommands } from './CreateFormat';
 import { registerImportExportCommands } from './ImportExportFormat';
 import { registerReloadFormats } from './ReloadFormats';
 import { registerGenerateFormat } from './GenerateFormat';
+import { registerFormatFileActions } from './FormatFileActions';
 
 export function registerAllCommands(
   context: vscode.ExtensionContext,
@@ -32,4 +33,6 @@ export function registerAllCommands(
     }),
   ];
   context.subscriptions.push(...disposables);
+
+  registerFormatFileActions(context, provider, formats);
 }

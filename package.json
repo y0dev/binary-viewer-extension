@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -86,6 +86,8 @@
       { "command": "binaryViewer.importFormat", "title": "Import Binary Format", "category": "Binary Viewer" },
       { "command": "binaryViewer.exportFormat", "title": "Export Binary Format", "category": "Binary Viewer" },
       { "command": "binaryViewer.reloadFormats", "title": "Reload Binary Formats", "category": "Binary Viewer" },
+      { "command": "binaryViewer.validateFormatFile", "title": "Validate Binary Format File", "category": "Binary Viewer", "icon": "$(check)" },
+      { "command": "binaryViewer.applyFormatFile", "title": "Apply Binary Format File", "category": "Binary Viewer", "icon": "$(sync)" },
       { "command": "binaryViewer.openWith", "title": "Open With Binary Viewer", "category": "Binary Viewer" }
     ],
     "menus": {
@@ -106,6 +108,18 @@
           "command": "binaryViewer.openWith",
           "group": "navigation@30",
           "when": "!explorerResourceIsFolder"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "binaryViewer.validateFormatFile",
+          "when": "binaryViewer.formatFileOpen",
+          "group": "navigation@1"
+        },
+        {
+          "command": "binaryViewer.applyFormatFile",
+          "when": "binaryViewer.formatFileOpen",
+          "group": "navigation@2"
         }
       ]
     },

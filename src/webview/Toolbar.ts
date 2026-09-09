@@ -200,7 +200,16 @@ export class Toolbar {
   private renderFormatSelect(): void {
     clear(this.formatSelectWrap);
     const s = this.store.state;
+
+    const reloadBtn = el('button', {
+      class: 'bv-btn bv-btn-sm bv-btn-icon',
+      title: 'Reload binary formats (rescan workspace + global JSON)',
+      text: '↻',
+      onclick: () => post({ type: 'reloadFormats' }),
+    });
+
     if (s.formats.length === 0 && !s.activeFormat) {
+      this.formatSelectWrap.append(reloadBtn);
       return;
     }
     const select = el('select', {
@@ -213,11 +222,12 @@ export class Toolbar {
     }) as HTMLSelectElement;
     select.append(el('option', { value: '', text: 'Format: (none)' }));
     for (const f of s.formats) {
+      const src = f.source === 'workspace' ? ' [workspace]' : f.source === 'builtin' ? ' [builtin]' : '';
       const tag = f.name === s.detectedFormat ? ' (detected)' : '';
-      select.append(el('option', { value: f.name, text: `Format: ${f.name}${tag}` }));
+      select.append(el('option', { value: f.name, text: `Format: ${f.name}${src}${tag}` }));
     }
     select.value = s.activeFormat ?? '';
-    this.formatSelectWrap.append(el('label', { class: 'bv-label', text: 'Format:' }), select);
+    this.formatSelectWrap.append(el('label', { class: 'bv-label', text: 'Format:' }), select, reloadBtn);
   }
 
   private persist(): void {

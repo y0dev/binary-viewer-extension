@@ -126,6 +126,23 @@ fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'flash.fls'), buf);
 }
 
+// --- sensor.slog : matches "Sensor Log" (reusable "Sample" structure) ---
+{
+  const N = 32;
+  const buf = Buffer.alloc(8 + N * 8);
+  buf.write('SLOG', 0, 'ascii');
+  buf.writeUInt16LE(1, 4); // Version
+  buf.writeUInt16LE(N, 6); // SampleCount
+  for (let i = 0; i < N; i++) {
+    const o = 8 + i * 8;
+    buf.writeUInt32LE(1000 + i * 25, o); // timestamp
+    buf.writeUInt8(i % 4, o + 4); // channel
+    buf.writeUInt8(0x01 | (i % 3 === 0 ? 0x02 : 0) | ((i % 3) << 4), o + 5); // flags: valid, maybe clipped, range
+    buf.writeInt16LE(Math.round(2000 * Math.sin(i / 3)), o + 6); // value
+  }
+  fs.writeFileSync(path.join(OUT, 'sensor.slog'), buf);
+}
+
 // --- sample.dat : arbitrary binary, no matching format (raw-mode demo) ---
 {
   const buf = Buffer.alloc(4096);

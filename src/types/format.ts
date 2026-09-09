@@ -152,6 +152,19 @@ export interface SectionDefinition {
   description?: string;
 }
 
+/**
+ * A reusable structure body. Referenced from a field by `"type": "<name>"`;
+ * the extension inlines it before parsing. `fields` offsets are relative to the
+ * referencing field, exactly like an inline nested structure.
+ */
+export interface StructBody {
+  fields: FieldDefinition[];
+  /** Explicit total size; otherwise computed from the largest child end. */
+  size?: number;
+  endianness?: Endianness;
+  description?: string;
+}
+
 export interface FormatDefinition {
   /** Unique, human-readable name. Used as the storage key. */
   name: string;
@@ -164,6 +177,12 @@ export interface FormatDefinition {
   endianness?: Endianness;
   /** One or more magic-byte signatures. Any match counts. */
   magic?: MagicSpec | MagicSpec[];
+  /**
+   * Reusable named structures. A field (or an array's `items`) can then set
+   * `"type": "<key>"` instead of repeating a `fields` block — handy for large
+   * arrays of records.
+   */
+  structures?: Record<string, StructBody>;
   /** Top-level fields. Optional when `sections` is provided. */
   fields?: FieldDefinition[];
   /** Named regions for the Sections / memory-map view. */

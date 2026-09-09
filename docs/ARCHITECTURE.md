@@ -7,17 +7,22 @@
 │                                                                             │
 │  extension.ts                                                               │
 │    ├─ FormatManager ── FormatStorage ── BuiltinFormats                      │
-│    │     (builtin + global + workspace, precedence resolution, watchers)    │
+│    │     (builtin + global + workspace; debounced watchers on BOTH          │
+│    │      locations; precedence via core/FormatMerge)                       │
 │    ├─ BinaryEditorProvider  (CustomReadonlyEditorProvider)                  │
 │    │     ├─ BinaryDocument ── BinaryReader (range reads) ── BinaryCache     │
 │    │     └─ per-panel message router                                       │
-│    ├─ commands/*  (Go To, Search, Toggle*, Create/Edit/Import/Export…)     │
+│    ├─ commands/*  (Go To, Search, Toggle*, Create/Edit/Import/Export,      │
+│    │              Generate…, Validate/Apply format file)                   │
 │    └─ FormatEditorPanel  (WebviewPanel form editor)                        │
 │                                                                             │
 │  core/  ── pure, no vscode/node ── DataTypes, Endianness, BitField,        │
 │           FieldShape (container/bit-field/primitive classification),        │
-│            BinaryField, BinaryParser, FormatSchema, FormatDetector,        │
-│            SearchPattern, humanize                                          │
+│           BinaryField, BinaryParser, FormatSchema (+ validateFormatText),  │
+│           FormatResolve (inline reusable `structures`),                    │
+│           FormatDetector, FormatMerge (name/filename precedence),          │
+│           Sections (memory-map rows), FormatScaffold, SearchPattern,       │
+│           humanize                                                         │
 └───────────────────────────────┬─────────────────────────────────────────────┘
                                 │  typed postMessage protocol (types/messages.ts)
 ┌───────────────────────────────┴─────────────────────────────────────────────┐
@@ -26,11 +31,14 @@
 │    ├─ Store            (central observable state)                           │
 │    ├─ DataProvider     (bounded block cache; requests ranges from host)     │
 │    ├─ HexView          (VirtualGrid-backed hex/ASCII grid, selection)       │
-│    ├─ StructureView    (parsed-node table, field→bytes highlight)           │
+│    ├─ StructureView    (parsed-node tree, breadcrumb, field→bytes)          │
+│    ├─ SectionsView     (memory-map table; row→bytes)                        │
 │    ├─ Inspector        (scalar interpretation, LE/BE)                       │
-│    ├─ Toolbar          (view toggle, bytes/row, endian, format, search)     │
+│    ├─ Toolbar          (Raw/Structure/Sections, bytes/row, endian,          │
+│    │                    format select + ↻ reload, search, go-to)           │
 │    ├─ SearchBar        (query kinds, next/prev/all)                         │
-│    └─ StatusBar                                                             │
+│    ├─ StatusBar                                                             │
+│    └─ formatEditor/    (the form editor's own bundle)                       │
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -40,11 +48,16 @@
 | --- | --- |
 | File access, `fs` handles, range reads | `binary/BinaryReader` (host) |
 | Bounded caching of file bytes | `binary/BinaryCache` (host), `webview/DataProvider` (webview) |
-| Binary parsing & format schema | `core/*` (pure — runs in host today, importable anywhere) |
-| Format discovery, storage, precedence | `formats/*` (host) |
+| Binary parsing, format schema, scaffolding | `core/*` (pure — runs in host today, importable anywhere) |
+| Reusable `structures` -> inline `fields` | `core/FormatResolve` (pure; run in `doParse` before parsing) |
+| Format discovery, storage, watchers | `formats/*` (host) |
+| Format precedence (name / filename merge) | `core/FormatMerge` (pure) |
+| Sections / memory-map row building | `core/Sections` (pure) |
+| Generate a starter format | `core/FormatScaffold` (pure) + `commands/GenerateFormat` |
+| Validate / apply a hand-edited format `.json` | `commands/FormatFileActions` + `core/FormatSchema.validateFormatText` |
 | Streaming search | `binary/BinarySearch` (host) + `core/SearchPattern` (pure) |
 | Rendering, selection, scrolling, interaction | `webview/*` |
-| Commands / palette / keybindings | `commands/*` (host) |
+| Commands / palette / keybindings / menus | `commands/*` (host) |
 
 The webview never receives more than a bounded window of file bytes. All
 messages are described by the discriminated unions in
@@ -60,9 +73,10 @@ extension host:
 | --- | --- |
 | `binary/BinaryReader`, `binary/BinaryCache` | `src/binary/` (Node `fs`) |
 | `binary/BinaryFormat`, `BinaryParser`, `BinaryField`, `DataTypes`, `Endianness`, `BitField` | `src/core/` (pure) |
-| `formats/FormatManager`, `FormatStorage`, `FormatDetector` | `src/formats/` (+ pure scoring in `core/FormatDetector`) |
-| `editor/*`, `commands/*`, `types/*` | same |
-| `webview/*`, `webview/components/*` | `src/webview/*` (bundled separately by esbuild) |
+| — | `src/core/` also holds `FieldShape`, `FormatSchema`, `FormatDetector`, `FormatMerge`, `Sections`, `FormatScaffold`, `SearchPattern`, `humanize` |
+| `formats/FormatManager`, `FormatStorage`, `FormatDetector` | `src/formats/` (+ pure scoring in `core/FormatDetector`, pure merge in `core/FormatMerge`) |
+| `editor/*`, `commands/*`, `types/*` | same (`commands/` includes `GenerateFormat`, `FormatFileActions`) |
+| `webview/*`, `webview/components/*` | `src/webview/*` + `src/webview/formatEditor/*` (three esbuild bundles) |
 
 ## Performance model
 
@@ -97,14 +111,26 @@ Type-checking is separate: `tsconfig.json` (host, Node + vscode libs) and
 
 The format schema is intentionally a superset of what the parser implements
 today. `FieldDefinition` already carries the shape for nested structs, arrays,
-enums, bit fields, timestamps, scale/bias and per-field endianness. Future
-additions (variable-length fields, conditionals, calculated/CRC fields, pointer
-chasing, C-struct / DWARF / ELF / S-record / Intel-HEX importers,
-memory-map visualization) slot in as:
+enums, bit fields, timestamps, scale/bias and per-field endianness; the
+top-level `sections` array drives the memory-map view. Future additions
+(variable-length fields, conditionals, calculated/CRC fields, pointer chasing,
+C-struct / DWARF / ELF / S-record / Intel-HEX importers) slot in as:
 
 1. new `type` handlers in `core/BinaryParser` (+ `computeFieldSize` + schema
    validation), and
 2. optional new message fields — never a code-execution hook.
+
+### Format authoring
+
+`core/FormatScaffold` emits *valid starter* definitions (whole-file skeleton, or
+a computed `array` from a byte selection) that the user finishes by hand;
+`core/FormatSchema.validateFormatText` re-validates a JSON file's raw text
+(single definition or an array, JSON-syntax errors included) for the
+editor-title / CodeLens **Validate** and **Apply** buttons in
+`commands/FormatFileActions`. `core/FormatMerge` resolves precedence purely, by
+format `name` **or** backing-file name, so `formats/FormatManager` only has to
+load the three groups and merge. `core/FormatResolve` expands the top-level
+`structures` map into inline `fields` (see *Nested structures* below).
 
 ### Nested structures
 
@@ -115,6 +141,9 @@ parser threads a `stack` of `{ id, path }` frames so every emitted `ParsedNode`
 carries `parentId`, `path` and `isContainer`; `computeStructSize` resolves a
 structure's size (explicit or largest-child-end) and recurses. Child offsets in
 a definition are always relative to their parent; the parser converts them to
-absolute. A future *reusable named structures* feature only needs a resolver
-pass that inlines `"type": "<StructName>"` references into `fields` before
-parsing — the parser is already recursive.
+absolute.
+
+**Reusable named structures** build on this: `core/FormatResolve` inlines every
+`"type": "<StructName>"` reference (from `structures`) into a typeless `fields`
+container before the parser or `computeFieldSize` ever see it — so no parser or
+protocol change was needed. It detects reference cycles and reports them.

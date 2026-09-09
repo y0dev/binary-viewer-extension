@@ -15,16 +15,19 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
 ## The toolbar
 
 ```
-[ Raw ] [ Structure ]   Bytes: [16 ▼]   Endian: [Little ▼]   Format: [ … ▼ ]        [ Inspector ] [ Search ] [ Go To ]   0x00000120
+[ Raw ] [ Structure ] [ Sections ]   Bytes: [16 ▼]   Endian: [Little ▼]   Format: [ … ▼ ] ↻   [ Inspector ] [ Search ] [ Go To ]   0x00000120
 ```
 
-- **Raw / Structure** — switch views. Structure is available once a format is
-  applied (auto-detected or chosen).
+- **Raw / Structure / Sections** — switch views. Structure and Sections need a
+  format applied (auto-detected or chosen); Sections also works from a format's
+  top-level fields when it declares no `sections`.
 - **Bytes** — 8, 16 or 32 bytes per row. Default from `binaryViewer.bytesPerRow`.
-- **Endian** — affects the inspector and structure decoding (for formats/fields
-  that don't pin their own endianness).
-- **Format** — appears when at least one format is known. `(detected)` marks the
-  auto-detected one. Choose **(none)** to go back to raw-only.
+- **Endian** — affects the inspector and structure/sections decoding (for
+  formats/fields that don't pin their own endianness).
+- **Format** — appears when at least one format is known. Entries are tagged
+  `[workspace]` / `[builtin]`; `(detected)` marks the auto-detected one. Choose
+  **(none)** to go back to raw-only. The **↻** button rescans the workspace and
+  global formats folders.
 - **Inspector / Search / Go To** — toggles and tools (also on the command
   palette and keybindings).
 - The right-hand readout shows the caret offset and `+N` selection length.
@@ -129,8 +132,19 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
 - **Edit** an existing format the same way (built-ins open as an editable copy).
 - **Duplicate** pre-fills the editor with `… (copy)`.
 - **Import / Export** move definitions as `.json` files.
-- **Reload** re-scans global + workspace definitions (also automatic via a file
-  watcher).
+- **Editing the JSON by hand?** When a `.vscode/binary-viewer/formats/*.json`
+  (or global) file is open, two buttons appear in the editor title bar and as
+  CodeLenses at the top of the file:
+  - **✓ Validate** — checks the current text (JSON syntax + the format schema)
+    and reports problems in a notification and the Problems panel. Runs
+    automatically on save too.
+  - **↻ Apply to open binary** — saves, reloads, and applies this format to the
+    open binary viewer so you see the effect immediately.
+- **Reload** re-scans global + workspace definitions. It also happens
+  automatically: file watchers on both locations pick up new / edited / deleted
+  JSON within ~150 ms, and the **↻** button beside the format dropdown forces it.
+  When the JSON of the *currently applied* format changes, the open file
+  re-decodes in place.
 
 ### Where formats live
 
@@ -140,9 +154,11 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
 | Global | `<globalStorage>/binary-viewer/formats/*.json` | yes | middle |
 | Workspace | `<workspace>/.vscode/binary-viewer/formats/*.json` | yes (edit the file) | highest |
 
-A workspace format with the same `name` replaces the global/builtin one — handy
-for a repo full of proprietary firmware layouts. Workspace formats load only in
-**trusted** workspaces.
+A workspace file replaces a global/builtin one when they collide **by format
+`name` or by JSON file name** — so dropping `firmware.json` into
+`.vscode/binary-viewer/formats/` shadows the global `firmware.json` even if the
+`name` fields differ. Handy for a repo full of proprietary firmware layouts.
+Workspace formats load only in **trusted** workspaces.
 
 ## Themes
 

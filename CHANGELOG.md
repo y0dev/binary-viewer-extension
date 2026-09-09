@@ -1,6 +1,8 @@
 # Change Log
 
-## 0.4.0 — Generate a format from a binary
+## 0.5.0 — Format authoring workflow
+
+### Generate a format from a binary
 
 - New command **Binary Viewer: Generate Binary Format From File** (also on the
   Structure / Sections empty-state buttons). Scaffolds a *valid* starter JSON,
@@ -11,7 +13,49 @@
     from the selection: pick a scalar type, or give a record size for opaque
     `bytes` / a `struct` stub. The point is large repeating data — you edit one
     `items` template instead of thousands of fields; leftover bytes are reported.
-- Pure `core/FormatScaffold.ts` + 8 unit tests (92 total).
+- Pure `core/FormatScaffold.ts`.
+
+### Refresh & precedence
+
+- **Global storage is now watched** too (not just the workspace), so a format
+  JSON dropped into `<globalStorage>/binary-viewer/formats/` is picked up
+  without a manual reload. File events are debounced (~150 ms).
+- Precedence is now **format name OR JSON file name**: a workspace
+  `firmware.json` shadows a global `firmware.json` even when the two `name`
+  fields differ (previously only the `name` field decided it). Pure
+  `core/FormatMerge.ts`.
+- When the *applied* format's JSON changes, the open file **re-decodes in
+  place**; if that format's file is deleted, the viewer falls back to Raw.
+- A **↻ Reload formats** button sits next to the format dropdown; the dropdown
+  now tags entries `[workspace]` / `[builtin]`.
+
+### Editing format JSON by hand
+
+- When a format `.json` file is open (in `.vscode/binary-viewer/formats/` **or**
+  the global storage folder) editor-title buttons **✓ Validate** and **↻ Apply
+  to open binary** appear (also as CodeLenses at the top of the file). Validate
+  checks JSON syntax + the schema, reports problems in a notification and the
+  Problems panel, and re-runs on save. Apply saves, reloads and re-decodes the
+  open binary.
+- Commands: *Binary Viewer: Validate Binary Format File* / *Apply Binary Format
+  File*. Pure `validateFormatText()`.
+
+### Reusable structures & easier arrays
+
+- Format definitions gain an optional top-level `structures` map. A field or an
+  array's `items` can set `"type": "<StructName>"` instead of repeating a
+  `fields` block — the main fix for large arrays of records. Cross-references
+  and cycles are detected; the whole thing is resolved to inline `fields`
+  before parsing (pure `core/FormatResolve.ts`).
+- **Format editor**: a "Reusable structures" section (`+ Add Structure
+  Definition`); those names appear in every type dropdown. Arrays are now
+  first-class (`+ Add Array` → count → element type) instead of an advanced-box
+  JSON fragment. New per-row **⧉ Duplicate** button (copies the row and its
+  whole subtree).
+- `Generate … From File` with a struct element now emits a `structures.Record`
+  + a reference to it.
+
+_(115 unit tests total.)_
 
 ## 0.3.0 — Sections / memory-map view
 

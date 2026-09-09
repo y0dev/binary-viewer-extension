@@ -143,6 +143,12 @@ body {
   font-size: 11px;
 }
 
+.bv-btn-icon {
+  padding: 2px 6px;
+  font-size: 13px;
+  line-height: 1;
+}
+
 .bv-offset-readout {
   margin-left: auto;
   color: var(--vscode-descriptionForeground);

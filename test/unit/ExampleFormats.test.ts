@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { validateFormat } from '../../src/core/FormatSchema';
 import { parseFormat } from '../../src/core/BinaryParser';
+import { resolveStructures } from '../../src/core/FormatResolve';
 import { detectFormats } from '../../src/core/FormatDetector';
 import type { FormatDefinition } from '../../src/types/format';
 import type { ParsedNode } from '../../src/types/messages';
@@ -103,5 +104,38 @@ describe('Shipped example formats', () => {
     const sig = nodes.find((x) => x.name === 'Signature')!;
     assert.strictEqual(sig.offset, 510);
     assert.strictEqual(sig.value, '0xAA55');
+  });
+
+  it('Sensor Log decodes sensor.slog via a reusable "Sample" structure', () => {
+    const def = loadFormat('sensor-log.json');
+    const bytes = loadBin('sensor.slog');
+
+    assert.deepStrictEqual(validateFormat(def).errors, []);
+    assert.strictEqual(
+      detectFormats([def], 'sensor.slog', bytes)[0]?.format.name,
+      'Sensor Log',
+    );
+
+    const { format, errors } = resolveStructures(def);
+    assert.deepStrictEqual(errors, []);
+    assert.strictEqual(format.structures, undefined); // inlined away
+
+    const { nodes, error } = parseFormat(
+      format,
+      { baseOffset: 0, bytes, fileSize: bytes.length },
+      { defaultEndianness: 'little' },
+    );
+    assert.strictEqual(error, undefined);
+
+    const timestamps = nodes.filter((n: ParsedNode) => n.name === 'timestamp');
+    assert.strictEqual(timestamps.length, 32);
+    assert.strictEqual(timestamps[0].offset, 8);
+    assert.strictEqual(timestamps[0].value, '1000');
+    assert.strictEqual(timestamps[31].offset, 8 + 31 * 8);
+    // the bit-field inside the reusable struct still works
+    const flags0 = nodes.find(
+      (n) => n.name === 'flags' && n.offset === 8 + 5,
+    )!;
+    assert.ok(flags0.bits && flags0.bits.length === 3);
   });
 });
