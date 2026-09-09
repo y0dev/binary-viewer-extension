@@ -81,7 +81,7 @@ extension registers as an *optional* editor for `.bin .hex .img .dat .fw .rom
 ### Package a VSIX
 
 ```bash
-npm run package     # produces binary-viewer-0.1.0.vsix
+npm run package     # produces binary-structure-inspector-0.2.0.vsix
 ```
 
 ---

@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-const EXT_ID = 'y0dev.binary-viewer';
+const EXT_ID = 'devdoesit.binary-structure-inspector';
 
 function makeFirmwareFixture(): vscode.Uri {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'binview-int-'));

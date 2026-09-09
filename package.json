@@ -1,9 +1,9 @@
 {
-  "name": "binary-viewer",
+  "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
   "version": "0.2.0",
-  "publisher": "y0dev",
+  "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
   "galleryBanner": {
