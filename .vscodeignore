@@ -7,6 +7,7 @@ test/**
 scripts/**
 media/**
 !media/*.css
+!media/icon.png
 **/*.ts
 **/*.map
 **/tsconfig*.json

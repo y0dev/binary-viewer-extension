@@ -5,6 +5,11 @@
   "version": "0.2.0",
   "publisher": "y0dev",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#171E2B",
+    "theme": "dark"
+  },
   "author": {
     "name": "Devontae Reid",
     "url": "https://www.devontaereid.com"
@@ -165,6 +170,7 @@
     "test:integration": "node ./out/test/runIntegration.js",
     "test": "npm run test:unit",
     "gen-fixtures": "node scripts/gen-fixtures.js",
+    "gen-icon": "node scripts/gen-icon.js",
     "package": "npm run check-types && node esbuild.js --production && vsce package --no-dependencies"
   },
   "devDependencies": {
