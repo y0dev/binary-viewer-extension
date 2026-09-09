@@ -1,0 +1,39 @@
+{
+  "name": "Device EEPROM Config",
+  "description": "Example 128-byte EEPROM configuration dump for a sensor board.",
+  "fileExtensions": [".eeprom", ".dump"],
+  "endianness": "big",
+  "magic": { "offset": 0, "bytes": "CA FE" },
+  "fields": [
+    { "name": "Signature", "type": "uint16", "offset": 0, "display": "hex" },
+    { "name": "Layout Revision", "type": "uint8", "offset": 2 },
+    { "name": "Board Serial", "type": "uint32", "offset": 4 },
+    { "name": "MAC Address", "type": "bytes", "offset": 8, "size": 6 },
+    {
+      "name": "Region",
+      "type": "enum",
+      "offset": 14,
+      "size": 1,
+      "enum": { "0": "FCC", "1": "ETSI", "2": "MIC", "3": "SRRC" }
+    },
+    { "name": "Calibration Offset", "type": "int16", "offset": 16, "scale": 0.01, "unit": "dBm" },
+    { "name": "VREF", "type": "uint16", "offset": 18, "scale": 0.001, "unit": "V" },
+    {
+      "name": "Feature Bits",
+      "type": "flags",
+      "offset": 20,
+      "size": 4,
+      "fields": [
+        { "name": "BLE", "bits": "0" },
+        { "name": "WiFi", "bits": "1" },
+        { "name": "LoRa", "bits": "2" },
+        { "name": "GPS", "bits": "3" },
+        { "name": "HW Revision", "bits": "8-15" },
+        { "name": "Reserved", "bits": "16-31" }
+      ]
+    },
+    { "name": "Device Name", "type": "ascii", "offset": 24, "length": 24 },
+    { "name": "Reserved", "type": "bytes", "offset": 48, "size": 78 },
+    { "name": "Checksum", "type": "uint16", "offset": 126, "display": "hex" }
+  ]
+}

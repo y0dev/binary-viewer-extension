@@ -1,0 +1,491 @@
+/* Binary Viewer webview styles. All colors come from VS Code theme variables so
+   light, dark and high-contrast themes are all supported automatically. */
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+}
+
+.bv-mono {
+  font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace);
+}
+
+.bv-dim {
+  color: var(--vscode-descriptionForeground);
+}
+
+.bv-spacer {
+  flex: 1 1 auto;
+}
+
+/* ---- Toolbar ------------------------------------------------------- */
+
+.bv-toolbar,
+.bv-searchbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  flex: none;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.bv-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bv-label {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+
+.bv-segmented {
+  display: inline-flex;
+  border: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bv-seg {
+  border: 0;
+  background: transparent;
+  color: var(--vscode-foreground);
+  padding: 3px 12px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.bv-seg + .bv-seg {
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.bv-seg-active {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+
+.bv-select,
+.bv-input {
+  font: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  border-radius: 2px;
+  padding: 3px 6px;
+}
+
+.bv-input:focus,
+.bv-select:focus,
+.bv-hex-scroller:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.bv-goto-input {
+  width: 120px;
+}
+
+.bv-invalid {
+  outline: 1px solid var(--vscode-inputValidation-errorBorder, #d33) !important;
+}
+
+.bv-btn {
+  font: inherit;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  background: var(--vscode-button-secondaryBackground, transparent);
+  border: 1px solid var(--vscode-button-border, var(--vscode-panel-border, rgba(128, 128, 128, 0.35)));
+  border-radius: 2px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.bv-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.15)));
+}
+
+.bv-btn-active {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border-color: var(--vscode-button-background);
+}
+
+.bv-btn-sm {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.bv-offset-readout {
+  margin-left: auto;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+.bv-check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bv-search-status {
+  color: var(--vscode-descriptionForeground);
+  min-width: 90px;
+  font-size: 11px;
+}
+
+/* ---- Body / layout ---------------------------------------------- */
+
+.bv-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bv-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ---- Hex view --------------------------------------------------- */
+
+.bv-hex {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.bv-row {
+  font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  white-space: pre;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+}
+
+.bv-hex-header {
+  flex: none;
+  padding: 0;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  color: var(--vscode-descriptionForeground);
+  background: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  user-select: none;
+  overflow: hidden;
+}
+
+.bv-hex-header-inner {
+  display: flex;
+  align-items: center;
+  padding: 3px 10px;
+  white-space: pre;
+  font-family: var(--vscode-editor-font-family, ui-monospace, Menlo, Consolas, monospace);
+  font-size: var(--vscode-editor-font-size, 13px);
+  will-change: transform;
+}
+
+.bv-hex-scroller {
+  position: relative;
+  flex: 1 1 auto;
+  overflow: auto;
+  outline: none;
+}
+
+.bv-hex-sizer {
+  width: 1px;
+  flex: none;
+  pointer-events: none;
+}
+
+.bv-hex-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform;
+}
+
+.bv-off {
+  min-width: 10ch;
+  padding-right: 1ch;
+  flex: none;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+}
+
+.bv-hexcells,
+.bv-ascii {
+  display: flex;
+  flex: none;
+}
+
+.bv-cell {
+  padding-right: 1ch;
+  flex: none;
+  cursor: pointer;
+}
+
+.bv-cell.bv-split {
+  margin-left: 1ch;
+}
+
+.bv-asc-sep {
+  width: 2ch;
+  flex: none;
+}
+
+.bv-ac {
+  flex: none;
+  cursor: pointer;
+  white-space: pre;
+}
+
+.bv-colhead {
+  color: var(--vscode-descriptionForeground);
+  font-weight: 600;
+  cursor: default;
+}
+
+.bv-cell:hover,
+.bv-ac:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.bv-selected {
+  background: var(--vscode-editor-selectionBackground);
+  color: var(--vscode-editor-selectionForeground, inherit);
+}
+
+.bv-caret {
+  outline: 1px solid var(--vscode-editorCursor-foreground, var(--vscode-focusBorder));
+  outline-offset: -1px;
+}
+
+.bv-cell-empty {
+  cursor: default;
+}
+
+/* ---- Inspector ------------------------------------------------- */
+
+.bv-inspector {
+  width: 300px;
+  flex: none;
+  overflow: auto;
+  padding: 8px 10px;
+  border-left: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: var(--vscode-sideBar-background, var(--vscode-editorWidget-background));
+}
+
+.bv-inspector-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 8px;
+}
+
+.bv-insp-section {
+  margin-bottom: 12px;
+}
+
+.bv-insp-head {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--vscode-descriptionForeground);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  padding-bottom: 2px;
+  margin-bottom: 4px;
+}
+
+.bv-insp-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  padding: 1px 0;
+}
+
+.bv-insp-k {
+  color: var(--vscode-descriptionForeground);
+  flex: none;
+}
+
+.bv-insp-v {
+  font-family: var(--vscode-editor-font-family, monospace);
+  text-align: right;
+  word-break: break-all;
+}
+
+.bv-insp-missing {
+  opacity: 0.4;
+}
+
+/* ---- Structure view ------------------------------------------ */
+
+.bv-structure {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 10px;
+}
+
+.bv-struct-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.bv-struct-fmt {
+  font-weight: 600;
+}
+
+.bv-struct-wrap {
+  overflow: auto;
+}
+
+.bv-struct-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+
+.bv-struct-table th {
+  text-align: left;
+  position: sticky;
+  top: 0;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  padding: 5px 8px;
+}
+
+.bv-struct-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.2));
+  vertical-align: top;
+}
+
+.bv-struct-row {
+  cursor: pointer;
+}
+
+.bv-struct-row:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.bv-struct-active {
+  background: var(--vscode-list-activeSelectionBackground);
+  color: var(--vscode-list-activeSelectionForeground);
+}
+
+.bv-struct-val {
+  font-family: var(--vscode-editor-font-family, monospace);
+  word-break: break-all;
+}
+
+.bv-struct-err .bv-struct-val {
+  color: var(--vscode-errorForeground);
+}
+
+.bv-bit-row td,
+.bv-bit-grid-row td {
+  font-family: var(--vscode-editor-font-family, monospace);
+  color: var(--vscode-descriptionForeground);
+  white-space: pre;
+  border-bottom: none;
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.bv-empty {
+  padding: 24px;
+  color: var(--vscode-descriptionForeground);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.bv-error {
+  color: var(--vscode-errorForeground);
+  padding: 10px;
+  white-space: pre-wrap;
+}
+
+/* ---- Status bar --------------------------------------------- */
+
+.bv-status {
+  flex: none;
+  display: flex;
+  gap: 18px;
+  padding: 3px 12px;
+  border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+  background: var(--vscode-statusBar-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-statusBar-foreground, var(--vscode-foreground));
+  font-size: 11px;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+.bv-stat {
+  flex: none;
+}
+
+/* ---- Toast ------------------------------------------------- */
+
+.bv-toast {
+  position: fixed;
+  bottom: 34px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--vscode-notifications-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-notifications-foreground, var(--vscode-foreground));
+  border: 1px solid var(--vscode-notifications-border, var(--vscode-panel-border, #666));
+  padding: 8px 14px;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  max-width: 70%;
+  z-index: 100;
+}
+
+.bv-toast-show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}

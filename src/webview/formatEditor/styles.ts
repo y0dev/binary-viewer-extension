@@ -1,0 +1,50 @@
+export const FORMAT_EDITOR_CSS = `
+:root { color-scheme: light dark; }
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  margin: 0;
+}
+.fe-wrap { display: flex; flex-direction: column; gap: 14px; padding: 16px; max-width: 1100px; }
+h1 { font-size: 1.3em; margin: 0; }
+h2 { font-size: 1.05em; margin: 12px 0 4px; border-bottom: 1px solid var(--vscode-panel-border); padding-bottom: 4px; }
+.fe-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.fe-field { display: flex; flex-direction: column; gap: 3px; }
+.fe-field label { font-size: 0.85em; opacity: 0.8; }
+input[type=text], input[type=number], select, textarea {
+  font-family: inherit; font-size: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  border-radius: 2px; padding: 4px 6px; box-sizing: border-box;
+}
+input:focus, select:focus, textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+textarea { font-family: var(--vscode-editor-font-family, monospace); width: 100%; min-height: 60px; resize: vertical; }
+button {
+  font-family: inherit; font-size: inherit; cursor: pointer;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px; padding: 5px 12px;
+}
+button:hover { background: var(--vscode-button-hoverBackground); }
+button.secondary {
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+button.icon { padding: 2px 7px; }
+table.fe-fields { border-collapse: collapse; width: 100%; }
+table.fe-fields th, table.fe-fields td { border: 1px solid var(--vscode-panel-border); padding: 4px 6px; text-align: left; vertical-align: top; }
+table.fe-fields th { background: var(--vscode-editorWidget-background); font-weight: 600; }
+table.fe-fields input[type=text] { width: 100%; }
+.fe-cell-narrow input { width: 68px; }
+.fe-adv { margin-top: 4px; }
+.fe-adv summary { cursor: pointer; opacity: 0.8; font-size: 0.85em; }
+.fe-errors { border: 1px solid var(--vscode-inputValidation-errorBorder, #b00); background: var(--vscode-inputValidation-errorBackground, rgba(180,0,0,0.1)); padding: 8px 10px; border-radius: 3px; white-space: pre-wrap; }
+.fe-ok { color: var(--vscode-testing-iconPassed, #3c3); }
+.fe-preview { font-family: var(--vscode-editor-font-family, monospace); background: var(--vscode-textCodeBlock-background); padding: 10px; border-radius: 3px; white-space: pre; overflow: auto; max-height: 320px; }
+.fe-actions { display: flex; gap: 10px; position: sticky; bottom: 0; padding: 10px 0; background: var(--vscode-editor-background); }
+.fe-hint { opacity: 0.7; font-size: 0.85em; }
+`;

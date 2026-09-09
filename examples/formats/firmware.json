@@ -1,0 +1,36 @@
+{
+  "name": "ACME Firmware Header",
+  "description": "Example proprietary firmware image header for embedded devices.",
+  "version": "1.0.0",
+  "fileExtensions": [".fw", ".img"],
+  "endianness": "little",
+  "magic": { "offset": 0, "bytes": "46 57 01 00" },
+  "fields": [
+    { "name": "Magic", "type": "ascii", "offset": 0, "length": 2, "description": "ASCII \"FW\"" },
+    { "name": "Container Version", "type": "uint16", "offset": 2 },
+    { "name": "Firmware Version", "type": "uint16", "offset": 4 },
+    {
+      "name": "Flags",
+      "type": "flags",
+      "offset": 6,
+      "size": 2,
+      "fields": [
+        { "name": "Compressed", "bits": "0", "description": "Payload is LZ compressed" },
+        { "name": "Signed", "bits": "1" },
+        { "name": "Encrypted", "bits": "2" },
+        { "name": "Stage", "bits": "4-6", "enum": { "0": "bootloader", "1": "application", "2": "recovery" } },
+        { "name": "Reserved", "bits": "7-15" }
+      ]
+    },
+    { "name": "Image Size", "type": "uint32", "offset": 8, "display": "dec", "unit": "bytes" },
+    { "name": "Load Address", "type": "uint32", "offset": 12, "display": "hex" },
+    {
+      "name": "Build Timestamp",
+      "type": "timestamp",
+      "offset": 16,
+      "timestamp": { "size": 4, "unit": "s", "epoch": "unix" }
+    },
+    { "name": "CRC32", "type": "uint32", "offset": 20, "display": "hex" },
+    { "name": "Product", "type": "ascii", "offset": 24, "length": 16 }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "Telemetry Packet v2",
+  "description": "Example fixed-layout telemetry packet from a custom radio link (network byte order).",
+  "fileExtensions": [".pkt", ".dat", ".raw"],
+  "endianness": "big",
+  "magic": { "offset": 0, "bytes": "A5 5A" },
+  "fields": [
+    { "name": "Preamble", "type": "uint16", "offset": 0, "display": "hex" },
+    { "name": "Protocol Version", "type": "uint8", "offset": 2 },
+    {
+      "name": "Message Type",
+      "type": "enum",
+      "offset": 3,
+      "size": 1,
+      "enum": { "1": "HEARTBEAT", "2": "GPS_FIX", "3": "IMU", "4": "STATUS", "255": "DEBUG" }
+    },
+    { "name": "Sequence", "type": "uint16", "offset": 4 },
+    { "name": "Payload Length", "type": "uint16", "offset": 6 },
+    { "name": "Timestamp (ms)", "type": "timestamp", "offset": 8, "timestamp": { "size": 8, "unit": "ms", "epoch": "unix" } },
+    { "name": "Latitude", "type": "int32", "offset": 16, "scale": 1e-7, "unit": "deg" },
+    { "name": "Longitude", "type": "int32", "offset": 20, "scale": 1e-7, "unit": "deg" },
+    { "name": "Altitude", "type": "float32", "offset": 24, "unit": "m" },
+    { "name": "Battery", "type": "uint8", "offset": 28, "unit": "%" },
+    {
+      "name": "Status",
+      "type": "flags",
+      "offset": 29,
+      "size": 1,
+      "fields": [
+        { "name": "Armed", "bits": "0" },
+        { "name": "GPS Lock", "bits": "1" },
+        { "name": "Fault", "bits": "2" },
+        { "name": "Mode", "bits": "4-7", "enum": { "0": "idle", "1": "run", "2": "safe" } }
+      ]
+    },
+    { "name": "Header CRC", "type": "uint16", "offset": 30, "display": "hex" }
+  ]
+}

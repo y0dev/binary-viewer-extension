@@ -1,0 +1,176 @@
+{
+  "name": "binary-viewer",
+  "displayName": "Binary Viewer & Structure Inspector",
+  "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
+  "version": "0.1.0",
+  "publisher": "binary-viewer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/binary-viewer.git"
+  },
+  "qna": false,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "hex",
+    "hex editor",
+    "binary",
+    "firmware",
+    "embedded",
+    "reverse engineering",
+    "struct"
+  ],
+  "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Workspace-defined binary formats under .vscode/binary-viewer are only loaded in trusted workspaces. Raw hex viewing and global formats work everywhere."
+    }
+  },
+  "activationEvents": [],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "binaryViewer.hexEditor",
+        "displayName": "Binary Viewer",
+        "selector": [
+          { "filenamePattern": "*.bin" },
+          { "filenamePattern": "*.hex" },
+          { "filenamePattern": "*.img" },
+          { "filenamePattern": "*.dat" },
+          { "filenamePattern": "*.fw" },
+          { "filenamePattern": "*.rom" },
+          { "filenamePattern": "*.dump" },
+          { "filenamePattern": "*.raw" },
+          { "filenamePattern": "*.eeprom" },
+          { "filenamePattern": "*.nvram" }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      { "command": "binaryViewer.goToOffset", "title": "Go To Offset", "category": "Binary Viewer" },
+      { "command": "binaryViewer.search", "title": "Search", "category": "Binary Viewer" },
+      { "command": "binaryViewer.findNext", "title": "Find Next", "category": "Binary Viewer" },
+      { "command": "binaryViewer.findPrevious", "title": "Find Previous", "category": "Binary Viewer" },
+      { "command": "binaryViewer.toggleStructureView", "title": "Toggle Structure View", "category": "Binary Viewer" },
+      { "command": "binaryViewer.toggleInspector", "title": "Toggle Inspector", "category": "Binary Viewer" },
+      { "command": "binaryViewer.showFieldInRawView", "title": "Show Field in Raw View", "category": "Binary Viewer" },
+      { "command": "binaryViewer.selectFormat", "title": "Select Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.createFormat", "title": "Create Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.editFormat", "title": "Edit Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.duplicateFormat", "title": "Duplicate Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.deleteFormat", "title": "Delete Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.importFormat", "title": "Import Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.exportFormat", "title": "Export Binary Format", "category": "Binary Viewer" },
+      { "command": "binaryViewer.reloadFormats", "title": "Reload Binary Formats", "category": "Binary Viewer" },
+      { "command": "binaryViewer.openWith", "title": "Open With Binary Viewer", "category": "Binary Viewer" }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "binaryViewer.goToOffset", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.search", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.findNext", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.findPrevious", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.toggleStructureView", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.toggleInspector", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.showFieldInRawView", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.selectFormat", "when": "binaryViewer.active" }
+      ],
+      "explorer/context": [
+        {
+          "command": "binaryViewer.openWith",
+          "group": "navigation@30",
+          "when": "!explorerResourceIsFolder"
+        }
+      ]
+    },
+    "keybindings": [
+      { "command": "binaryViewer.goToOffset", "key": "ctrl+g", "mac": "cmd+g", "when": "binaryViewer.active && !inputFocus" },
+      { "command": "binaryViewer.search", "key": "ctrl+f", "mac": "cmd+f", "when": "binaryViewer.active && !inputFocus" },
+      { "command": "binaryViewer.findNext", "key": "f3", "when": "binaryViewer.active && !inputFocus" },
+      { "command": "binaryViewer.findPrevious", "key": "shift+f3", "when": "binaryViewer.active && !inputFocus" },
+      { "command": "binaryViewer.toggleStructureView", "key": "ctrl+alt+s", "mac": "cmd+alt+s", "when": "binaryViewer.active && !inputFocus" },
+      { "command": "binaryViewer.toggleInspector", "key": "ctrl+alt+i", "mac": "cmd+alt+i", "when": "binaryViewer.active && !inputFocus" }
+    ],
+    "configuration": {
+      "title": "Binary Viewer",
+      "properties": {
+        "binaryViewer.bytesPerRow": {
+          "type": "number",
+          "enum": [8, 16, 32],
+          "default": 16,
+          "description": "Default number of bytes displayed per row in the raw hex view."
+        },
+        "binaryViewer.defaultEndianness": {
+          "type": "string",
+          "enum": ["little", "big"],
+          "default": "little",
+          "description": "Default endianness used by the data inspector and by formats that do not specify one."
+        },
+        "binaryViewer.showInspectorByDefault": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the data inspector panel when a binary file is opened."
+        },
+        "binaryViewer.cacheWindowBytes": {
+          "type": "number",
+          "default": 8388608,
+          "minimum": 262144,
+          "description": "Maximum number of bytes kept in the extension-host read cache per open file."
+        },
+        "binaryViewer.blockSizeBytes": {
+          "type": "number",
+          "default": 65536,
+          "minimum": 4096,
+          "description": "Granularity (in bytes) of range reads and caching."
+        },
+        "binaryViewer.autoDetectFormat": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically detect a matching binary format (by extension and magic bytes) when opening a file."
+        },
+        "binaryViewer.maxSearchResults": {
+          "type": "number",
+          "default": 5000,
+          "description": "Maximum number of matches returned by 'Find All'."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.js --production && npm run check-types",
+    "esbuild": "node esbuild.js",
+    "check-types": "tsc -p tsconfig.json && tsc -p tsconfig.webview.json",
+    "compile": "node esbuild.js && npm run check-types",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts",
+    "compile-tests": "tsc -p tsconfig.test.json",
+    "pretest": "npm run compile-tests",
+    "test:unit": "mocha \"out/test/unit/**/*.test.js\"",
+    "test:integration": "node ./out/test/runIntegration.js",
+    "test": "npm run test:unit",
+    "gen-fixtures": "node scripts/gen-fixtures.js",
+    "package": "npm run check-types && node esbuild.js --production && vsce package --no-dependencies --baseContentUrl https://example.com/binary-viewer --baseImagesUrl https://example.com/binary-viewer"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "@vscode/test-electron": "^2.3.9",
+    "@vscode/vsce": "^2.24.0",
+    "esbuild": "^0.20.2",
+    "eslint": "^8.57.0",
+    "glob": "^10.3.10",
+    "mocha": "^10.3.0",
+    "typescript": "^5.4.0"
+  }
+}

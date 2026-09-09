@@ -1,0 +1,494 @@
+/**
+ * Declarative binary structure parser.
+ *
+ * Input: a validated FormatDefinition + a byte window that already covers the
+ * region the format describes. Output: a flat list of render-ready ParsedNode
+ * objects (with depth for tree rendering). Pure — no I/O, no code execution.
+ */
+
+import type { FieldDefinition, FormatDefinition, BitSpec, Endianness } from '../types/format';
+import type { ParsedNode, ParsedBit } from '../types/messages';
+import { formatScalar, getScalarType } from './DataTypes';
+import { computeFieldSize, lookupEnumLabel } from './BinaryField';
+import { decodeBits } from './BitField';
+import { byteBits, byteHex, offsetHex, bigintHex } from './humanize';
+
+export interface ByteWindow {
+  /** Absolute file offset of bytes[0]. */
+  baseOffset: number;
+  bytes: Uint8Array;
+  fileSize: number;
+}
+
+export interface ParseOptions {
+  defaultEndianness: Endianness;
+  /** Safety cap on total emitted nodes (protects the webview from huge arrays). */
+  maxNodes?: number;
+}
+
+interface Ctx {
+  win: ByteWindow;
+  view: DataView;
+  defEndian: Endianness;
+  nodes: ParsedNode[];
+  maxNodes: number;
+  idSeq: number;
+}
+
+/** True when [abs, abs+size) lies fully inside the loaded window. */
+function inWindow(ctx: Ctx, abs: number, size: number): boolean {
+  const start = abs - ctx.win.baseOffset;
+  return start >= 0 && start + size <= ctx.win.bytes.byteLength;
+}
+
+/**
+ * Index to pass to `ctx.view` (a DataView already anchored at
+ * `bytes.byteOffset`), so this is purely window-relative.
+ */
+function localOffset(ctx: Ctx, abs: number): number {
+  return abs - ctx.win.baseOffset;
+}
+
+function slice(ctx: Ctx, abs: number, size: number): Uint8Array {
+  const start = abs - ctx.win.baseOffset;
+  return ctx.win.bytes.subarray(start, start + size);
+}
+
+export function parseFormat(
+  format: FormatDefinition,
+  win: ByteWindow,
+  opts: ParseOptions,
+): { nodes: ParsedNode[]; error?: string } {
+  const ctx: Ctx = {
+    win,
+    view: new DataView(win.bytes.buffer, win.bytes.byteOffset, win.bytes.byteLength),
+    defEndian: format.endianness ?? opts.defaultEndianness,
+    nodes: [],
+    maxNodes: opts.maxNodes ?? 20000,
+    idSeq: 0,
+  };
+
+  let cursor = 0;
+  try {
+    for (const field of format.fields) {
+      if (ctx.nodes.length >= ctx.maxNodes) {
+        return { nodes: ctx.nodes, error: 'Structure truncated: too many fields' };
+      }
+      const abs = field.offset ?? cursor;
+      const size = parseField(ctx, field, abs, 0);
+      cursor = abs + size;
+    }
+  } catch (e) {
+    return { nodes: ctx.nodes, error: (e as Error).message };
+  }
+  return { nodes: ctx.nodes };
+}
+
+function pushNode(ctx: Ctx, node: Omit<ParsedNode, 'id'>): ParsedNode {
+  const full: ParsedNode = { id: `n${ctx.idSeq++}`, ...node };
+  ctx.nodes.push(full);
+  return full;
+}
+
+function fieldEndianLittle(ctx: Ctx, field: FieldDefinition): boolean {
+  return (field.endianness ?? ctx.defEndian) === 'little';
+}
+
+function parseField(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const t = field.type;
+
+  // An integer scalar that carries a `fields` array of bit specs is a bit-field
+  // container (the section-7 `{ "type": "uint8", "fields": [ { bits } ] }` form).
+  if (
+    getScalarType(t) &&
+    Array.isArray(field.fields) &&
+    field.fields.length > 0 &&
+    typeof (field.fields[0] as { bits?: unknown }).bits === 'string'
+  ) {
+    return parseFlags(ctx, field, abs, depth);
+  }
+
+  // Composite dispatch first.
+  switch (t) {
+    case 'struct':
+      return parseStruct(ctx, field, abs, depth);
+    case 'array':
+      return parseArray(ctx, field, abs, depth);
+    case 'flags':
+    case 'bitfield':
+      return parseFlags(ctx, field, abs, depth);
+    case 'enum':
+      return parseEnum(ctx, field, abs, depth);
+    case 'ascii':
+    case 'utf8':
+    case 'utf16':
+    case 'string':
+      return parseString(ctx, field, abs, depth);
+    case 'bytes':
+    case 'hex':
+      return parseBytes(ctx, field, abs, depth, 'hex');
+    case 'binary':
+      return parseBytes(ctx, field, abs, depth, 'bits');
+    case 'timestamp':
+      return parseTimestamp(ctx, field, abs, depth);
+    case 'padding': {
+      const size = computeFieldSize(field);
+      pushNode(ctx, {
+        name: field.name || '(padding)',
+        typeLabel: `padding[${size}]`,
+        offset: abs,
+        size,
+        value: '…',
+        depth,
+        detail: field.description,
+      });
+      return size;
+    }
+    default:
+      break;
+  }
+
+  // A `char` with a length/count is a fixed ASCII array (char[N]).
+  if (t === 'char' && (field.length !== undefined || field.count !== undefined)) {
+    return parseString(
+      ctx,
+      { ...field, type: 'ascii', length: field.length ?? field.count },
+      abs,
+      depth,
+    );
+  }
+
+  // Scalar.
+  const scalar = getScalarType(t);
+  if (!scalar) {
+    pushNode(ctx, {
+      name: field.name,
+      typeLabel: t,
+      offset: abs,
+      size: 0,
+      value: '',
+      depth,
+      error: `unknown type "${t}"`,
+    });
+    return 0;
+  }
+  const size = field.size ?? scalar.size;
+  if (!inWindow(ctx, abs, size)) {
+    pushNode(ctx, {
+      name: field.name,
+      typeLabel: scalar.name,
+      offset: abs,
+      size,
+      value: '',
+      depth,
+      error: abs + size > ctx.win.fileSize ? 'reads past end of file' : 'outside loaded window',
+    });
+    return size;
+  }
+  const le = fieldEndianLittle(ctx, field);
+  const raw = scalar.read(ctx.view, localOffset(ctx, abs), le);
+
+  let value: string;
+  let detail: string;
+  if (field.enum !== undefined && typeof raw !== 'boolean') {
+    const label = lookupEnumLabel(field.enum, raw);
+    value = label ? `${label} (${raw.toString()})` : raw.toString();
+    detail = describeScalar(raw, scalar.size, scalar.category);
+  } else if (typeof raw === 'number' && (field.scale !== undefined || field.bias !== undefined)) {
+    const scaled = raw * (field.scale ?? 1) + (field.bias ?? 0);
+    value = `${trimNum(scaled)}${field.unit ? ' ' + field.unit : ''}`;
+    detail = `raw ${raw} · ${describeScalar(raw, scalar.size, scalar.category)}`;
+  } else {
+    value = formatScalar(raw, scalar, field.display ?? 'auto');
+    if (field.unit) {
+      value += ' ' + field.unit;
+    }
+    detail = describeScalar(raw, scalar.size, scalar.category);
+  }
+
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: scalar.name + (field.endianness ? ` (${field.endianness === 'little' ? 'LE' : 'BE'})` : ''),
+    offset: abs,
+    size,
+    value,
+    detail: field.description ? `${field.description} — ${detail}` : detail,
+    depth,
+  });
+  return size;
+}
+
+function describeScalar(raw: number | bigint | boolean, sizeBytes: number, category: string): string {
+  if (typeof raw === 'boolean') {
+    return raw ? 'true' : 'false';
+  }
+  if (category === 'float') {
+    return `float ${trimNum(Number(raw))}`;
+  }
+  if (typeof raw === 'bigint') {
+    const unsigned = raw < 0n ? raw + (1n << BigInt(sizeBytes * 8)) : raw;
+    return `${raw.toString()} · ${bigintHex(unsigned, sizeBytes)}`;
+  }
+  const unsigned = raw < 0 ? raw >>> 0 : raw;
+  const hex = '0x' + unsigned.toString(16).toUpperCase().padStart(sizeBytes * 2, '0');
+  return `${raw} · ${hex}`;
+}
+
+function trimNum(n: number): string {
+  if (Number.isInteger(n)) {
+    return n.toString();
+  }
+  return parseFloat(n.toFixed(6)).toString();
+}
+
+function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const nested = (field.fields as FieldDefinition[]) ?? [];
+  const size = computeFieldSize(field);
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: `struct`,
+    offset: abs,
+    size,
+    value: `{ ${nested.length} field${nested.length === 1 ? '' : 's'} }`,
+    detail: field.description,
+    depth,
+  });
+  let cursor = 0;
+  for (const f of nested) {
+    if (ctx.nodes.length >= ctx.maxNodes) {
+      break;
+    }
+    const childAbs = abs + (f.offset ?? cursor);
+    const csize = parseField(ctx, f, childAbs, depth + 1);
+    cursor = (f.offset ?? cursor) + csize;
+  }
+  return size;
+}
+
+function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const item = field.items!;
+  const count = field.count ?? 0;
+  const each = computeFieldSize({ ...item, name: item.name || 'item' });
+  const size = field.size ?? each * count;
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: `${item.type}[${count}]`,
+    offset: abs,
+    size,
+    value: `[ ${count} ]`,
+    detail: field.description,
+    depth,
+  });
+  const limit = Math.min(count, 4096);
+  for (let i = 0; i < limit; i++) {
+    if (ctx.nodes.length >= ctx.maxNodes) {
+      break;
+    }
+    parseField(ctx, { ...item, name: `${field.name}[${i}]`, offset: undefined }, abs + i * each, depth + 1);
+  }
+  if (limit < count) {
+    pushNode(ctx, {
+      name: `${field.name}[…]`,
+      typeLabel: '',
+      offset: abs + limit * each,
+      size: 0,
+      value: `(${count - limit} more elements not shown)`,
+      depth: depth + 1,
+    });
+  }
+  return size;
+}
+
+function readContainer(ctx: Ctx, abs: number, sizeBytes: number, le: boolean): number | bigint {
+  const o = localOffset(ctx, abs);
+  switch (sizeBytes) {
+    case 1:
+      return ctx.view.getUint8(o);
+    case 2:
+      return ctx.view.getUint16(o, le);
+    case 4:
+      return ctx.view.getUint32(o, le);
+    case 8:
+      return ctx.view.getBigUint64(o, le);
+    default: {
+      // arbitrary width, build from bytes
+      let acc = 0n;
+      for (let i = 0; i < sizeBytes; i++) {
+        const b = BigInt(ctx.view.getUint8(o + (le ? sizeBytes - 1 - i : i)));
+        acc = (acc << 8n) | b;
+      }
+      return acc <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(acc) : acc;
+    }
+  }
+}
+
+function parseFlags(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const sizeBytes = field.size ?? sizeFromScalar(field.type) ?? 1;
+  if (!inWindow(ctx, abs, sizeBytes)) {
+    pushNode(ctx, { name: field.name, typeLabel: `flags[${sizeBytes}]`, offset: abs, size: sizeBytes, value: '', depth, error: 'outside loaded window' });
+    return sizeBytes;
+  }
+  const le = fieldEndianLittle(ctx, field);
+  const container = readContainer(ctx, abs, sizeBytes, le);
+  const specs = (field.fields as BitSpec[]) ?? [];
+  const decoded = decodeBits(container, specs);
+  const bits: ParsedBit[] = decoded.map((d) => ({
+    name: d.name,
+    bitLabel: d.range.width === 1 ? String(d.range.lo) : `${d.range.hi}-${d.range.lo}`,
+    value: d.display,
+  }));
+  // add descriptions
+  specs.forEach((s, i) => {
+    if (bits[i] && s.description) {
+      bits[i].description = s.description;
+    }
+  });
+
+  const containerHex =
+    typeof container === 'bigint'
+      ? bigintHex(container, sizeBytes)
+      : '0x' + container.toString(16).toUpperCase().padStart(sizeBytes * 2, '0');
+  const binStr =
+    typeof container === 'bigint'
+      ? container.toString(2).padStart(sizeBytes * 8, '0')
+      : container.toString(2).padStart(sizeBytes * 8, '0');
+
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: `flags[${sizeBytes}]`,
+    offset: abs,
+    size: sizeBytes,
+    value: `${containerHex}  ${binStr}`,
+    detail: field.description,
+    depth,
+    bits,
+  });
+  return sizeBytes;
+}
+
+function sizeFromScalar(type: string): number | undefined {
+  const s = getScalarType(type);
+  return s?.size;
+}
+
+function parseEnum(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const sizeBytes = field.size ?? sizeFromScalar(field.type) ?? 4;
+  if (!inWindow(ctx, abs, sizeBytes)) {
+    pushNode(ctx, { name: field.name, typeLabel: `enum[${sizeBytes}]`, offset: abs, size: sizeBytes, value: '', depth, error: 'outside loaded window' });
+    return sizeBytes;
+  }
+  const le = fieldEndianLittle(ctx, field);
+  const raw = readContainer(ctx, abs, sizeBytes, le);
+  const label = lookupEnumLabel(field.enum, raw);
+  const rawHex =
+    typeof raw === 'bigint'
+      ? bigintHex(raw, sizeBytes)
+      : '0x' + raw.toString(16).toUpperCase().padStart(sizeBytes * 2, '0');
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: `enum`,
+    offset: abs,
+    size: sizeBytes,
+    value: label ? `${label} (${raw.toString()})` : `${raw.toString()} (unknown)`,
+    detail: field.description ? `${field.description} — ${rawHex}` : rawHex,
+    depth,
+  });
+  return sizeBytes;
+}
+
+function parseString(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const t = field.type;
+  const units = field.length ?? field.size ?? 0;
+  const size = t === 'utf16' ? (field.size ?? units * 2) : (field.size ?? units);
+  if (!inWindow(ctx, abs, size)) {
+    pushNode(ctx, { name: field.name, typeLabel: t, offset: abs, size, value: '', depth, error: 'outside loaded window' });
+    return size;
+  }
+  const raw = slice(ctx, abs, size);
+  let text: string;
+  try {
+    if (t === 'utf16') {
+      const le = fieldEndianLittle(ctx, field);
+      text = new TextDecoder(le ? 'utf-16le' : 'utf-16be').decode(raw);
+    } else if (t === 'utf8') {
+      text = new TextDecoder('utf-8', { fatal: false }).decode(raw);
+    } else {
+      // ascii / string: byte-per-char, non-printable shown as .
+      text = Array.from(raw, (b) => (b >= 0x20 && b <= 0x7e ? String.fromCharCode(b) : b === 0 ? '' : '.')).join('');
+    }
+  } catch {
+    text = '(decode error)';
+  }
+  const nulChar = String.fromCharCode(0);
+  const nul = text.indexOf(nulChar);
+  const shown = (nul >= 0 ? text.slice(0, nul) : text).replace(/\r?\n/g, '\\n');
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: `${t}[${units || size}]`,
+    offset: abs,
+    size,
+    value: JSON.stringify(shown),
+    detail: field.description,
+    depth,
+  });
+  return size;
+}
+
+function parseBytes(
+  ctx: Ctx,
+  field: FieldDefinition,
+  abs: number,
+  depth: number,
+  mode: 'hex' | 'bits',
+): number {
+  const size = computeFieldSize(field);
+  if (!inWindow(ctx, abs, size)) {
+    pushNode(ctx, { name: field.name, typeLabel: mode === 'hex' ? `bytes[${size}]` : `binary[${size}]`, offset: abs, size, value: '', depth, error: 'outside loaded window' });
+    return size;
+  }
+  const raw = slice(ctx, abs, size);
+  const MAX = 64;
+  const shown = Array.from(raw.subarray(0, MAX), mode === 'hex' ? byteHex : byteBits).join(' ');
+  const value = raw.length > MAX ? `${shown} … (+${raw.length - MAX} bytes)` : shown;
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: mode === 'hex' ? `bytes[${size}]` : `binary[${size}]`,
+    offset: abs,
+    size,
+    value,
+    detail: field.description,
+    depth,
+  });
+  return size;
+}
+
+function parseTimestamp(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const cfg = field.timestamp ?? {};
+  const sizeBytes = cfg.size ?? 4;
+  if (!inWindow(ctx, abs, sizeBytes)) {
+    pushNode(ctx, { name: field.name, typeLabel: 'timestamp', offset: abs, size: sizeBytes, value: '', depth, error: 'outside loaded window' });
+    return sizeBytes;
+  }
+  const le = fieldEndianLittle(ctx, field);
+  const raw = readContainer(ctx, abs, sizeBytes, le);
+  const rawNum = typeof raw === 'bigint' ? Number(raw) : raw;
+  const unitMs = cfg.unit === 'ms' ? 1 : 1000;
+  let epochMs = 0;
+  if (cfg.epoch === 'y2k') {
+    epochMs = Date.UTC(2000, 0, 1);
+  } else if (typeof cfg.epoch === 'number') {
+    epochMs = cfg.epoch;
+  }
+  const date = new Date(epochMs + rawNum * unitMs);
+  const iso = Number.isFinite(date.getTime()) ? date.toISOString() : '(invalid)';
+  pushNode(ctx, {
+    name: field.name,
+    typeLabel: `timestamp`,
+    offset: abs,
+    size: sizeBytes,
+    value: `${iso}`,
+    detail: field.description ? `${field.description} — raw ${raw.toString()}` : `raw ${raw.toString()} @ ${offsetHex(abs)}`,
+    depth,
+  });
+  return sizeBytes;
+}
