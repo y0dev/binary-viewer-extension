@@ -272,3 +272,87 @@ describe('BinaryParser — array countField (length prefix)', () => {
     assert.strictEqual(nodes.filter((n) => /^xs\[\d+\]$/.test(n.name)).length, 2);
   });
 });
+
+describe('BinaryParser — nested-array element stride', () => {
+  it('advances the parent offset by a fixed inner array size (3D)', () => {
+    const fmt: FormatDefinition = {
+      name: '3d',
+      endianness: 'little',
+      fields: [
+        {
+          name: 'vol',
+          type: 'array',
+          offset: 0,
+          count: 2,
+          items: {
+            name: 'plane',
+            type: 'array',
+            count: 3,
+            items: { name: 'row', type: 'array', count: 4, items: { name: 'c', type: 'int16' } },
+          },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win(new Array(48).fill(0)), { defaultEndianness: 'little' });
+    const planes = nodes.filter((n) => /^vol\[\d+\]$/.test(n.name));
+    assert.deepStrictEqual(planes.map((n) => n.offset), [0, 24]);
+    const rowsOf0 = nodes.filter((n) => /^vol\[0\]\[\d+\]$/.test(n.name));
+    assert.deepStrictEqual(rowsOf0.map((n) => n.offset), [0, 8, 16]);
+  });
+
+  it('advances by a runtime (countField) inner array size', () => {
+    const fmt: FormatDefinition = {
+      name: 'dyn',
+      endianness: 'little',
+      fields: [
+        { name: 'rows', type: 'uint8', offset: 0 },
+        {
+          name: 'grid',
+          type: 'array',
+          offset: 1,
+          count: 2,
+          items: { name: 'plane', type: 'array', countField: 'rows', items: { name: 'c', type: 'uint8' } },
+        },
+        { name: 'tail', type: 'uint8' },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([3, 10, 11, 12, 20, 21, 22, 0xee]), {
+      defaultEndianness: 'little',
+    });
+    const planes = nodes.filter((n) => /^grid\[\d+\]$/.test(n.name));
+    assert.deepStrictEqual(planes.map((n) => n.offset), [1, 4]);
+    assert.deepStrictEqual(
+      nodes.filter((n) => /^grid\[1\]\[\d+\]$/.test(n.name)).map((n) => n.value),
+      ['20', '21', '22'],
+    );
+    assert.strictEqual(nodes.find((n) => n.name === 'tail')!.offset, 7);
+  });
+
+  it('grows a struct size when a countField child consumes more than its static size', () => {
+    const fmt: FormatDefinition = {
+      name: 'aos',
+      endianness: 'little',
+      fields: [
+        {
+          name: 'recs',
+          type: 'array',
+          offset: 0,
+          count: 2,
+          items: {
+            name: 'rec',
+            fields: [
+              { name: 'n', type: 'uint8', offset: 0 },
+              { name: 'vals', type: 'array', offset: 1, countField: 'n', items: { name: 'x', type: 'uint8' } },
+            ],
+          },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([2, 10, 20, 3, 30, 40, 50, 0xee]), {
+      defaultEndianness: 'little',
+    });
+    const recs = nodes.filter((n) => /^recs\[\d+\]$/.test(n.name));
+    assert.deepStrictEqual(recs.map((n) => n.offset), [0, 3]);
+    assert.deepStrictEqual(recs.map((n) => n.size), [3, 4]);
+  });
+});

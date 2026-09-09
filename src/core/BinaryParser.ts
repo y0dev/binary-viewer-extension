@@ -332,23 +332,24 @@ function trimNum(n: number): string {
 
 function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
   const nested = containerChildren(field);
-  const size = computeStructSize(field);
+  const staticSize = computeStructSize(field);
   const node = pushNode(ctx, {
     name: field.name,
     typeLabel: 'struct',
     offset: abs,
-    size,
-    value: `${size} byte${size === 1 ? '' : 's'}`,
+    size: staticSize,
+    value: `${staticSize} byte${staticSize === 1 ? '' : 's'}`,
     detail: field.description,
     depth,
     isContainer: true,
   });
-  if (!inWindow(ctx, abs, Math.min(size, 1)) && size > 0) {
+  if (!inWindow(ctx, abs, Math.min(staticSize, 1)) && staticSize > 0) {
     node.error = abs >= ctx.win.fileSize ? 'starts past end of file' : 'outside loaded window';
   }
   // Child offsets are RELATIVE to this structure; convert to absolute here.
   ctx.stack.push({ id: node.id, path: node.path! });
   let cursor = 0;
+  let end = 0;
   for (const f of nested) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
@@ -356,8 +357,17 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
     const rel = f.offset ?? cursor;
     const csize = parseField(ctx, f, abs + rel, depth + 1);
     cursor = rel + csize;
+    end = Math.max(end, cursor);
   }
   ctx.stack.pop();
+  // An explicit `size` is authoritative; otherwise grow to what the children
+  // actually consumed (a child sized at parse time — e.g. a `countField` array
+  // — can exceed the statically computed size).
+  const size = field.size !== undefined ? staticSize : Math.max(staticSize, end);
+  if (size !== staticSize) {
+    node.size = size;
+    node.value = `${size} byte${size === 1 ? '' : 's'}`;
+  }
   return size;
 }
 
@@ -367,8 +377,12 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   const count = resolved ?? 0;
   const countErr =
     resolved === null ? `count field "${field.countField}" not found before this array` : undefined;
-  const each = computeFieldSize({ ...item, name: item.name || 'item' });
-  const size = field.size ?? each * count;
+  // Static element size — reliable for scalars / fixed structs / fixed arrays,
+  // but 0 when the element's size is only known at parse time (a nested array
+  // sized by `countField`, or one missing `count`). The loop below advances by
+  // what each element actually consumes and only falls back to this.
+  const staticEach = computeFieldSize({ ...item, name: item.name || 'item' });
+  let size = field.size ?? staticEach * count;
   const via = field.count === undefined && field.countField ? ` ← ${field.countField}` : '';
   const node = pushNode(ctx, {
     name: field.name,
@@ -383,17 +397,24 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   });
   ctx.stack.push({ id: node.id, path: node.path! });
   const limit = Math.min(count, ctx.maxArrayElements);
+  let cursor = abs;
   for (let i = 0; i < limit; i++) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
     }
-    parseField(ctx, { ...item, name: `${field.name}[${i}]`, offset: undefined }, abs + i * each, depth + 1);
+    const consumed = parseField(
+      ctx,
+      { ...item, name: `${field.name}[${i}]`, offset: undefined },
+      cursor,
+      depth + 1,
+    );
+    cursor += consumed || staticEach;
   }
   if (limit < count) {
     pushNode(ctx, {
       name: `${field.name}[…]`,
       typeLabel: '',
-      offset: abs + limit * each,
+      offset: cursor,
       size: 0,
       value:
         `… ${count - limit} more element${count - limit === 1 ? '' : 's'} not shown ` +
@@ -402,6 +423,12 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
     });
   }
   ctx.stack.pop();
+  // When every element was parsed and the size wasn't pinned, trust the real
+  // consumed total (fixes runtime-sized element strides).
+  if (field.size === undefined && limit === count) {
+    size = cursor - abs;
+    node.size = size;
+  }
   return size;
 }
 

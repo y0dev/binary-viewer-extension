@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.9.1
+
+- **Fix — nested (multi-dimensional) array offsets.** An `array` whose elements
+  are themselves arrays advanced the parent offset by a *static* element size,
+  which is `0` when the inner array is sized by `countField` (or is missing
+  `count`) — so every outer element landed at the same offset. Elements are now
+  placed by what each one actually consumes. A `struct` element likewise grows
+  to fit a `countField` child that reads longer than its static size.
+
 ## 0.9.0 — Display & decoding settings, length-prefixed arrays
 
 - **Length-prefixed arrays** — an `array` field can set `"countField": "<name>"`
