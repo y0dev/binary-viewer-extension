@@ -5,3 +5,6 @@ dist/
 .vscode-test/
 *.tsbuildinfo
 test/fixtures/generated/
+
+# Local-only Claude Code config / skills (never committed)
+.claude/
