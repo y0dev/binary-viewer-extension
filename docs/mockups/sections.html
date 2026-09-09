@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="../../media/style.css" />
+  <link rel="stylesheet" href="frame.css" />
+  <title>Sections view mockup</title>
+</head>
+<body>
+  <div id="app"></div>
+  <script>
+    const app = document.getElementById('app');
+    const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+
+    const tb = h('div', 'bv-toolbar');
+    const seg = h('div', 'bv-segmented');
+    seg.append(h('button', 'bv-seg', 'Raw'), h('button', 'bv-seg', 'Structure'), h('button', 'bv-seg bv-seg-active', 'Sections'));
+    tb.append(seg);
+    const tool = (label, ...opts) => {
+      const w = h('span', 'bv-tool'); w.append(h('label', 'bv-label', label));
+      const s = h('select', 'bv-select'); opts.forEach((o) => s.append(h('option', null, o))); w.append(s); return w;
+    };
+    tb.append(tool('Bytes:', '16'), tool('Endian:', 'Little Endian'),
+              tool('Format:', 'Format: MCU Flash Layout (detected)'));
+    tb.append(h('span', 'bv-spacer'));
+    tb.append(h('button', 'bv-btn', 'Inspector'), h('button', 'bv-btn', 'Search'), h('button', 'bv-btn', 'Go To'));
+    tb.append(h('span', 'bv-offset-readout bv-mono', '0x00005000  +36864'));
+    app.append(tb);
+
+    const body = h('div', 'bv-body');
+    const main = h('div', 'bv-main');
+    const sec = h('div', 'bv-sections');
+
+    const stb = h('div', 'bv-sections-toolbar');
+    stb.append(h('span', 'bv-sections-title', 'Sections'));
+    const chk = h('input', null); chk.type = 'checkbox'; chk.className = 'bv-check';
+    stb.append(h('label', 'bv-check-label', null));
+    stb.lastChild.append(chk, document.createTextNode(' Hide "display: No"'));
+    stb.append(h('span', 'bv-spacer'), h('button', 'bv-btn bv-btn-sm', 'Edit Format'));
+    sec.append(stb);
+
+    const wrap = h('div', 'bv-sections-wrap');
+    const table = h('table', 'bv-sections-table bv-struct-table');
+    const thead = h('thead'); const htr = h('tr');
+    ['Section', 'Start', 'End', 'Length', 'Flags', 'Display'].forEach((t) => htr.append(h('th', null, t)));
+    thead.append(htr); table.append(thead);
+    const tbody = h('tbody');
+
+    // name, start, end, length, flags, display, {active,hidden}
+    const rows = [
+      ['Bootloader',            '0x00000000', '0x00004000', '16,384  (16.0 KB)', 'r-x', 'Yes', {}],
+      ['Config / NVM',          '0x00004000', '0x00005000', '4,096  (4.0 KB)',   'rw-', 'Yes', {}],
+      ['Application (.text)',    '0x00005000', '0x0000E000', '36,864  (36.0 KB)', 'r-x', 'Yes', { active: true }],
+      ['Application (.rodata)',  '0x0000E000', '0x0000F800', '6,144  (6.0 KB)',   'r--', 'Yes', {}],
+      ['Application (.data init)', '0x0000F800', '0x00010000', '2,048  (2.0 KB)', 'r--', 'Yes', {}],
+      ['OTA staging',           '0x00010000', '0x0001E000', '57,344  (56.0 KB)', 'rw-', 'Yes', {}],
+      ['Reserved',              '0x0001E000', '0x0001F000', '4,096  (4.0 KB)',   '---', 'No',  { hidden: true }],
+      ['Manufacturing block',   '0x0001F000', '0x00020000', '4,096  (4.0 KB)',   'r--', 'Yes', {}],
+    ];
+    for (const [name, start, end, len, flags, disp, o] of rows) {
+      const tr = h('tr', 'bv-struct-row bv-section-row'
+        + (o.active ? ' bv-struct-active' : '')
+        + (o.hidden ? ' bv-section-hidden' : ''));
+      tr.append(
+        h('td', 'bv-section-name', name),
+        h('td', 'bv-mono', start),
+        h('td', 'bv-mono', end),
+        h('td', 'bv-mono', len),
+        h('td', 'bv-mono bv-section-flags', flags),
+        h('td', null, disp),
+      );
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    wrap.append(table);
+    sec.append(wrap);
+    main.append(sec);
+
+    const insp = h('div', 'bv-inspector');
+    insp.append(h('div', 'bv-inspector-title', 'Data Inspector'));
+    const ib = h('div', 'bv-inspector-body');
+    const section = (title, rowsData) => {
+      const s = h('div', 'bv-insp-section');
+      s.append(h('div', 'bv-insp-head', title));
+      const rr = h('div', 'bv-insp-rows');
+      rowsData.forEach(([k, v]) => {
+        const row = h('div', 'bv-insp-row');
+        row.append(h('span', 'bv-insp-k', k), h('span', 'bv-insp-v', v));
+        rr.append(row);
+      });
+      s.append(rr); return s;
+    };
+    ib.append(section('Selected Range', [
+      ['Section', 'Application (.text)'], ['Offset', '0x00005000'],
+      ['End', '0x0000E000'], ['Length', '36864 bytes'], ['Flags', 'r-x'],
+    ]));
+    ib.append(section('Selected Byte', [
+      ['Offset', '0x00005000'], ['Hex', '5B'], ['Unsigned (uint8)', '91'],
+    ]));
+    insp.append(ib);
+    body.append(main, insp);
+    app.append(body);
+
+    const st = h('div', 'bv-status');
+    ['Offset: 0x00005000', 'Decimal: 20480', 'File Size: 128 KB (131,072 bytes)',
+     'Selected: 36864 bytes [0x00005000 .. 0x0000DFFF]', "Value: 0x5B (91) '['"]
+      .forEach((t) => st.append(h('span', 'bv-stat', t)));
+    app.append(st);
+  </script>
+</body>
+</html>

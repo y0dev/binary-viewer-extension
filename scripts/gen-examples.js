@@ -117,6 +117,15 @@ fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'disk.mbr'), buf);
 }
 
+// --- flash.fls : 128 KiB blob for the "MCU Flash Layout" sections example ---
+{
+  const buf = Buffer.alloc(0x20000);
+  for (let i = 0; i < buf.length; i++) buf[i] = (i * 191 + (i >> 7) * 13) & 0xff;
+  buf.fill(0xff, 0x1e000, 0x1f000); // "Reserved" region left erased
+  buf.write('MFG:SN=AB12CD34:REV=C', 0x1f000, 'ascii');
+  fs.writeFileSync(path.join(OUT, 'flash.fls'), buf);
+}
+
 // --- sample.dat : arbitrary binary, no matching format (raw-mode demo) ---
 {
   const buf = Buffer.alloc(4096);

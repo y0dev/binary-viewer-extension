@@ -1,0 +1,17 @@
+{
+  "name": "MCU Flash Layout",
+  "description": "A sections-only format (no fields): a 128 KiB microcontroller flash memory map for the Sections view, with rwx permission flags and a display column.",
+  "version": "1.0.0",
+  "fileExtensions": [".fls", ".flash"],
+  "endianness": "little",
+  "sections": [
+    { "name": "Bootloader", "start": "0x00000000", "length": "0x4000", "flags": "r-x", "display": true, "description": "Immutable first-stage boot ROM shadow" },
+    { "name": "Config / NVM", "start": "0x00004000", "length": "0x1000", "flags": "rw-", "display": true },
+    { "name": "Application (.text)", "start": "0x00005000", "length": "0x9000", "flags": "r-x", "display": true },
+    { "name": "Application (.rodata)", "start": "0x0000E000", "length": "0x1800", "flags": "r--", "display": true },
+    { "name": "Application (.data init)", "start": "0x0000F800", "length": "0x800", "flags": "r--", "display": true },
+    { "name": "OTA staging", "start": "0x00010000", "length": "0xE000", "flags": "rw-", "display": true },
+    { "name": "Reserved", "start": "0x0001E000", "length": "0x1000", "flags": "---", "display": false },
+    { "name": "Manufacturing block", "start": "0x0001F000", "length": "0x1000", "flags": "r--", "display": true }
+  ]
+}

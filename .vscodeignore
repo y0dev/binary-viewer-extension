@@ -21,4 +21,5 @@ esbuild.js
 **/*.vsix
 test/fixtures/generated/**
 docs/mockups/**
+examples/binaries/**
 CONTRIBUTING.md

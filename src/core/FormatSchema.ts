@@ -318,12 +318,87 @@ export function validateFormat(input: unknown): ValidationResult {
     const list = Array.isArray(fmt.magic) ? fmt.magic : [fmt.magic];
     list.forEach((m, i) => validateMagic(m, `magic[${i}]`, errors));
   }
-  if (!Array.isArray(fmt.fields) || fmt.fields.length === 0) {
-    errors.push('"fields" must be a non-empty array');
-  } else {
-    fmt.fields.forEach((f, i) => validateField(f, `fields[${i}]`, result));
+
+  const hasFields = Array.isArray(fmt.fields) && fmt.fields.length > 0;
+  const hasSections = Array.isArray(fmt.sections) && fmt.sections.length > 0;
+
+  if (fmt.fields !== undefined && !Array.isArray(fmt.fields)) {
+    errors.push('"fields" must be an array');
+  } else if (hasFields) {
+    fmt.fields!.forEach((f, i) => validateField(f, `fields[${i}]`, result));
+  }
+
+  if (fmt.sections !== undefined) {
+    validateSections(fmt.sections, result);
+  }
+
+  if (!hasFields && !hasSections) {
+    errors.push('a format must define a non-empty "fields" array, a "sections" array, or both');
   }
 
   result.valid = errors.length === 0;
   return result;
+}
+
+const FLAGS_RE = /^[rwxa\- ]*$/i;
+
+function validateSections(sections: unknown, result: ValidationResult): void {
+  const { errors, warnings } = result;
+  if (!Array.isArray(sections)) {
+    errors.push('"sections" must be an array');
+    return;
+  }
+  sections.forEach((raw, i) => {
+    const path = `sections[${i}]`;
+    if (!raw || typeof raw !== 'object') {
+      errors.push(`${path} must be an object`);
+      return;
+    }
+    const s = raw as Record<string, unknown>;
+    if (typeof s.name !== 'string' || s.name.trim() === '') {
+      errors.push(`${path}.name is required`);
+    }
+    const start = normNumeric(s.start);
+    if (start === undefined) {
+      errors.push(`${path}.start must be a non-negative number or hex string (e.g. "0x8000")`);
+    }
+    const length = normNumeric(s.length);
+    const end = normNumeric(s.end);
+    if (length === undefined && end === undefined) {
+      errors.push(`${path} must define "length" or "end"`);
+    }
+    if (length !== undefined && end !== undefined) {
+      warnings.push(`${path}: both "length" and "end" set — "length" wins`);
+    }
+    if (end !== undefined && start !== undefined && end < start) {
+      errors.push(`${path}.end (${end}) is before "start" (${start})`);
+    }
+    if (s.flags !== undefined && (typeof s.flags !== 'string' || !FLAGS_RE.test(s.flags))) {
+      errors.push(`${path}.flags must be a string of r/w/x/a/- (e.g. "rwx", "r-x")`);
+    }
+    if (s.display !== undefined && typeof s.display !== 'boolean') {
+      errors.push(`${path}.display must be true or false`);
+    }
+  });
+}
+
+function normNumeric(v: unknown): number | undefined {
+  if (typeof v === 'number') {
+    return Number.isFinite(v) && v >= 0 ? Math.floor(v) : undefined;
+  }
+  if (typeof v === 'string') {
+    const t = v.trim().toLowerCase();
+    let n: number;
+    if (t.startsWith('0x')) {
+      n = parseInt(t.slice(2), 16);
+    } else if (/^[0-9a-f]+h$/.test(t)) {
+      n = parseInt(t.slice(0, -1), 16);
+    } else if (/^\d+$/.test(t)) {
+      n = parseInt(t, 10);
+    } else {
+      n = Number(t);
+    }
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
+  }
+  return undefined;
 }

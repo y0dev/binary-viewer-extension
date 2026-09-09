@@ -1,5 +1,23 @@
 # Change Log
 
+## 0.3.0 — Sections / memory-map view
+
+- New **Sections** tab (`Ctrl/Cmd+Alt+M`, command *Binary Viewer: Toggle
+  Sections View*): a table of `Section · Start · End · Length`, with optional
+  user-defined **Flags** (`rwx`) and **Display** (`Yes`/`No`) columns.
+- Format definitions gain an optional top-level `sections` array
+  (`{ name, start, length | end, flags?, display? }`; `start`/`length` accept
+  `0x` hex / `…h` / decimal strings). `fields` is now optional when `sections`
+  is present, so a definition can be a pure memory map.
+- The tab falls back to deriving one row per top-level structure field when a
+  format has no `sections`. Rows are sorted by address; clicking one selects
+  `[start, end)` in the raw view; `display: false` rows are struck-through and
+  hidable.
+- Format editor: a **Sections (memory map)** JSON box with an "insert example
+  section" helper.
+- New example `flash-layout.json` (sections-only 128 KiB MCU flash map) +
+  `flash.fls`; `nested-firmware.json` gains a `sections` array.
+
 ## 0.2.0 — Nested structures
 
 - Binary format definitions now support **nested structures**: a field with a

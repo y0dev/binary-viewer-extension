@@ -4,11 +4,12 @@ import { Store, AppState, selectBytes } from './state';
 import { DataProvider } from './DataProvider';
 import { HexView } from './HexView';
 import { StructureView } from './StructureView';
+import { SectionsView } from './SectionsView';
 import { Inspector } from './Inspector';
 import { Toolbar } from './Toolbar';
 import { SearchBar } from './SearchBar';
 import { StatusBar } from './StatusBar';
-import type { HostToWebview } from '../types/messages';
+import type { HostToWebview, ViewMode } from '../types/messages';
 
 const appRoot = document.getElementById('app')!;
 
@@ -18,6 +19,7 @@ let hexView: HexView;
 let searchBar: SearchBar;
 let hexEl: HTMLElement;
 let structEl: HTMLElement;
+let sectionsEl: HTMLElement;
 let booted = false;
 
 window.addEventListener('message', (ev: MessageEvent<HostToWebview>) => handleMessage(ev.data));
@@ -37,12 +39,16 @@ function handleMessage(msg: HostToWebview): void {
       if (store) {
         store.update({
           parsed: msg.nodes,
+          sections: msg.sections,
           parseError: msg.error ?? null,
         });
       }
       break;
     case 'formats':
-      store?.update({ formats: msg.formats, activeFormat: msg.activeFormat });
+      if (store) {
+        const cleared = msg.activeFormat === null ? { parsed: [], sections: [] } : {};
+        store.update({ formats: msg.formats, activeFormat: msg.activeFormat, ...cleared });
+      }
       break;
     case 'searchResult':
       searchBar?.onResult(msg.query, msg.matches, msg.done);
@@ -66,9 +72,11 @@ function handleMessage(msg: HostToWebview): void {
     case 'setView':
       setView(msg.view);
       break;
-    case 'toggleView':
-      setView(store.state.view === 'raw' ? 'structure' : 'raw');
+    case 'toggleView': {
+      const target = msg.target ?? 'structure';
+      setView(store.state.view === target ? 'raw' : target);
       break;
+    }
     case 'toggleInspector':
       store.update({ showInspector: !store.state.showInspector });
       persist();
@@ -120,6 +128,8 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     parsed: [],
     parseError: null,
     activeNodeId: null,
+    sections: [],
+    activeSectionName: null,
     blockSizeBytes: msg.config.blockSizeBytes,
     maxSearchResults: msg.config.maxSearchResults,
   };
@@ -134,9 +144,10 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
   const searchEl = el('div');
   hexEl = el('div');
   structEl = el('div');
+  sectionsEl = el('div');
   const inspectorEl = el('div');
   const statusEl = el('div');
-  mainEl.append(searchEl, hexEl, structEl);
+  mainEl.append(searchEl, hexEl, structEl, sectionsEl);
   bodyEl.append(mainEl, inspectorEl);
   appRoot.append(toolbarEl, bodyEl, statusEl);
 
@@ -166,6 +177,12 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
       hexView.revealOffset(offset);
     },
   });
+  new SectionsView(sectionsEl, store, {
+    onRevealSection: (start) => {
+      setView('raw');
+      hexView.revealOffset(start);
+    },
+  });
   new Inspector(inspectorEl, store, data);
   new StatusBar(statusEl, store, data);
 
@@ -180,27 +197,34 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
 
   if (store.state.activeFormat) {
     post({ type: 'requestParse', formatName: store.state.activeFormat, endianness: store.state.endianness });
-    if (store.state.view === 'structure') {
-      setView('structure');
-    }
   }
 
   logToHost('info', `viewer booted: ${msg.fileName} (${msg.fileSize} bytes)`);
 }
 
-function setView(view: 'raw' | 'structure'): void {
-  if (view === 'structure' && store.state.activeFormat && store.state.parsed.length === 0) {
-    post({ type: 'requestParse', formatName: store.state.activeFormat, endianness: store.state.endianness });
+function setView(view: ViewMode): void {
+  const needsParse =
+    (view === 'structure' || view === 'sections') &&
+    store.state.activeFormat &&
+    store.state.parsed.length === 0 &&
+    store.state.sections.length === 0;
+  if (needsParse) {
+    post({
+      type: 'requestParse',
+      formatName: store.state.activeFormat!,
+      endianness: store.state.endianness,
+    });
   }
   store.update({ view });
   persist();
 }
 
 function applyViewVisibility(): void {
-  const raw = store.state.view === 'raw';
-  hexEl.hidden = !raw;
-  structEl.hidden = raw;
-  if (raw) {
+  const v = store.state.view;
+  hexEl.hidden = v !== 'raw';
+  structEl.hidden = v !== 'structure';
+  sectionsEl.hidden = v !== 'sections';
+  if (v === 'raw') {
     hexView.layout();
     hexView.focus();
   }

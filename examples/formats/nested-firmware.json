@@ -39,5 +39,12 @@
       ]
     },
     { "name": "Checksum", "type": "uint32", "offset": 20, "display": "hex" }
+  ],
+  "sections": [
+    { "name": "Header", "start": 0, "length": 8, "flags": "r--", "display": true },
+    { "name": "ImageInfo", "start": "0x08", "length": 12, "flags": "r--", "display": true },
+    { "name": "Checksum", "start": "0x14", "length": 4, "flags": "r--", "display": true },
+    { "name": "Payload", "start": "0x18", "end": "0x40", "flags": "r-x", "display": true },
+    { "name": "Scratch (RAM)", "start": "0x20000000", "length": "0x400", "flags": "rw-", "display": false }
   ]
 }

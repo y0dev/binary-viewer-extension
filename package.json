@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -74,6 +74,7 @@
       { "command": "binaryViewer.findNext", "title": "Find Next", "category": "Binary Viewer" },
       { "command": "binaryViewer.findPrevious", "title": "Find Previous", "category": "Binary Viewer" },
       { "command": "binaryViewer.toggleStructureView", "title": "Toggle Structure View", "category": "Binary Viewer" },
+      { "command": "binaryViewer.toggleSectionsView", "title": "Toggle Sections View", "category": "Binary Viewer" },
       { "command": "binaryViewer.toggleInspector", "title": "Toggle Inspector", "category": "Binary Viewer" },
       { "command": "binaryViewer.showFieldInRawView", "title": "Show Field in Raw View", "category": "Binary Viewer" },
       { "command": "binaryViewer.selectFormat", "title": "Select Binary Format", "category": "Binary Viewer" },
@@ -93,6 +94,7 @@
         { "command": "binaryViewer.findNext", "when": "binaryViewer.active" },
         { "command": "binaryViewer.findPrevious", "when": "binaryViewer.active" },
         { "command": "binaryViewer.toggleStructureView", "when": "binaryViewer.active" },
+        { "command": "binaryViewer.toggleSectionsView", "when": "binaryViewer.active" },
         { "command": "binaryViewer.toggleInspector", "when": "binaryViewer.active" },
         { "command": "binaryViewer.showFieldInRawView", "when": "binaryViewer.active" },
         { "command": "binaryViewer.selectFormat", "when": "binaryViewer.active" }
@@ -111,6 +113,7 @@
       { "command": "binaryViewer.findNext", "key": "f3", "when": "binaryViewer.active && !inputFocus" },
       { "command": "binaryViewer.findPrevious", "key": "shift+f3", "when": "binaryViewer.active && !inputFocus" },
       { "command": "binaryViewer.toggleStructureView", "key": "ctrl+alt+s", "mac": "cmd+alt+s", "when": "binaryViewer.active && !inputFocus" },
+      { "command": "binaryViewer.toggleSectionsView", "key": "ctrl+alt+m", "mac": "cmd+alt+m", "when": "binaryViewer.active && !inputFocus" },
       { "command": "binaryViewer.toggleInspector", "key": "ctrl+alt+i", "mac": "cmd+alt+i", "when": "binaryViewer.active && !inputFocus" }
     ],
     "configuration": {

@@ -46,6 +46,7 @@ console.log('Using browser:', browser);
 const shots = [
   { html: 'raw.html', png: 'raw-view.png', size: '1180,662' },
   { html: 'structure.html', png: 'structure-view.png', size: '1180,470' },
+  { html: 'sections.html', png: 'sections-view.png', size: '1180,430' },
 ];
 
 for (const { html, png, size } of shots) {

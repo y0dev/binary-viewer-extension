@@ -53,6 +53,9 @@ interface Model {
   magicOffset: string;
   magicBytes: string;
   tree: EditNode[];
+  /** Raw JSON text for the `sections` array (memory-map view). '' == none. */
+  sectionsJson: string;
+  sectionsError?: string;
 }
 
 let model: Model;
@@ -158,6 +161,10 @@ function toModel(def: FormatDefinition | null): Model {
     magicOffset: magic ? String(magic.offset) : '',
     magicBytes: magic?.bytes ?? '',
     tree: (def?.fields ?? []).map(fieldToNode),
+    sectionsJson:
+      def?.sections && def.sections.length
+        ? JSON.stringify(def.sections, null, 2)
+        : '',
   };
 }
 
@@ -253,6 +260,27 @@ function buildDefinition(): FormatDefinition {
       offset: Number(model.magicOffset.trim() || '0') || 0,
       bytes: model.magicBytes.trim(),
     };
+  }
+
+  model.sectionsError = undefined;
+  if (model.sectionsJson.trim()) {
+    try {
+      const parsed = JSON.parse(model.sectionsJson);
+      if (Array.isArray(parsed)) {
+        def.sections = parsed;
+      } else if (parsed && Array.isArray(parsed.sections)) {
+        def.sections = parsed.sections;
+      } else {
+        model.sectionsError = 'expected a JSON array of { name, start, length, flags?, display? }';
+      }
+    } catch (e) {
+      model.sectionsError = (e as Error).message;
+    }
+  }
+
+  // A sections-only format has no fields.
+  if (def.fields && def.fields.length === 0 && def.sections && def.sections.length) {
+    delete def.fields;
   }
   return def;
 }
@@ -402,6 +430,9 @@ function updatePreview(): void {
   previewBox.textContent = JSON.stringify(def, null, 2);
   const advErrors: string[] = [];
   collectAdvErrors(model.tree, '', advErrors);
+  if (model.sectionsError) {
+    advErrors.push(`sections: invalid JSON — ${model.sectionsError}`);
+  }
   if (advErrors.length) {
     showErrors(advErrors);
   }
@@ -522,6 +553,48 @@ function render(): void {
     el('div', { class: 'fe-row fe-add-row' }, [
       el('button', { class: 'secondary', text: '+ Add Field', onclick: () => addTop('field') }),
       el('button', { class: 'secondary', text: '+ Add Structure', onclick: () => addTop('struct') }),
+    ]),
+  );
+
+  // ---- sections / memory map ----
+  wrap.append(el('h2', { text: 'Sections (memory map)' }));
+  wrap.append(
+    el('div', {
+      class: 'fe-hint',
+      text: 'Optional. A JSON array shown in the Sections view: each entry { "name", "start", "length" (or "end"), "flags"?, "display"? }. start/length accept 0x hex. Leave blank to derive rows from the top-level fields instead.',
+    }),
+  );
+  const sectionsTa = el('textarea', {
+    value: model.sectionsJson,
+    placeholder:
+      '[\n  { "name": "main", "start": "0x0000", "length": "0x4000", "flags": "r-x", "display": true },\n  { "name": "config", "start": "0x4000", "length": "0x1000", "flags": "rw-", "display": true }\n]',
+    oninput: (e) => {
+      model.sectionsJson = (e.target as HTMLTextAreaElement).value;
+      scheduleValidate();
+    },
+  }) as HTMLTextAreaElement;
+  sectionsTa.style.minHeight = '120px';
+  wrap.append(sectionsTa);
+  wrap.append(
+    el('div', { class: 'fe-row fe-add-row' }, [
+      el('button', {
+        class: 'secondary',
+        text: '+ Insert example section',
+        onclick: () => {
+          const example = { name: 'main', start: '0x0000', length: '0x4000', flags: 'r-x', display: true };
+          let arr: unknown[] = [];
+          try {
+            const p = JSON.parse(model.sectionsJson || '[]');
+            arr = Array.isArray(p) ? p : [];
+          } catch {
+            arr = [];
+          }
+          arr.push(example);
+          model.sectionsJson = JSON.stringify(arr, null, 2);
+          sectionsTa.value = model.sectionsJson;
+          scheduleValidate();
+        },
+      }),
     ]),
   );
 

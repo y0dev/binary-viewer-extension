@@ -54,6 +54,29 @@ export interface ParsedBit {
   description?: string;
 }
 
+/** One row of the Sections / memory-map view. */
+export interface ParsedSection {
+  name: string;
+  /** Start address / file offset. */
+  start: number;
+  /** Size in bytes. */
+  length: number;
+  /** start + length (exclusive). */
+  end: number;
+  /** Permission string (`rwx`, `r-x`, …), only when the definition supplied one. */
+  flags?: string;
+  /** Explicit "display" hint from the definition, if any. `undefined` == not set. */
+  display?: boolean;
+  /** True when `start` is inside the file (so it can be selected in the raw view). */
+  inFile: boolean;
+  /** 'defined' == from the format's `sections`; 'derived' == from top-level fields. */
+  source: 'defined' | 'derived';
+  description?: string;
+  error?: string;
+}
+
+export type ViewMode = 'raw' | 'structure' | 'sections';
+
 export interface SearchQuery {
   kind: 'hex' | 'ascii' | 'utf8' | 'utf16' | 'bits';
   text: string;
@@ -91,13 +114,19 @@ export type HostToWebview =
       data: string;
       length: number;
     }
-  | { type: 'parseResult'; formatName: string; nodes: ParsedNode[]; error?: string }
+  | {
+      type: 'parseResult';
+      formatName: string;
+      nodes: ParsedNode[];
+      sections: ParsedSection[];
+      error?: string;
+    }
   | { type: 'formats'; formats: FormatSummary[]; activeFormat: string | null }
   | { type: 'searchResult'; query: SearchQuery; matches: SearchMatch[]; done: boolean; scannedTo: number }
   | { type: 'gotoOffset'; offset: number; select?: number }
   | { type: 'selectRange'; offset: number; length: number; reveal?: boolean }
-  | { type: 'setView'; view: 'raw' | 'structure' }
-  | { type: 'toggleView' }
+  | { type: 'setView'; view: ViewMode }
+  | { type: 'toggleView'; target?: 'structure' | 'sections' }
   | { type: 'toggleInspector' }
   | { type: 'showFieldInRaw' }
   | { type: 'setBytesPerRow'; bytesPerRow: 8 | 16 | 32 }
@@ -122,7 +151,7 @@ export type WebviewToHost =
   | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string };
 
 export interface WebviewPersistedState {
-  view: 'raw' | 'structure';
+  view: ViewMode;
   bytesPerRow: 8 | 16 | 32;
   endianness: Endianness;
   showInspector: boolean;

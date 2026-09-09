@@ -74,7 +74,7 @@ export function parseFormat(
 
   let cursor = 0;
   try {
-    for (const field of format.fields) {
+    for (const field of format.fields ?? []) {
       if (ctx.nodes.length >= ctx.maxNodes) {
         return { nodes: ctx.nodes, error: 'Structure truncated: too many fields' };
       }

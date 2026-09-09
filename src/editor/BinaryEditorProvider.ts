@@ -6,6 +6,7 @@ import { getNonce } from '../util/nonce';
 import { log } from '../util/logger';
 import { parseFormat } from '../core/BinaryParser';
 import { computeFieldSize } from '../core/BinaryField';
+import { buildSections } from '../core/Sections';
 import { searchBinary } from '../binary/BinarySearch';
 import type { FieldDefinition } from '../types/format';
 import type {
@@ -267,13 +268,19 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
   ): Promise<void> {
     const loaded = this.formats.get(formatName);
     if (!loaded) {
-      this.post(entry, { type: 'parseResult', formatName, nodes: [], error: `Format "${formatName}" not found` });
+      this.post(entry, {
+        type: 'parseResult',
+        formatName,
+        nodes: [],
+        sections: [],
+        error: `Format "${formatName}" not found`,
+      });
       return;
     }
     const def = loaded.definition;
     let extent = HEADER_MIN_WINDOW;
     let cursor = 0;
-    for (const f of def.fields as FieldDefinition[]) {
+    for (const f of (def.fields ?? []) as FieldDefinition[]) {
       try {
         const at = f.offset ?? cursor;
         const sz = computeFieldSize(f);
@@ -291,7 +298,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       { baseOffset: 0, bytes, fileSize: entry.document.fileSize },
       { defaultEndianness: endianness ?? cfg.defaultEndianness },
     );
-    this.post(entry, { type: 'parseResult', formatName, nodes, error });
+    const sections = buildSections(
+      def,
+      nodes.map((n) => ({ name: n.name, offset: n.offset, size: n.size, depth: n.depth })),
+      entry.document.fileSize,
+    );
+    this.post(entry, { type: 'parseResult', formatName, nodes, sections, error });
   }
 
   private async persist(entry: Entry, patch: Partial<WebviewPersistedState>): Promise<void> {

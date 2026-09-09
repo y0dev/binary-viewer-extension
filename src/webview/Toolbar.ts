@@ -15,6 +15,7 @@ export class Toolbar {
   private inspectorBtn: HTMLButtonElement;
   private rawBtn: HTMLButtonElement;
   private structBtn: HTMLButtonElement;
+  private sectionsBtn: HTMLButtonElement;
   private gotoInput: HTMLInputElement;
 
   constructor(
@@ -34,7 +35,16 @@ export class Toolbar {
       text: 'Structure',
       onclick: () => this.setView('structure'),
     });
-    const segmented = el('div', { class: 'bv-segmented' }, [this.rawBtn, this.structBtn]);
+    this.sectionsBtn = el('button', {
+      class: 'bv-seg',
+      text: 'Sections',
+      onclick: () => this.setView('sections'),
+    });
+    const segmented = el('div', { class: 'bv-segmented' }, [
+      this.rawBtn,
+      this.structBtn,
+      this.sectionsBtn,
+    ]);
 
     const bytesSelect = el('select', {
       class: 'bv-select',
@@ -157,11 +167,17 @@ export class Toolbar {
     this.inspectorBtn.classList.toggle('bv-btn-active', this.store.state.showInspector);
   }
 
-  private setView(view: 'raw' | 'structure'): void {
+  private setView(view: 'raw' | 'structure' | 'sections'): void {
     this.store.update({ view });
     this.persist();
-    if (view === 'structure' && this.store.state.activeFormat && this.store.state.parsed.length === 0) {
-      post({ type: 'requestParse', formatName: this.store.state.activeFormat, endianness: this.store.state.endianness });
+    const s = this.store.state;
+    const needsParse =
+      (view === 'structure' || view === 'sections') &&
+      s.activeFormat &&
+      s.parsed.length === 0 &&
+      s.sections.length === 0;
+    if (needsParse) {
+      post({ type: 'requestParse', formatName: s.activeFormat!, endianness: s.endianness });
     }
   }
 
@@ -169,6 +185,7 @@ export class Toolbar {
     const v = this.store.state.view;
     this.rawBtn.classList.toggle('bv-seg-active', v === 'raw');
     this.structBtn.classList.toggle('bv-seg-active', v === 'structure');
+    this.sectionsBtn.classList.toggle('bv-seg-active', v === 'sections');
   }
 
   private syncOffset(): void {

@@ -1,5 +1,5 @@
 import type { Endianness } from '../types/format';
-import type { FormatSummary, ParsedNode } from '../types/messages';
+import type { FormatSummary, ParsedNode, ParsedSection, ViewMode } from '../types/messages';
 
 export interface Selection {
   /** Start byte offset (inclusive). */
@@ -11,7 +11,7 @@ export interface Selection {
 export interface AppState {
   fileSize: number;
   fileName: string;
-  view: 'raw' | 'structure';
+  view: ViewMode;
   bytesPerRow: 8 | 16 | 32;
   endianness: Endianness;
   showInspector: boolean;
@@ -29,6 +29,11 @@ export interface AppState {
   parseError: string | null;
   /** Currently highlighted structure node id. */
   activeNodeId: string | null;
+
+  /** Rows for the Sections / memory-map view. */
+  sections: ParsedSection[];
+  /** Currently highlighted section name. */
+  activeSectionName: string | null;
 
   blockSizeBytes: number;
   maxSearchResults: number;

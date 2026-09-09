@@ -25,6 +25,15 @@ bytes back in the hex view.
 
 ![Structure view showing a nested firmware format and the breadcrumb](docs/images/structure-view.png)
 
+## Sections / memory map
+
+Add a `sections` array to a format and the **Sections** tab shows a memory-map
+table — `Section · Start · End · Length`, plus optional user-defined **Flags**
+(`rwx`) and **Display** (`Yes`/`No`) columns. Click a row to select that region
+in the hex view. Works with a fields-based format or a sections-only one.
+
+![Sections view: an MCU flash layout with rwx flags and a display column](docs/images/sections-view.png)
+
 ## What you get
 
 - **16 / 8 / 32 bytes per row**, virtualized rendering, horizontal + vertical
@@ -38,6 +47,10 @@ bytes back in the hex view.
 - **Nested structures** — a field with a `fields` array and no `type` is a
   container; unlimited depth, mixes freely with flat fields, collapse/expand
   remembered per session, `Format › Header › Field` breadcrumb.
+- **Sections / memory-map view** — a `sections: [{ name, start, length, flags?,
+  display? }]` array renders as `Section · Start · End · Length` with optional
+  Flags / Display columns; click a row to select the region. Falls back to the
+  top-level fields when a format defines no sections.
 - **Automatic format detection** by file extension and magic bytes; switch or
   clear the format at any time without reopening the file.
 - **Binary search** — hex (`FF 00 A5 10`, `??` wildcards), text (optional
@@ -102,6 +115,7 @@ builtin**, so a repository can ship its proprietary layouts in
 | Binary Viewer: Search | <kbd>Ctrl/Cmd+F</kbd> |
 | Binary Viewer: Find Next / Previous | <kbd>F3</kbd> / <kbd>Shift+F3</kbd> |
 | Binary Viewer: Toggle Structure View | <kbd>Ctrl/Cmd+Alt+S</kbd> |
+| Binary Viewer: Toggle Sections View | <kbd>Ctrl/Cmd+Alt+M</kbd> |
 | Binary Viewer: Toggle Inspector | <kbd>Ctrl/Cmd+Alt+I</kbd> |
 | Binary Viewer: Show Field in Raw View | — |
 | Binary Viewer: Select Binary Format | — |

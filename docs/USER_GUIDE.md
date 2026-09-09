@@ -67,6 +67,24 @@ Toggle with the toolbar button or **Ctrl/Cmd+Alt+I**. Sections:
 If parsing hits a problem (e.g. a field past EOF) the affected row shows
 `<reads past end of file>` and the rest still render.
 
+## Sections view (memory map)
+
+The third toolbar tab (**Sections**, or **Ctrl/Cmd+Alt+M**) shows a table of
+named regions:
+
+- Columns: **Section · Start · End · Length**, plus **Flags** and **Display**
+  when the format's sections define them.
+- **Click** a row to select `[start, end)` in the raw view; **double-click** to
+  jump to Raw.
+- Rows with `"display": false` render struck-through; tick **Hide "display: No"**
+  in the tab's toolbar to drop them.
+- If the active format has no `sections` array, the tab derives one row per
+  top-level structure field (labelled *derived*).
+
+Add sections to a format with a `sections` array (see
+[FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md#sections-memory-map)) or the
+**Sections (memory map)** box in the format editor.
+
 ## Search
 
 Open with the **Search** button or **Ctrl/Cmd+F**.

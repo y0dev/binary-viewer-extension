@@ -130,6 +130,7 @@ formats override global ones of the same name.
 | [`wav-header.json`](../examples/formats/wav-header.json) | nested sub-chunks, `enum`, ASCII tags, `unit` |
 | [`nested-firmware.json`](../examples/formats/nested-firmware.json) | multi-level nesting, a bit-field inside a nested struct, `timestamp` |
 | [`mbr.json`](../examples/formats/mbr.json) | an **array of nested structures**, magic at a non-zero offset (`55 AA` @ 510) |
+| [`flash-layout.json`](../examples/formats/flash-layout.json) | a **sections-only** memory map for the Sections view — `start` / `length` / `flags` / `display` |
 | [`firmware.json`](../examples/formats/firmware.json) | `flags` with an enum sub-field, `timestamp`, scaled size |
 | [`eeprom.json`](../examples/formats/eeprom.json) | big-endian, `bytes[6]` MAC address, `scale`/`bias`/`unit` calibration, 32-bit flags |
 | [`packet.json`](../examples/formats/packet.json) | network byte order, 64-bit millisecond timestamp, status bit-field |
@@ -149,3 +150,7 @@ Matching binaries for each live in [`examples/binaries/`](../examples/binaries/)
   `offset` + size is beyond the file — check the offsets against the hex view.
 - Use **Binary Viewer: Import / Export Binary Format** to move definitions
   between machines.
+- Add a top-level `sections` array (`{ name, start, length, flags?, display? }`)
+  for the **Sections** tab's memory-map table — see
+  [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md#sections-memory-map). `fields` is
+  optional when `sections` is present.

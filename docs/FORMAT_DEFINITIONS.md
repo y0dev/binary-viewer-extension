@@ -18,9 +18,13 @@ only describe a wrong layout.
   "fileExtensions": [".fw", ".img"],   // optional, with or without the dot
   "endianness": "little",              // optional, default "little"
   "magic": { "offset": 0, "bytes": "46 57 01 00" },  // optional, see below
-  "fields": [ /* FieldDefinition[] */ ] // required, non-empty
+  "fields": [ /* FieldDefinition[] */ ],   // fields OR sections must be present
+  "sections": [ /* SectionDefinition[] */ ] // optional, memory-map view
 }
 ```
+
+A format must define a non-empty `fields` array, a non-empty `sections` array,
+or both. A `sections`-only format is a pure memory map.
 
 ### Magic detection
 
@@ -226,6 +230,40 @@ the field, e.g.:
 ```
 
 The live JSON preview always shows the exact object that will be saved.
+
+## Sections (memory map)
+
+An optional top-level `sections` array powers the **Sections** tab — a
+memory-map table with `Section · Start · End · Length` and two optional,
+user-defined columns.
+
+```jsonc
+"sections": [
+  { "name": "main",   "start": "0x0000", "length": "0x4000", "flags": "r-x", "display": true },
+  { "name": "config", "start": "0x4000", "end": "0x5000",    "flags": "rw-", "display": true },
+  { "name": "scratch (RAM)", "start": "0x20000000", "length": 1024, "flags": "rw-", "display": false }
+]
+```
+
+| Property | Required | Meaning |
+| --- | --- | --- |
+| `name` | yes | Section title, e.g. `main`, `.text`, `Bootloader` |
+| `start` | yes | Start address / file offset. Number or string — `"0x8000"`, `"4096"`, `"1000h"` |
+| `length` | one of `length`/`end` | Size in bytes (number or hex string) |
+| `end` | one of `length`/`end` | Exclusive end address; used when `length` is absent |
+| `flags` | no | Free-form permission string (`rwx`, `r-x`, `rw-`, `---`). Shows the **Flags** column only when at least one section sets it |
+| `display` | no | `true` / `false`. Shows a **Display** column (`Yes`/`No`); `false` rows render struck-through and can be hidden with the tab's checkbox |
+| `description` | no | Tooltip text |
+
+Behaviour:
+
+- Rows are sorted by `start`. Clicking a row selects `[start, start + length)` in
+  the raw view (double-click also switches to Raw). A row whose `start` is past
+  the end of the file is shown but not selectable.
+- **No `sections` key?** The tab still works — it derives one row per top-level
+  field (name, offset, size), marked *derived*.
+- `fields` is optional when `sections` is present, so a definition can be a pure
+  memory map. See [`examples/formats/flash-layout.json`](../examples/formats/flash-layout.json).
 
 ## Future-proofing
 

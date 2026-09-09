@@ -8,7 +8,10 @@ export function registerViewCommands(
 ): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('binaryViewer.toggleStructureView', () => {
-      provider.postToActive({ type: 'toggleView' });
+      provider.postToActive({ type: 'toggleView', target: 'structure' });
+    }),
+    vscode.commands.registerCommand('binaryViewer.toggleSectionsView', () => {
+      provider.postToActive({ type: 'toggleView', target: 'sections' });
     }),
     vscode.commands.registerCommand('binaryViewer.toggleInspector', () => {
       provider.postToActive({ type: 'toggleInspector' });

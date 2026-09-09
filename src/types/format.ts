@@ -131,6 +131,27 @@ export interface MagicSpec {
   mask?: string;
 }
 
+/**
+ * A named region of the file for the Sections / memory-map view. `start` and
+ * `length` accept a number or a hex/decimal string (`"0x8000"`, `"4096"`,
+ * `"1000h"`). `flags` and `display` are optional, user-defined columns.
+ */
+export interface SectionDefinition {
+  /** Section title, e.g. "main", ".text", "Bootloader". */
+  name: string;
+  /** Start address / file offset. */
+  start: number | string;
+  /** Size in bytes. Either this or `end` must be given. */
+  length?: number | string;
+  /** End address (exclusive). Alternative to `length`. */
+  end?: number | string;
+  /** Permission string, typically `rwx` / `r-x` / `rw-` (free-form, shown verbatim). */
+  flags?: string;
+  /** Whether the section is shown as visible ("Yes" / "No"). Default: true. */
+  display?: boolean;
+  description?: string;
+}
+
 export interface FormatDefinition {
   /** Unique, human-readable name. Used as the storage key. */
   name: string;
@@ -143,8 +164,10 @@ export interface FormatDefinition {
   endianness?: Endianness;
   /** One or more magic-byte signatures. Any match counts. */
   magic?: MagicSpec | MagicSpec[];
-  /** Top-level fields. */
-  fields: FieldDefinition[];
+  /** Top-level fields. Optional when `sections` is provided. */
+  fields?: FieldDefinition[];
+  /** Named regions for the Sections / memory-map view. */
+  sections?: SectionDefinition[];
 }
 
 /** Where a loaded format came from (affects override precedence and editability). */
