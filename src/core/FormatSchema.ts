@@ -8,6 +8,8 @@ import type { BitSpec, FieldDefinition, FormatDefinition, MagicSpec } from '../t
 import { isScalarType } from './DataTypes';
 import { parseBitRange } from './BitField';
 import { normalizeEndianness } from './Endianness';
+import { computeFieldSize } from './BinaryField';
+import { hasType, isBitFieldForm, isContainerForm, containerChildren } from './FieldShape';
 
 const COMPOSITE_TYPES = new Set([
   'bytes',
@@ -34,8 +36,8 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-export function isKnownType(type: string): boolean {
-  return isScalarType(type) || COMPOSITE_TYPES.has(type);
+export function isKnownType(type: string | undefined): boolean {
+  return type !== undefined && (isScalarType(type) || COMPOSITE_TYPES.has(type));
 }
 
 export function parseMagicBytes(spec: string): number[] {
@@ -101,6 +103,87 @@ function isBitSpecArray(fields: FieldDefinition[] | BitSpec[] | undefined): fiel
   return Array.isArray(fields) && fields.length > 0 && 'bits' in (fields[0] as object);
 }
 
+function validateStructure(field: FieldDefinition, path: string, result: ValidationResult): void {
+  const { errors } = result;
+  const label = field.name ? `structure "${field.name}"` : 'structure';
+
+  if (
+    field.offset !== undefined &&
+    (typeof field.offset !== 'number' || !Number.isInteger(field.offset) || field.offset < 0)
+  ) {
+    errors.push(`${cap(label)} has an invalid offset.`);
+  }
+  if (
+    field.size !== undefined &&
+    (typeof field.size !== 'number' || !Number.isInteger(field.size) || field.size < 0)
+  ) {
+    errors.push(`${cap(label)} has an invalid size.`);
+  }
+  if (field.endianness !== undefined && normalizeEndianness(field.endianness) === undefined) {
+    errors.push(`${path}.endianness must be "little" or "big"`);
+  }
+
+  const children = containerChildren(field);
+  if (children.length === 0) {
+    errors.push(`${cap(label)} must contain at least one field.`);
+    return;
+  }
+
+  children.forEach((child, i) => validateField(child, `${path}.fields[${i}]`, result));
+
+  // Resolve each child's byte range (relative to this structure) for overlap
+  // and size-overflow checks. Skip a child whose size cannot be determined.
+  const ranges: { name: string; start: number; end: number }[] = [];
+  let cursor = 0;
+  for (const child of children) {
+    if (
+      child.offset !== undefined &&
+      (typeof child.offset !== 'number' || !Number.isInteger(child.offset) || child.offset < 0)
+    ) {
+      errors.push(`Field "${child.name}" has an invalid offset.`);
+    }
+    const start = typeof child.offset === 'number' && child.offset >= 0 ? child.offset : cursor;
+    let sz: number | undefined;
+    try {
+      sz = computeFieldSize(child);
+    } catch {
+      sz = undefined;
+    }
+    if (sz !== undefined && Number.isFinite(sz)) {
+      ranges.push({ name: child.name ?? `fields[${ranges.length}]`, start, end: start + sz });
+      cursor = start + sz;
+    } else {
+      cursor = start;
+    }
+  }
+
+  for (let i = 0; i < ranges.length; i++) {
+    for (let j = i + 1; j < ranges.length; j++) {
+      const a = ranges[i];
+      const b = ranges[j];
+      if (a.start < b.end && b.start < a.end) {
+        errors.push(
+          `${cap(label)} contains overlapping fields ("${a.name}" and "${b.name}").`,
+        );
+      }
+    }
+  }
+
+  if (typeof field.size === 'number' && field.size >= 0) {
+    for (const r of ranges) {
+      if (r.end > field.size) {
+        errors.push(
+          `Field "${r.name}" extends beyond the declared size of ${label} (${field.size} bytes).`,
+        );
+      }
+    }
+  }
+}
+
+function cap(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 function validateField(field: FieldDefinition, path: string, result: ValidationResult): void {
   const { errors, warnings } = result;
   if (!field || typeof field !== 'object') {
@@ -110,10 +193,33 @@ function validateField(field: FieldDefinition, path: string, result: ValidationR
   if (typeof field.name !== 'string' || field.name.trim() === '') {
     errors.push(`${path}.name is required`);
   }
-  if (typeof field.type !== 'string' || field.type.trim() === '') {
-    errors.push(`${path}.type is required`);
+
+  const typed = hasType(field);
+  const bitForm = isBitFieldForm(field);
+  const hasFieldsArray = Array.isArray(field.fields);
+  const containerForm = isContainerForm(field);
+
+  // A field must be exactly one of: primitive (type), nested structure (fields),
+  // or the bit-field form (type + { bits } entries).
+  if (typed && hasFieldsArray && !bitForm && field.type !== 'struct') {
+    errors.push(
+      `Field "${field.name}" declares both a type ("${field.type}") and nested fields. ` +
+        `Define either a "type" or a "fields" array, not both.`,
+    );
     return;
   }
+  if (!typed && !containerForm && !bitForm) {
+    errors.push(`Field "${field.name}" must define either a type or nested fields.`);
+    return;
+  }
+
+  // ---- nested structure -------------------------------------------------
+  if (containerForm) {
+    validateStructure(field, path, result);
+    return;
+  }
+
+  // ---- primitive / composite -----------------------------------------
   if (!isKnownType(field.type)) {
     errors.push(`${path}.type "${field.type}" is not a known type`);
   }
@@ -149,15 +255,6 @@ function validateField(field: FieldDefinition, path: string, result: ValidationR
     }
   }
 
-  if (t === 'struct') {
-    const nested = field.fields as FieldDefinition[] | undefined;
-    if (!Array.isArray(nested) || nested.length === 0) {
-      errors.push(`${path}: "struct" requires a non-empty "fields" array`);
-    } else {
-      nested.forEach((f, i) => validateField(f, `${path}.fields[${i}]`, result));
-    }
-  }
-
   const scalarWithBits = isScalarType(t) && isBitSpecArray(field.fields);
   if (t === 'flags' || t === 'bitfield' || scalarWithBits) {
     if (!isBitSpecArray(field.fields)) {
@@ -182,7 +279,10 @@ function validateField(field: FieldDefinition, path: string, result: ValidationR
   }
 }
 
-function scalarSizeGuess(type: string): number | undefined {
+function scalarSizeGuess(type: string | undefined): number | undefined {
+  if (type === undefined) {
+    return undefined;
+  }
   const map: Record<string, number> = {
     uint8: 1, int8: 1, byte: 1, char: 1, bool: 1, boolean: 1,
     uint16: 2, int16: 2, utf16: 2,

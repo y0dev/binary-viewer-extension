@@ -32,8 +32,14 @@ opens multi-hundred-MB and multi-GB files without loading them into memory.
 
 ### Structure view
 - Decodes the file with a **declarative** binary-format definition and shows an
-  `Offset | Name | Type | Value` table.
-- Click a field to select and highlight the corresponding bytes in the raw view.
+  expandable `Name | Offset | Type | Value` tree.
+- **Nested structures** — a field with a `fields` array and no `type` is a
+  container; child offsets are relative to it and resolved to absolute
+  automatically. Nesting is unlimited and mixes freely with flat fields.
+- Collapse/expand containers (remembered for the session) and a
+  `Format › Header › ImageInfo › Field` breadcrumb for deep hierarchies.
+- Click a field to select and highlight its bytes in the raw view; selecting a
+  container highlights its whole byte range.
 - Bit-field breakdown with a `Bit 7…0` grid and per-bit values / enums.
 - Automatic format detection by file extension and magic bytes; if several match,
   you pick one. Change the format at any time without reopening the file.
@@ -130,6 +136,12 @@ viewing and global/builtin formats work everywhere.
 npm test                  # unit tests (parsing, bit fields, detection, large files)
 npm run test:integration  # downloads VS Code and runs the extension host suite
 ```
+
+## Author
+
+Devontae Reid — [www.devontaereid.com](https://www.devontaereid.com)
+
+Source: [github.com/y0dev/binary-viewer-extension](https://github.com/y0dev/binary-viewer-extension)
 
 ## License
 

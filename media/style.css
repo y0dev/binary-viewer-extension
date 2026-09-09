@@ -422,6 +422,72 @@ body {
   color: var(--vscode-errorForeground);
 }
 
+/* ---- Nested structure tree -------------------------------- */
+
+.bv-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 2px 8px;
+  font-size: 12px;
+}
+
+.bv-crumb {
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--vscode-textLink-foreground);
+}
+
+.bv-crumb:hover {
+  background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+
+.bv-crumb-active {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+  cursor: default;
+}
+
+.bv-crumb-root {
+  font-weight: 600;
+}
+
+.bv-crumb-sep {
+  color: var(--vscode-descriptionForeground);
+}
+
+.bv-disclosure {
+  display: inline-block;
+  width: 1.1em;
+  text-align: center;
+  cursor: pointer;
+  color: var(--vscode-descriptionForeground);
+  user-select: none;
+  font-size: 0.85em;
+}
+
+.bv-disclosure-empty {
+  cursor: default;
+}
+
+.bv-node-name {
+  margin-left: 2px;
+}
+
+.bv-struct-container > td:first-child .bv-node-name {
+  font-weight: 600;
+}
+
+.bv-struct-root {
+  background: var(--vscode-editorWidget-background, transparent);
+}
+
+.bv-struct-table td:first-child {
+  white-space: nowrap;
+}
+
 .bv-bit-row td,
 .bv-bit-grid-row td {
   font-family: var(--vscode-editor-font-family, monospace);

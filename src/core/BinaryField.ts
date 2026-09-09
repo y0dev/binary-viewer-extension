@@ -6,10 +6,41 @@
 
 import type { EnumEntry, FieldDefinition } from '../types/format';
 import { getScalarType } from './DataTypes';
+import { isContainerForm, containerChildren } from './FieldShape';
+
+/**
+ * Total bytes a container occupies: explicit `size` if given, otherwise the
+ * largest child end offset (children packed after the previous sibling when
+ * they omit their own offset). Nested containers recurse through this.
+ */
+export function computeStructSize(field: FieldDefinition): number {
+  let end = 0;
+  let cursor = 0;
+  for (const f of containerChildren(field)) {
+    const at = f.offset ?? cursor;
+    let sz = 0;
+    try {
+      sz = computeFieldSize(f);
+    } catch {
+      // A child of unknowable size (e.g. variable-length) does not advance the
+      // cursor; the explicit `size` (if any) still governs.
+      sz = 0;
+    }
+    end = Math.max(end, at + sz);
+    cursor = at + sz;
+  }
+  return field.size ?? end;
+}
 
 /** Bytes consumed by a field. Returns 0 for zero-length, throws on unknowable. */
 export function computeFieldSize(field: FieldDefinition): number {
   const t = field.type;
+
+  // A field with nested `fields` (and no scalar type) is a structure/container.
+  if (isContainerForm(field)) {
+    return computeStructSize(field);
+  }
+
   if (t === 'char' && (field.length !== undefined || field.count !== undefined)) {
     return field.size ?? (field.length ?? field.count)!;
   }
@@ -46,18 +77,8 @@ export function computeFieldSize(field: FieldDefinition): number {
       const each = computeFieldSize({ ...field.items, name: field.items.name || 'item' });
       return each * (field.count ?? 0);
     }
-    case 'struct': {
-      const nested = (field.fields as FieldDefinition[]) ?? [];
-      let end = 0;
-      let cursor = 0;
-      for (const f of nested) {
-        const at = f.offset ?? cursor;
-        const sz = computeFieldSize(f);
-        end = Math.max(end, at + sz);
-        cursor = at + sz;
-      }
-      return field.size ?? end;
-    }
+    case 'struct':
+      return computeStructSize(field);
     default:
       throw new Error(`Cannot determine size of type "${t}" for field "${field.name}"`);
   }

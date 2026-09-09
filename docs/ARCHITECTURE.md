@@ -15,6 +15,7 @@
 │    └─ FormatEditorPanel  (WebviewPanel form editor)                        │
 │                                                                             │
 │  core/  ── pure, no vscode/node ── DataTypes, Endianness, BitField,        │
+│           FieldShape (container/bit-field/primitive classification),        │
 │            BinaryField, BinaryParser, FormatSchema, FormatDetector,        │
 │            SearchPattern, humanize                                          │
 └───────────────────────────────┬─────────────────────────────────────────────┘
@@ -104,3 +105,16 @@ memory-map visualization) slot in as:
 1. new `type` handlers in `core/BinaryParser` (+ `computeFieldSize` + schema
    validation), and
 2. optional new message fields — never a code-execution hook.
+
+### Nested structures
+
+`core/FieldShape` is the single place that decides whether a `FieldDefinition`
+is a **primitive** (`type`), a **nested structure** (`fields` without `type`, or
+`type: "struct"`) or the **bit-field form** (`type` + `{ bits }` entries). The
+parser threads a `stack` of `{ id, path }` frames so every emitted `ParsedNode`
+carries `parentId`, `path` and `isContainer`; `computeStructSize` resolves a
+structure's size (explicit or largest-child-end) and recurses. Child offsets in
+a definition are always relative to their parent; the parser converts them to
+absolute. A future *reusable named structures* feature only needs a resolver
+pass that inlines `"type": "<StructName>"` references into `fields` before
+parsing — the parser is already recursive.

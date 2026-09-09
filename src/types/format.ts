@@ -67,13 +67,25 @@ export interface EnumEntry {
 
 export interface FieldDefinition {
   name: string;
-  type: FieldTypeName;
   /**
-   * Absolute byte offset from the start of the file. If omitted the field is
-   * placed immediately after the previous sibling field ("packed").
+   * The data type for a *primitive* field. Omit `type` entirely for a nested
+   * structure — a field with a `fields` array and no `type` is treated as a
+   * container. A field must define exactly one of `type` or nested `fields`
+   * (the bit-field form `{ type: "uint8", fields: [ { bits } ] }` is the one
+   * intentional exception).
+   */
+  type?: FieldTypeName;
+  /**
+   * Byte offset. At the top level this is absolute from the start of the file;
+   * inside a nested structure it is **relative to that structure**. If omitted
+   * the field is placed immediately after the previous sibling ("packed").
    */
   offset?: number;
-  /** Explicit size in bytes. Required for `bytes`/`binary`/string types. */
+  /**
+   * Explicit size in bytes. Required for `bytes`/`binary`/string types.
+   * Optional for a structure — when given it is the structure's total size;
+   * when omitted the size is computed from the largest child end offset.
+   */
   size?: number;
   /** For string types: number of characters/code units. */
   length?: number;
@@ -81,7 +93,12 @@ export interface FieldDefinition {
   count?: number;
   /** For `array`: the element type (a nested field definition without a name is allowed). */
   items?: FieldDefinition;
-  /** For `struct`: nested fields. Offsets inside are relative to this struct. */
+  /**
+   * Nested content:
+   *  - `FieldDefinition[]` — a nested structure (with or without `type: "struct"`).
+   *    Child offsets are relative to this structure.
+   *  - `BitSpec[]` — bit-field breakdown of an integer container.
+   */
   fields?: FieldDefinition[] | BitSpec[];
   /** Per-field endianness override. */
   endianness?: Endianness;

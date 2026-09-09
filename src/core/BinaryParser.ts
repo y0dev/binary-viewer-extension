@@ -9,8 +9,9 @@
 import type { FieldDefinition, FormatDefinition, BitSpec, Endianness } from '../types/format';
 import type { ParsedNode, ParsedBit } from '../types/messages';
 import { formatScalar, getScalarType } from './DataTypes';
-import { computeFieldSize, lookupEnumLabel } from './BinaryField';
+import { computeFieldSize, computeStructSize, lookupEnumLabel } from './BinaryField';
 import { decodeBits } from './BitField';
+import { isContainerForm, containerChildren } from './FieldShape';
 import { byteBits, byteHex, offsetHex, bigintHex } from './humanize';
 
 export interface ByteWindow {
@@ -33,6 +34,8 @@ interface Ctx {
   nodes: ParsedNode[];
   maxNodes: number;
   idSeq: number;
+  /** Stack of enclosing containers; the last entry is the current parent. */
+  stack: Array<{ id: string | null; path: string[] }>;
 }
 
 /** True when [abs, abs+size) lies fully inside the loaded window. */
@@ -66,6 +69,7 @@ export function parseFormat(
     nodes: [],
     maxNodes: opts.maxNodes ?? 20000,
     idSeq: 0,
+    stack: [{ id: null, path: [] }],
   };
 
   let cursor = 0;
@@ -85,7 +89,13 @@ export function parseFormat(
 }
 
 function pushNode(ctx: Ctx, node: Omit<ParsedNode, 'id'>): ParsedNode {
-  const full: ParsedNode = { id: `n${ctx.idSeq++}`, ...node };
+  const parent = ctx.stack[ctx.stack.length - 1];
+  const full: ParsedNode = {
+    id: `n${ctx.idSeq++}`,
+    parentId: parent.id,
+    path: [...parent.path, node.name],
+    ...node,
+  };
   ctx.nodes.push(full);
   return full;
 }
@@ -96,6 +106,12 @@ function fieldEndianLittle(ctx: Ctx, field: FieldDefinition): boolean {
 
 function parseField(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
   const t = field.type;
+
+  // A field with nested `fields` and no scalar type is a nested structure.
+  // (`type: "struct"` is also accepted for backward compatibility.)
+  if (isContainerForm(field)) {
+    return parseStruct(ctx, field, abs, depth);
+  }
 
   // An integer scalar that carries a `fields` array of bit specs is a bit-field
   // container (the section-7 `{ "type": "uint8", "fields": [ { bits } ] }` form).
@@ -163,12 +179,12 @@ function parseField(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   if (!scalar) {
     pushNode(ctx, {
       name: field.name,
-      typeLabel: t,
+      typeLabel: t ?? '(none)',
       offset: abs,
       size: 0,
       value: '',
       depth,
-      error: `unknown type "${t}"`,
+      error: t ? `unknown type "${t}"` : 'field must define either a type or nested fields',
     });
     return 0;
   }
@@ -242,26 +258,33 @@ function trimNum(n: number): string {
 }
 
 function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
-  const nested = (field.fields as FieldDefinition[]) ?? [];
-  const size = computeFieldSize(field);
-  pushNode(ctx, {
+  const nested = containerChildren(field);
+  const size = computeStructSize(field);
+  const node = pushNode(ctx, {
     name: field.name,
-    typeLabel: `struct`,
+    typeLabel: 'struct',
     offset: abs,
     size,
-    value: `{ ${nested.length} field${nested.length === 1 ? '' : 's'} }`,
+    value: `${size} byte${size === 1 ? '' : 's'}`,
     detail: field.description,
     depth,
+    isContainer: true,
   });
+  if (!inWindow(ctx, abs, Math.min(size, 1)) && size > 0) {
+    node.error = abs >= ctx.win.fileSize ? 'starts past end of file' : 'outside loaded window';
+  }
+  // Child offsets are RELATIVE to this structure; convert to absolute here.
+  ctx.stack.push({ id: node.id, path: node.path! });
   let cursor = 0;
   for (const f of nested) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
     }
-    const childAbs = abs + (f.offset ?? cursor);
-    const csize = parseField(ctx, f, childAbs, depth + 1);
-    cursor = (f.offset ?? cursor) + csize;
+    const rel = f.offset ?? cursor;
+    const csize = parseField(ctx, f, abs + rel, depth + 1);
+    cursor = rel + csize;
   }
+  ctx.stack.pop();
   return size;
 }
 
@@ -270,15 +293,17 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   const count = field.count ?? 0;
   const each = computeFieldSize({ ...item, name: item.name || 'item' });
   const size = field.size ?? each * count;
-  pushNode(ctx, {
+  const node = pushNode(ctx, {
     name: field.name,
-    typeLabel: `${item.type}[${count}]`,
+    typeLabel: `${item.type ?? 'struct'}[${count}]`,
     offset: abs,
     size,
-    value: `[ ${count} ]`,
+    value: `${count} element${count === 1 ? '' : 's'}`,
     detail: field.description,
     depth,
+    isContainer: true,
   });
+  ctx.stack.push({ id: node.id, path: node.path! });
   const limit = Math.min(count, 4096);
   for (let i = 0; i < limit; i++) {
     if (ctx.nodes.length >= ctx.maxNodes) {
@@ -296,6 +321,7 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
       depth: depth + 1,
     });
   }
+  ctx.stack.pop();
   return size;
 }
 
@@ -366,7 +392,7 @@ function parseFlags(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   return sizeBytes;
 }
 
-function sizeFromScalar(type: string): number | undefined {
+function sizeFromScalar(type: string | undefined): number | undefined {
   const s = getScalarType(type);
   return s?.size;
 }
@@ -397,7 +423,7 @@ function parseEnum(ctx: Ctx, field: FieldDefinition, abs: number, depth: number)
 }
 
 function parseString(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
-  const t = field.type;
+  const t = field.type ?? 'ascii';
   const units = field.length ?? field.size ?? 0;
   const size = t === 'utf16' ? (field.size ?? units * 2) : (field.size ?? units);
   if (!inWindow(ctx, abs, size)) {

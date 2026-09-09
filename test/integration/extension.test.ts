@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-const EXT_ID = 'binary-viewer.binary-viewer';
+const EXT_ID = 'y0dev.binary-viewer';
 
 function makeFirmwareFixture(): vscode.Uri {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'binview-int-'));
@@ -58,5 +58,24 @@ describe('Binary Viewer integration', () => {
   it('reloads formats and finds the builtin firmware example', async () => {
     await vscode.commands.executeCommand('binaryViewer.reloadFormats');
     // Nothing to assert directly via the public API; the command must not throw.
+  });
+
+  it('opens the nested-structure example .fw without throwing', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'binview-nested-'));
+    const p = path.join(dir, 'nested.fw');
+    const buf = Buffer.alloc(64);
+    buf.writeUInt32LE(0x00015746, 0); // FW magic
+    buf.writeUInt16LE(0x0107, 4);
+    buf.writeUInt16LE(0b10011, 6);
+    buf.writeUInt32LE(20480, 8);
+    buf.writeUInt32LE(0x08000000, 12);
+    buf.writeUInt32LE(0x08000131, 16);
+    buf.writeUInt32LE(0xdeadbeef, 20);
+    fs.writeFileSync(p, buf);
+    await vscode.commands.executeCommand('vscode.openWith', vscode.Uri.file(p), 'binaryViewer.hexEditor');
+    await new Promise((r) => setTimeout(r, 400));
+    await vscode.commands.executeCommand('binaryViewer.toggleStructureView');
+    await new Promise((r) => setTimeout(r, 200));
+    await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
   });
 });

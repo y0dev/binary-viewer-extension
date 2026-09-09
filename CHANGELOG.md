@@ -1,5 +1,24 @@
 # Change Log
 
+## 0.2.0 — Nested structures
+
+- Binary format definitions now support **nested structures**: a field with a
+  `fields` array and no `type` is a container. Child offsets are **relative to
+  the enclosing structure**; the parser resolves absolute offsets. Nesting is
+  unlimited and can be freely mixed with flat fields. `type: "struct"` still
+  works. Fully backward compatible with existing flat definitions.
+- Structure view renders the hierarchy as an expandable tree (session-remembered
+  collapse state) with a `Format › Header › ImageInfo › Field` breadcrumb.
+  Selecting a container highlights its whole byte range in the raw view.
+- Structure `size` is optional — computed from the largest child end offset when
+  omitted; nested structures feed the parent calculation.
+- The format editor is now a **tree editor**: `+ Add Field` / `+ Add Structure`
+  at every level, move into / out of structures, reorder, collapse.
+- New validation errors: field with both `type` and `fields`, field with
+  neither, negative structure/child offset, overlapping fields, field extending
+  beyond a declared structure size, empty structure.
+- New builtin/example format `Nested Firmware (example)` + `examples/binaries/nested.fw`.
+
 ## 0.1.0 — Initial release
 
 ### Raw view

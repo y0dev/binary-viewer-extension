@@ -7,6 +7,46 @@ import type { FormatDefinition } from '../types/format';
  */
 export const BUILTIN_FORMATS: FormatDefinition[] = [
   {
+    name: 'Nested Firmware (example)',
+    description:
+      'Demonstrates nested structures — a Header and an ImageInfo container with ' +
+      'child offsets relative to their parent, plus a flat Checksum field.',
+    version: '1.0.0',
+    fileExtensions: ['.fw'],
+    endianness: 'little',
+    magic: { offset: 0, bytes: '46 57 01 00' },
+    fields: [
+      {
+        name: 'Header',
+        offset: 0,
+        fields: [
+          { name: 'Magic', type: 'uint32', offset: 0, display: 'hex', description: 'Firmware magic value' },
+          { name: 'Version', type: 'uint16', offset: 4 },
+          {
+            name: 'Flags',
+            type: 'uint16',
+            offset: 6,
+            fields: [
+              { name: 'Compressed', bits: '0' },
+              { name: 'Signed', bits: '1' },
+              { name: 'Stage', bits: '4-6', enum: { '0': 'boot', '1': 'app', '2': 'recovery' } },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'ImageInfo',
+        offset: 8,
+        fields: [
+          { name: 'ImageSize', type: 'uint32', offset: 0, display: 'dec', unit: 'bytes' },
+          { name: 'LoadAddress', type: 'uint32', offset: 4, display: 'hex' },
+          { name: 'EntryPoint', type: 'uint32', offset: 8, display: 'hex' },
+        ],
+      },
+      { name: 'Checksum', type: 'uint32', offset: 20, display: 'hex' },
+    ],
+  },
+  {
     name: 'Firmware Image (example)',
     description:
       'The sample firmware header from the Binary Viewer documentation. Magic "FW\\x01\\x00".',

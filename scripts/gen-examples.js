@@ -62,6 +62,20 @@ fs.mkdirSync(OUT, { recursive: true });
   fs.writeFileSync(path.join(OUT, 'telemetry.pkt'), buf);
 }
 
+// --- nested.fw : matches "Nested Firmware (example)" / examples/formats/nested-firmware.json ---
+{
+  const buf = Buffer.alloc(64);
+  buf.writeUInt32LE(0x00015746, 0); // Magic "FW\x01\x00"
+  buf.writeUInt16LE(0x0107, 4); // Version 1.7
+  buf.writeUInt16LE(0b0000_0000_0001_0011, 6); // Flags: Compressed|Signed, Stage=app(1)
+  buf.writeUInt32LE(20480, 8); // ImageInfo.ImageSize
+  buf.writeUInt32LE(0x08000000, 12); // ImageInfo.LoadAddress
+  buf.writeUInt32LE(0x08000131, 16); // ImageInfo.EntryPoint
+  buf.writeUInt32LE(0xdeadbeef, 20); // Checksum
+  for (let i = 24; i < buf.length; i++) buf[i] = (i * 17) & 0xff;
+  fs.writeFileSync(path.join(OUT, 'nested.fw'), buf);
+}
+
 // --- sample.dat : arbitrary binary, no matching format (raw-mode demo) ---
 {
   const buf = Buffer.alloc(4096);

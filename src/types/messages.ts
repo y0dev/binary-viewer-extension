@@ -34,8 +34,14 @@ export interface ParsedNode {
   value: string;
   /** Optional secondary representations shown on expand / hover. */
   detail?: string;
-  /** Nesting depth for tree rendering. */
+  /** Nesting depth for tree rendering (top-level fields are depth 0). */
   depth: number;
+  /** True for nested structures / arrays — rendered with a disclosure arrow. */
+  isContainer?: boolean;
+  /** id of the enclosing container node, or null at the top level. */
+  parentId?: string | null;
+  /** Name path from the top-level field down to and including this node. */
+  path?: string[];
   /** Bit rows for flags/bitfield nodes. */
   bits?: ParsedBit[];
   error?: string;

@@ -37,18 +37,61 @@ only describe a wrong layout.
 4. score: magic + extension > magic > extension; ties → alphabetical
 5. one match → applied automatically; several → you pick; none → Raw mode only
 
+## Nested structures
+
+A field is **either** a primitive (`type`) **or** a nested structure (`fields`),
+never both. A field with a `fields` array and **no `type`** is a container:
+
+```jsonc
+{
+  "name": "Header",
+  "offset": 0,          // absolute here (top level)
+  "fields": [
+    { "name": "Magic",   "type": "uint32", "offset": 0 },  // offset RELATIVE to Header
+    { "name": "Version", "type": "uint16", "offset": 4 },
+    { "name": "Flags",   "type": "uint16", "offset": 6 }
+  ]
+}
+```
+
+- **Child offsets are relative to the enclosing structure.** The parser adds the
+  parent's absolute offset automatically — you never compute absolute offsets by
+  hand. Omit a child `offset` to pack it after the previous sibling.
+- **Nesting is unlimited** — structures inside structures inside structures.
+- **`size`** on a structure is optional. When given it is the structure's total
+  size; when omitted it is the largest child end offset. Nested structures feed
+  their computed size into the parent's calculation.
+- The Structure view shows containers with a disclosure arrow (expand/collapse,
+  remembered for the session) and a breadcrumb such as
+  `Firmware › Header › ImageInfo › LoadAddress`. Selecting a container highlights
+  its whole byte range in the raw view; selecting a leaf highlights just that
+  field.
+- `type: "struct"` is still accepted for backward compatibility and behaves
+  identically to the typeless form.
+- Flat and nested fields can be freely mixed at any level. Existing flat format
+  definitions keep working unchanged.
+
+Validation rejects, with a clear message:
+
+- a field with **both** `type` and `fields` (except the bit-field form);
+- a field with **neither** `type` nor `fields`;
+- a negative structure or child `offset`;
+- **overlapping** fields within a structure;
+- a field that **extends beyond** a structure's declared `size`;
+- an empty structure.
+
 ## FieldDefinition
 
 | Property | Applies to | Meaning |
 | --- | --- | --- |
 | `name` | all | required label |
-| `type` | all | see the type table below |
-| `offset` | all | absolute byte offset. **Omit** to pack immediately after the previous sibling |
-| `size` | `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width |
+| `type` | primitives only | see the type table below. **Omit** for a nested structure |
+| `fields` | structure | nested `FieldDefinition[]`; child offsets are **relative** to this structure |
+| `offset` | all | byte offset — absolute at the top level, **relative to the parent** inside a structure. **Omit** to pack immediately after the previous sibling |
+| `size` | structure, `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width (structure: total size; omitted ⇒ computed from children) |
 | `length` | strings, `char` | number of characters / code units |
 | `count` | `array` | element count |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
-| `fields` | `struct` | nested `FieldDefinition[]` (offsets **relative** to the struct) |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
 | `endianness` | scalars & multi-byte composites | `"little"` / `"big"` override |
 | `enum` | `enum` + any integer scalar | value→label map or `[{value,name}]` |
@@ -144,16 +187,30 @@ Bit  7  6  5  4  3  2  1  0
 ```
 
 See [`examples/formats/`](../examples/formats/) for `firmware.json`,
-`eeprom.json` (big-endian, MAC address, scaled calibration values) and
-`packet.json` (network-order telemetry with a 64-bit millisecond timestamp), and
+`eeprom.json` (big-endian, MAC address, scaled calibration values),
+`packet.json` (network-order telemetry with a 64-bit millisecond timestamp) and
+`nested-firmware.json` (nested `Header` / `ImageInfo` structures), and
 [`examples/binaries/`](../examples/binaries/) for files that match them.
 
-## Composite fields in the form editor
+## The form editor
 
-The form editor shows one row per field with the common columns. Extra
-properties for `flags`/`bitfield`/`enum`/`array`/`struct`/`timestamp` go in the
-row's **advanced** disclosure as a JSON fragment that is merged onto the field,
-e.g.:
+Fields and structures are edited as a **tree**. Each row has Name, Offset,
+Size, and (for primitives) Type / Length / Endianness. Use:
+
+- **`+ Add Field`** / **`+ Add Structure`** at the top level, and the same pair
+  of buttons inside every structure;
+- **↑ / ↓** to reorder within the same parent;
+- **⇥** to move a field into the structure immediately above it;
+- **⇤** to move a field out of its structure (placing it right after it);
+- the **▶/▼** toggle to collapse a structure while editing.
+
+A live JSON preview shows the exact object that will be saved, and the
+validation panel lists overlap / offset / size / "type-or-fields" errors as you
+type.
+
+Extra properties for `flags`/`bitfield`/`enum`/`array`/`timestamp` go in a
+primitive row's **advanced** disclosure as a JSON fragment that is merged onto
+the field, e.g.:
 
 ```jsonc
 { "fields": [ { "name": "Enabled", "bits": "0" }, { "name": "Mode", "bits": "1-3" } ] }
@@ -175,3 +232,18 @@ enum/register definitions. Planned importers (C `struct`, DWARF, ELF, S-record,
 Intel HEX) and features (conditional/dynamic offsets, CRC validation, memory-map
 visualization) are additive — they become new `type` handlers, never a
 code-execution hook.
+
+**Reusable named structures** (a future feature) would add a top-level
+`structures` map and let a field reference one by `"type": "<StructName>"`:
+
+```jsonc
+{
+  "structures": { "ImageInfo": { "fields": [ /* ... */ ] } },
+  "fields": [ { "name": "ImageInfo", "type": "ImageInfo" } ]
+}
+```
+
+The recursive parser and `computeFieldSize` already handle inline nested
+structures, so this only needs a *resolver pass* that expands each named
+reference into an inline `fields` array before parsing — no change to the
+parser or the message protocol.

@@ -1,6 +1,6 @@
 import { el, clear } from '../dom';
 import { FORMAT_EDITOR_CSS } from './styles';
-import type { FormatDefinition, FieldDefinition, MagicSpec } from '../../types/format';
+import type { FormatDefinition, FieldDefinition, MagicSpec, BitSpec } from '../../types/format';
 import type {
   FormatEditorFromHost,
   FormatEditorToHost,
@@ -21,18 +21,28 @@ document.head.append(style);
 const app = document.getElementById('app')!;
 
 let init: FormatEditorInit | null = null;
-/** Working copy. `fields` are stored with their advanced JSON as a string. */
-interface EditRow {
+let seq = 1;
+const uid = () => `e${seq++}`;
+
+/** A node in the working tree: a primitive field or a nested structure. */
+interface EditNode {
+  id: string;
+  kind: 'field' | 'struct';
   name: string;
-  type: string;
   offset: string;
+  // field-only
+  type: string;
   size: string;
   length: string;
   endianness: string;
   description: string;
   advanced: string;
   advancedError?: string;
+  // struct-only
+  children: EditNode[];
+  collapsed: boolean;
 }
+
 interface Model {
   name: string;
   description: string;
@@ -42,7 +52,7 @@ interface Model {
   endianness: 'little' | 'big';
   magicOffset: string;
   magicBytes: string;
-  rows: EditRow[];
+  tree: EditNode[];
 }
 
 let model: Model;
@@ -63,7 +73,74 @@ window.addEventListener('message', (ev: MessageEvent<FormatEditorFromHost>) => {
 
 post({ type: 'ready' });
 
-// ---- model <-> definition -------------------------------------------
+// ---- model <-> definition ----------------------------------------------
+
+const KNOWN_KEYS = new Set(['name', 'type', 'offset', 'size', 'length', 'endianness', 'description']);
+
+function looksLikeBitSpecs(fields: unknown): boolean {
+  return (
+    Array.isArray(fields) &&
+    fields.length > 0 &&
+    typeof (fields[0] as Partial<BitSpec>).bits === 'string'
+  );
+}
+
+function isNestedStructure(f: FieldDefinition): boolean {
+  if (!Array.isArray(f.fields)) {
+    return false;
+  }
+  if (looksLikeBitSpecs(f.fields)) {
+    return false;
+  }
+  // typeless container, or explicit type:"struct"
+  return !f.type || f.type === 'struct';
+}
+
+function emptyNode(kind: 'field' | 'struct'): EditNode {
+  return {
+    id: uid(),
+    kind,
+    name: kind === 'struct' ? 'NewStruct' : 'field',
+    offset: '',
+    type: 'uint8',
+    size: '',
+    length: '',
+    endianness: '',
+    description: '',
+    advanced: '',
+    children: [],
+    collapsed: false,
+  };
+}
+
+function fieldToNode(f: FieldDefinition): EditNode {
+  if (isNestedStructure(f)) {
+    const node = emptyNode('struct');
+    node.name = f.name ?? '';
+    node.offset = f.offset === undefined ? '' : String(f.offset);
+    node.size = f.size === undefined ? '' : String(f.size);
+    node.endianness = f.endianness ?? '';
+    node.description = f.description ?? '';
+    node.children = (f.fields as FieldDefinition[]).map(fieldToNode);
+    return node;
+  }
+  const node = emptyNode('field');
+  const advanced: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(f)) {
+    if (!KNOWN_KEYS.has(k)) {
+      advanced[k] = v;
+    }
+  }
+  node.name = f.name ?? '';
+  node.type = f.type ?? 'uint8';
+  node.offset = f.offset === undefined ? '' : String(f.offset);
+  node.size = f.size === undefined ? '' : String(f.size);
+  node.length = f.length === undefined ? '' : String(f.length);
+  node.endianness = f.endianness ?? '';
+  node.description = f.description ?? '';
+  node.advanced = Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : '';
+  return node;
+}
 
 function toModel(def: FormatDefinition | null): Model {
   const magic: MagicSpec | undefined = def
@@ -80,75 +157,70 @@ function toModel(def: FormatDefinition | null): Model {
     endianness: def?.endianness ?? 'little',
     magicOffset: magic ? String(magic.offset) : '',
     magicBytes: magic?.bytes ?? '',
-    rows: (def?.fields ?? []).map(fieldToRow),
+    tree: (def?.fields ?? []).map(fieldToNode),
   };
 }
 
-const KNOWN_KEYS = new Set([
-  'name',
-  'type',
-  'offset',
-  'size',
-  'length',
-  'endianness',
-  'description',
-]);
-
-function fieldToRow(f: FieldDefinition): EditRow {
-  const advanced: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(f)) {
-    if (!KNOWN_KEYS.has(k)) {
-      advanced[k] = v;
-    }
+function num(s: string): number | undefined {
+  const t = s.trim();
+  if (t === '') {
+    return undefined;
   }
-  return {
-    name: f.name ?? '',
-    type: f.type ?? 'uint8',
-    offset: f.offset === undefined ? '' : String(f.offset),
-    size: f.size === undefined ? '' : String(f.size),
-    length: f.length === undefined ? '' : String(f.length),
-    endianness: f.endianness ?? '',
-    description: f.description ?? '',
-    advanced: Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : '',
-  };
+  const n = t.toLowerCase().startsWith('0x') ? parseInt(t, 16) : Number(t);
+  return Number.isFinite(n) ? n : undefined;
 }
 
-function rowToField(row: EditRow): FieldDefinition {
-  const f: FieldDefinition = { name: row.name.trim(), type: row.type.trim() };
-  const num = (s: string) => {
-    const t = s.trim();
-    if (t === '') {
-      return undefined;
+function nodeToField(node: EditNode): FieldDefinition {
+  if (node.kind === 'struct') {
+    const f: FieldDefinition = {
+      name: node.name.trim(),
+      fields: node.children.map(nodeToField),
+    };
+    const off = num(node.offset);
+    if (off !== undefined) {
+      f.offset = off;
     }
-    return t.toLowerCase().startsWith('0x') ? parseInt(t, 16) : Number(t);
-  };
-  const off = num(row.offset);
-  if (off !== undefined && Number.isFinite(off)) {
+    const sz = num(node.size);
+    if (sz !== undefined) {
+      f.size = sz;
+    }
+    if (node.endianness === 'little' || node.endianness === 'big') {
+      f.endianness = node.endianness;
+    }
+    if (node.description.trim()) {
+      f.description = node.description.trim();
+    }
+    return f;
+  }
+
+  const f: FieldDefinition = { name: node.name.trim(), type: node.type.trim() };
+  const off = num(node.offset);
+  if (off !== undefined) {
     f.offset = off;
   }
-  const sz = num(row.size);
-  if (sz !== undefined && Number.isFinite(sz)) {
+  const sz = num(node.size);
+  if (sz !== undefined) {
     f.size = sz;
   }
-  const len = num(row.length);
-  if (len !== undefined && Number.isFinite(len)) {
+  const len = num(node.length);
+  if (len !== undefined) {
     f.length = len;
   }
-  if (row.endianness === 'little' || row.endianness === 'big') {
-    f.endianness = row.endianness;
+  if (node.endianness === 'little' || node.endianness === 'big') {
+    f.endianness = node.endianness;
   }
-  if (row.description.trim()) {
-    f.description = row.description.trim();
+  if (node.description.trim()) {
+    f.description = node.description.trim();
   }
-  row.advancedError = undefined;
-  if (row.advanced.trim()) {
+  node.advancedError = undefined;
+  if (node.advanced.trim()) {
     try {
-      const extra = JSON.parse(row.advanced);
+      const extra = JSON.parse(node.advanced);
       if (extra && typeof extra === 'object') {
         Object.assign(f, extra);
       }
     } catch (e) {
-      row.advancedError = (e as Error).message;
+      node.advancedError = (e as Error).message;
     }
   }
   return f;
@@ -157,7 +229,7 @@ function rowToField(row: EditRow): FieldDefinition {
 function buildDefinition(): FormatDefinition {
   const def: FormatDefinition = {
     name: model.name.trim(),
-    fields: model.rows.map(rowToField),
+    fields: model.tree.map(nodeToField),
     endianness: model.endianness,
   };
   if (model.description.trim()) {
@@ -185,11 +257,125 @@ function buildDefinition(): FormatDefinition {
   return def;
 }
 
+// ---- tree operations -------------------------------------------------
+
+interface Location {
+  list: EditNode[];
+  index: number;
+}
+
+function locate(id: string, list: EditNode[] = model.tree): Location | null {
+  for (let i = 0; i < list.length; i++) {
+    if (list[i].id === id) {
+      return { list, index: i };
+    }
+    const deeper = locate(id, list[i].children);
+    if (deeper) {
+      return deeper;
+    }
+  }
+  return null;
+}
+
+function moveNode(id: string, delta: number): void {
+  const loc = locate(id);
+  if (!loc) {
+    return;
+  }
+  const j = loc.index + delta;
+  if (j < 0 || j >= loc.list.length) {
+    return;
+  }
+  [loc.list[loc.index], loc.list[j]] = [loc.list[j], loc.list[loc.index]];
+  changed();
+}
+
+function deleteNode(id: string): void {
+  const loc = locate(id);
+  if (!loc) {
+    return;
+  }
+  loc.list.splice(loc.index, 1);
+  changed();
+}
+
+/** Move a node into the immediately-preceding sibling, if that sibling is a struct. */
+function indentNode(id: string): void {
+  const loc = locate(id);
+  if (!loc || loc.index === 0) {
+    return;
+  }
+  const prev = loc.list[loc.index - 1];
+  if (prev.kind !== 'struct') {
+    return;
+  }
+  const [node] = loc.list.splice(loc.index, 1);
+  prev.collapsed = false;
+  prev.children.push(node);
+  changed();
+}
+
+/** Move a node out of its parent struct, placing it right after that struct. */
+function outdentNode(id: string): void {
+  // Find the node's list and, separately, which struct owns that list.
+  const found = findWithParent(id, model.tree, null);
+  if (!found || !found.parent) {
+    return; // already at the top level
+  }
+  const { parent } = found;
+  const parentLoc = locate(parent.id);
+  if (!parentLoc) {
+    return;
+  }
+  const idx = parent.children.findIndex((c) => c.id === id);
+  const [node] = parent.children.splice(idx, 1);
+  parentLoc.list.splice(parentLoc.index + 1, 0, node);
+  changed();
+}
+
+function findWithParent(
+  id: string,
+  list: EditNode[],
+  parent: EditNode | null,
+): { node: EditNode; parent: EditNode | null } | null {
+  for (const n of list) {
+    if (n.id === id) {
+      return { node: n, parent };
+    }
+    const deeper = findWithParent(id, n.children, n);
+    if (deeper) {
+      return deeper;
+    }
+  }
+  return null;
+}
+
+function addChild(structId: string, kind: 'field' | 'struct'): void {
+  const loc = locate(structId);
+  if (!loc) {
+    return;
+  }
+  const s = loc.list[loc.index];
+  s.collapsed = false;
+  s.children.push(emptyNode(kind));
+  changed();
+}
+
+function addTop(kind: 'field' | 'struct'): void {
+  model.tree.push(emptyNode(kind));
+  changed();
+}
+
 // ---- rendering -----------------------------------------------------
 
 let errorBox: HTMLElement;
 let previewBox: HTMLElement;
 let debounce: number | undefined;
+
+function changed(): void {
+  render();
+  scheduleValidate();
+}
 
 function scheduleValidate(): void {
   updatePreview();
@@ -201,12 +387,21 @@ function scheduleValidate(): void {
   }, 250);
 }
 
+function collectAdvErrors(list: EditNode[], pathPrefix: string, out: string[]): void {
+  list.forEach((n, i) => {
+    const p = `${pathPrefix}${n.name || i}`;
+    if (n.advancedError) {
+      out.push(`${p}: advanced JSON is invalid — ${n.advancedError}`);
+    }
+    collectAdvErrors(n.children, `${p} > `, out);
+  });
+}
+
 function updatePreview(): void {
   const def = buildDefinition();
   previewBox.textContent = JSON.stringify(def, null, 2);
-  const advErrors = model.rows
-    .map((r, i) => (r.advancedError ? `fields[${i}] advanced JSON: ${r.advancedError}` : ''))
-    .filter(Boolean);
+  const advErrors: string[] = [];
+  collectAdvErrors(model.tree, '', advErrors);
   if (advErrors.length) {
     showErrors(advErrors);
   }
@@ -215,7 +410,7 @@ function updatePreview(): void {
 function showErrors(errors: string[]): void {
   clear(errorBox);
   if (errors.length === 0) {
-    errorBox.append(el('span', { class: 'fe-ok', text: 'Valid ✓' }));
+    errorBox.append(el('span', { class: 'fe-ok', text: 'Valid' }));
     return;
   }
   errorBox.append(el('div', { text: errors.join('\n') }));
@@ -265,26 +460,27 @@ function render(): void {
 
   // ---- meta ----
   wrap.append(el('h2', { text: 'Format' }));
-  const meta1 = el('div', { class: 'fe-row' }, [
-    textField('Name', model.name, (v) => (model.name = v), { width: 260 }),
-    textField('Version', model.version, (v) => (model.version = v), { width: 90 }),
-    textField('Author', model.author, (v) => (model.author = v), { width: 140 }),
-    (() => {
-      const sel = el('select', {
-        onchange: (e) => {
-          model.endianness = (e.target as HTMLSelectElement).value as 'little' | 'big';
-          scheduleValidate();
-        },
-      }) as HTMLSelectElement;
-      sel.append(
-        el('option', { value: 'little', text: 'Little Endian' }),
-        el('option', { value: 'big', text: 'Big Endian' }),
-      );
-      sel.value = model.endianness;
-      return el('div', { class: 'fe-field' }, [el('label', { text: 'Default Endianness' }), sel]);
-    })(),
-  ]);
-  wrap.append(meta1);
+  wrap.append(
+    el('div', { class: 'fe-row' }, [
+      textField('Name', model.name, (v) => (model.name = v), { width: 260 }),
+      textField('Version', model.version, (v) => (model.version = v), { width: 90 }),
+      textField('Author', model.author, (v) => (model.author = v), { width: 140 }),
+      (() => {
+        const sel = el('select', {
+          onchange: (e) => {
+            model.endianness = (e.target as HTMLSelectElement).value as 'little' | 'big';
+            scheduleValidate();
+          },
+        }) as HTMLSelectElement;
+        sel.append(
+          el('option', { value: 'little', text: 'Little Endian' }),
+          el('option', { value: 'big', text: 'Big Endian' }),
+        );
+        sel.value = model.endianness;
+        return el('div', { class: 'fe-field' }, [el('label', { text: 'Default Endianness' }), sel]);
+      })(),
+    ]),
+  );
   wrap.append(
     el('div', { class: 'fe-row' }, [
       textField('Description', model.description, (v) => (model.description = v), { width: 420 }),
@@ -309,28 +505,24 @@ function render(): void {
     ]),
   );
 
-  // ---- fields ----
-  wrap.append(el('h2', { text: 'Fields' }));
-  wrap.append(renderFieldsTable());
+  // ---- fields tree ----
+  wrap.append(el('h2', { text: 'Fields & structures' }));
   wrap.append(
-    el('button', {
-      class: 'secondary',
-      text: '+ Add Field',
-      onclick: () => {
-        model.rows.push({
-          name: `field${model.rows.length}`,
-          type: 'uint8',
-          offset: '',
-          size: '',
-          length: '',
-          endianness: '',
-          description: '',
-          advanced: '',
-        });
-        render();
-        scheduleValidate();
-      },
+    el('div', {
+      class: 'fe-hint',
+      text: 'Offsets inside a structure are relative to that structure. Leave Offset blank to pack after the previous sibling. Leave a structure Size blank to size it automatically from its fields.',
     }),
+  );
+  const tree = el('div', { class: 'fe-tree' });
+  for (const node of model.tree) {
+    renderNode(tree, node, 0);
+  }
+  wrap.append(tree);
+  wrap.append(
+    el('div', { class: 'fe-row fe-add-row' }, [
+      el('button', { class: 'secondary', text: '+ Add Field', onclick: () => addTop('field') }),
+      el('button', { class: 'secondary', text: '+ Add Structure', onclick: () => addTop('struct') }),
+    ]),
   );
 
   // ---- preview + errors ----
@@ -359,136 +551,160 @@ function render(): void {
   post({ type: 'validate', format: buildDefinition() });
 }
 
-function renderFieldsTable(): HTMLElement {
-  const table = el('table', { class: 'fe-fields' });
-  table.append(
-    el('thead', {}, [
-      el('tr', {}, [
-        el('th', { text: '' }),
-        el('th', { text: 'Name' }),
-        el('th', { text: 'Type' }),
-        el('th', { text: 'Offset' }),
-        el('th', { text: 'Size' }),
-        el('th', { text: 'Length' }),
-        el('th', { text: 'Endian' }),
-        el('th', { text: 'Description' }),
-        el('th', { text: '' }),
-      ]),
-    ]),
-  );
-  const tbody = el('tbody');
-  const allTypes = [...(init?.scalarTypes ?? []), ...(init?.compositeTypes ?? [])];
+const ALL_TYPES = () => [...(init?.scalarTypes ?? []), ...(init?.compositeTypes ?? [])];
 
-  model.rows.forEach((row, i) => {
-    const cellInput = (
-      key: keyof EditRow,
-      opts: { narrow?: boolean; placeholder?: string } = {},
-    ) => {
-      const input = el('input', {
-        type: 'text',
-        value: String(row[key] ?? ''),
-        placeholder: opts.placeholder ?? '',
-        oninput: (e) => {
-          (row[key] as string) = (e.target as HTMLInputElement).value;
-          scheduleValidate();
+function bindInput(node: EditNode, key: keyof EditNode, opts: { placeholder?: string; width?: number } = {}) {
+  const input = el('input', {
+    type: 'text',
+    value: String(node[key] ?? ''),
+    placeholder: opts.placeholder ?? '',
+    oninput: (e) => {
+      (node[key] as string) = (e.target as HTMLInputElement).value;
+      scheduleValidate();
+    },
+  }) as HTMLInputElement;
+  if (opts.width) {
+    input.style.width = `${opts.width}px`;
+  }
+  return input;
+}
+
+function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
+  const rowEl = el('div', {
+    class: `fe-node fe-node-${node.kind}`,
+    style: `margin-left:${depth * 18}px`,
+  });
+
+  const head = el('div', { class: 'fe-node-head' });
+
+  if (node.kind === 'struct') {
+    head.append(
+      el('span', {
+        class: 'fe-toggle',
+        text: node.collapsed ? '▶' : '▼',
+        onclick: () => {
+          node.collapsed = !node.collapsed;
+          render();
         },
-      });
-      return el('td', { class: opts.narrow ? 'fe-cell-narrow' : '' }, [input]);
-    };
+      }),
+      el('span', { class: 'fe-badge', text: 'STRUCT' }),
+    );
+  } else {
+    head.append(el('span', { class: 'fe-toggle fe-toggle-empty', text: '' }));
+  }
 
+  head.append(bindInput(node, 'name', { placeholder: 'name', width: 150 }));
+
+  if (node.kind === 'field') {
     const typeSel = el('select', {
       onchange: (e) => {
-        row.type = (e.target as HTMLSelectElement).value;
+        node.type = (e.target as HTMLSelectElement).value;
         scheduleValidate();
       },
     }) as HTMLSelectElement;
-    for (const t of allTypes) {
+    for (const t of ALL_TYPES()) {
       typeSel.append(el('option', { value: t, text: t }));
     }
-    if (!allTypes.includes(row.type)) {
-      typeSel.append(el('option', { value: row.type, text: row.type }));
+    if (!ALL_TYPES().includes(node.type)) {
+      typeSel.append(el('option', { value: node.type, text: node.type }));
     }
-    typeSel.value = row.type;
+    typeSel.value = node.type;
+    head.append(typeSel);
+  } else {
+    head.append(el('span', { class: 'fe-badge-type', text: 'structure' }));
+  }
 
-    const endSel = el('select', {
-      onchange: (e) => {
-        row.endianness = (e.target as HTMLSelectElement).value;
-        scheduleValidate();
-      },
-    }) as HTMLSelectElement;
-    endSel.append(
-      el('option', { value: '', text: '(default)' }),
-      el('option', { value: 'little', text: 'LE' }),
-      el('option', { value: 'big', text: 'BE' }),
-    );
-    endSel.value = row.endianness;
+  head.append(
+    labelled('offset', bindInput(node, 'offset', { placeholder: 'auto', width: 70 })),
+    labelled('size', bindInput(node, 'size', { placeholder: node.kind === 'struct' ? 'auto' : '', width: 60 })),
+  );
 
-    const advDetails = el('details', { class: 'fe-adv' }, [
+  if (node.kind === 'field') {
+    head.append(labelled('len', bindInput(node, 'length', { width: 55 })));
+  }
+
+  const endSel = el('select', {
+    onchange: (e) => {
+      node.endianness = (e.target as HTMLSelectElement).value;
+      scheduleValidate();
+    },
+  }) as HTMLSelectElement;
+  endSel.append(
+    el('option', { value: '', text: 'endian: default' }),
+    el('option', { value: 'little', text: 'LE' }),
+    el('option', { value: 'big', text: 'BE' }),
+  );
+  endSel.value = node.endianness;
+  head.append(endSel);
+
+  // action buttons
+  head.append(
+    el('span', { class: 'fe-node-actions' }, [
+      iconBtn('↑', 'Move up', () => moveNode(node.id, -1)),
+      iconBtn('↓', 'Move down', () => moveNode(node.id, 1)),
+      iconBtn('⇤', 'Move out of structure', () => outdentNode(node.id)),
+      iconBtn('⇥', 'Move into previous structure', () => indentNode(node.id)),
+      iconBtn('✕', 'Delete', () => deleteNode(node.id)),
+    ]),
+  );
+
+  rowEl.append(head);
+
+  // description + advanced (second line)
+  const line2 = el('div', { class: 'fe-node-line2' }, [
+    labelled('description', bindInput(node, 'description', { width: 320 })),
+  ]);
+  if (node.kind === 'field') {
+    const adv = el('details', { class: 'fe-adv' }, [
       el('summary', {
-        text:
-          'advanced: bits / enum / items / timestamp' + (row.advancedError ? '  ⚠ invalid JSON' : ''),
+        text: 'advanced: bits / enum / items / timestamp' + (node.advancedError ? '  (invalid JSON)' : ''),
       }),
       el('textarea', {
-        value: row.advanced,
+        value: node.advanced,
         placeholder:
-          '{ "fields": [ { "name": "Enabled", "bits": "0" } ] }  or  { "enum": { "0": "off", "1": "on" } }',
+          '{ "fields": [ { "name": "Enabled", "bits": "0" } ] }   or   { "enum": { "0": "off", "1": "on" } }',
         oninput: (e) => {
-          row.advanced = (e.target as HTMLTextAreaElement).value;
+          node.advanced = (e.target as HTMLTextAreaElement).value;
           scheduleValidate();
         },
       }),
     ]);
+    line2.append(adv);
+  }
+  rowEl.append(line2);
 
-    const move = (delta: number) => {
-      const j = i + delta;
-      if (j < 0 || j >= model.rows.length) {
-        return;
-      }
-      [model.rows[i], model.rows[j]] = [model.rows[j], model.rows[i]];
-      render();
-      scheduleValidate();
-    };
+  parent.append(rowEl);
 
-    const nameCell = el('td', {}, [
-      el('input', {
-        type: 'text',
-        value: row.name,
-        oninput: (e) => {
-          row.name = (e.target as HTMLInputElement).value;
-          scheduleValidate();
-        },
-      }),
-      advDetails,
-    ]);
-
-    tbody.append(
-      el('tr', {}, [
-        el('td', { class: 'fe-cell-narrow' }, [
-          el('button', { class: 'icon secondary', text: '↑', onclick: () => move(-1) }),
-          el('button', { class: 'icon secondary', text: '↓', onclick: () => move(1) }),
-        ]),
-        nameCell,
-        el('td', {}, [typeSel]),
-        cellInput('offset', { narrow: true, placeholder: 'auto' }),
-        cellInput('size', { narrow: true }),
-        cellInput('length', { narrow: true }),
-        el('td', {}, [endSel]),
-        cellInput('description'),
-        el('td', { class: 'fe-cell-narrow' }, [
-          el('button', {
-            class: 'icon secondary',
-            text: '✕',
-            title: 'Remove field',
-            onclick: () => {
-              model.rows.splice(i, 1);
-              render();
-              scheduleValidate();
-            },
-          }),
-        ]),
+  if (node.kind === 'struct' && !node.collapsed) {
+    const kids = el('div', { class: 'fe-children' });
+    for (const child of node.children) {
+      renderNode(kids, child, depth + 1);
+    }
+    kids.append(
+      el('div', { class: 'fe-row fe-add-row', style: `margin-left:${(depth + 1) * 18}px` }, [
+        el('button', {
+          class: 'secondary icon-text',
+          text: '+ Field',
+          onclick: () => addChild(node.id, 'field'),
+        }),
+        el('button', {
+          class: 'secondary icon-text',
+          text: '+ Structure',
+          onclick: () => addChild(node.id, 'struct'),
+        }),
       ]),
     );
-  });
-  table.append(tbody);
-  return table;
+    parent.append(kids);
+  }
+}
+
+function labelled(label: string, control: HTMLElement): HTMLElement {
+  return el('span', { class: 'fe-inline-field' }, [
+    el('label', { class: 'fe-inline-label', text: label }),
+    control,
+  ]);
+}
+
+function iconBtn(text: string, title: string, onClick: () => void): HTMLElement {
+  return el('button', { class: 'icon secondary', text, title, onclick: onClick });
 }

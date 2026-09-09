@@ -42,12 +42,12 @@ registry.set('char', { ...registry.get('uint8')!, name: 'char', category: 'char'
 registry.set('bool', { name: 'bool', size: 1, category: 'bool', signed: false, read: (v, o) => v.getUint8(o) !== 0 });
 registry.set('boolean', registry.get('bool')!);
 
-export function getScalarType(name: string): ScalarType | undefined {
-  return registry.get(name);
+export function getScalarType(name: string | undefined): ScalarType | undefined {
+  return name === undefined ? undefined : registry.get(name);
 }
 
-export function isScalarType(name: string): boolean {
-  return registry.has(name);
+export function isScalarType(name: string | undefined): boolean {
+  return name === undefined ? false : registry.has(name);
 }
 
 export const SCALAR_TYPE_NAMES: string[] = defs.map((d) => d.name);

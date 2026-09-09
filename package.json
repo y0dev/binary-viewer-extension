@@ -2,12 +2,20 @@
   "name": "binary-viewer",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.1.0",
-  "publisher": "binary-viewer",
+  "version": "0.2.0",
+  "publisher": "y0dev",
   "license": "MIT",
+  "author": {
+    "name": "Devontae Reid",
+    "url": "https://www.devontaereid.com"
+  },
+  "homepage": "https://www.devontaereid.com",
   "repository": {
     "type": "git",
-    "url": "https://example.com/binary-viewer.git"
+    "url": "https://github.com/y0dev/binary-viewer-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/y0dev/binary-viewer-extension/issues"
   },
   "qna": false,
   "engines": {
@@ -157,7 +165,7 @@
     "test:integration": "node ./out/test/runIntegration.js",
     "test": "npm run test:unit",
     "gen-fixtures": "node scripts/gen-fixtures.js",
-    "package": "npm run check-types && node esbuild.js --production && vsce package --no-dependencies --baseContentUrl https://example.com/binary-viewer --baseImagesUrl https://example.com/binary-viewer"
+    "package": "npm run check-types && node esbuild.js --production && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",
