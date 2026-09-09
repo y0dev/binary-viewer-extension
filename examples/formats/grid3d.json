@@ -1,0 +1,53 @@
+{
+  "name": "3D Grid (example)",
+  "description": "Nested (multi-dimensional) arrays: a small fixed int16[2][3][4] grid you can eyeball, plus a large length-prefixed int16[planes][rows][cols] one.",
+  "fileExtensions": [".g3d", ".bin"],
+  "endianness": "little",
+  "magic": { "offset": 0, "bytes": "47 33 44 31" },
+  "fields": [
+    { "name": "magic", "type": "ascii", "offset": 0, "length": 4 },
+
+    {
+      "name": "small",
+      "type": "array",
+      "offset": 4,
+      "count": 2,
+      "description": "int16[2][3][4] — each cell = plane*100 + row*10 + col",
+      "items": {
+        "name": "plane",
+        "type": "array",
+        "count": 3,
+        "items": {
+          "name": "row",
+          "type": "array",
+          "count": 4,
+          "items": { "name": "cell", "type": "int16" }
+        }
+      }
+    },
+
+    { "name": "planes", "type": "uint16", "offset": 52 },
+    { "name": "rows", "type": "uint16", "offset": 54 },
+    { "name": "cols", "type": "uint16", "offset": 56 },
+    { "name": "pad", "type": "uint16", "offset": 58 },
+
+    {
+      "name": "big",
+      "type": "array",
+      "offset": 60,
+      "countField": "planes",
+      "description": "int16[planes][rows][cols] — length-prefixed 3-D array (planes=2, rows=4, cols=40000)",
+      "items": {
+        "name": "plane",
+        "type": "array",
+        "countField": "rows",
+        "items": {
+          "name": "row",
+          "type": "array",
+          "countField": "cols",
+          "items": { "name": "cell", "type": "int16" }
+        }
+      }
+    }
+  ]
+}
