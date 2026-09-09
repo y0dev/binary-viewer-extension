@@ -1,5 +1,28 @@
 # Change Log
 
+## 0.7.0 — Array shorthand & external format folders
+
+### Array shorthand
+
+- Any field `type` may be written as `<base>[<n>]` — `"float32[8]"`,
+  `"int16[24]"`, `"Sample[100]"` (array of a reusable structure), `"char[4]"`
+  (a 4-char string), `"bytes[12]"`. Expanded before validation / sizing /
+  parsing (pure `core/FieldSyntax.ts`). The form editor round-trips it to a
+  proper array row.
+
+### Format sources & settings
+
+- **`binaryViewer.formatDirectories`** — a list of extra folders to load format
+  `*.json` from (a shared / network drive, a synced folder for another machine).
+  `~` and `${workspaceFolder}` expand; the folders are watched; entries show as
+  `[external]`. Precedence: builtin < global < external < workspace.
+- **`binaryViewer.showBuiltinFormats`** (default `true`) — set `false` to hide
+  the shipped example formats from the dropdown and auto-detection.
+- Both settings reload formats live on change. Validate / Apply buttons now also
+  recognise a format `.json` opened from an external folder.
+
+_(130 unit tests total.)_
+
 ## 0.5.0 — Format authoring workflow
 
 ### Generate a format from a binary

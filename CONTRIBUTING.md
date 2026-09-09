@@ -61,11 +61,11 @@ Extension Development Host with `examples/binaries/` loaded.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
 
 - `src/core/` — pure, dependency-free logic: data types, bit fields, field-shape
-  classification, the parser, `FormatSchema` (+ `validateFormatText`),
-  `FormatResolve` (inline reusable `structures`), `FormatDetector`,
-  `FormatMerge` (name/filename precedence), `Sections` (memory-map rows),
-  `FormatScaffold`, the search matcher, `humanize`. Unit-testable without an
-  extension host.
+  classification, `FieldSyntax` (`"float32[8]"` shorthand), the parser,
+  `FormatSchema` (+ `validateFormatText`), `FormatResolve` (inline reusable
+  `structures`), `FormatDetector`, `FormatMerge` (name/filename precedence +
+  `isFormatFilePath`), `Sections` (memory-map rows), `FormatScaffold`, the
+  search matcher, `humanize`. Unit-testable without an extension host.
 - `src/binary/` — Node `fs` range reader + bounded cache + streaming search.
 - `src/formats/` — format discovery, storage, debounced watchers.
 - `src/editor/`, `src/commands/`, `src/formatEditor/` — extension host

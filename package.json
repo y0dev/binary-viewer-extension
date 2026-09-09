@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -168,6 +168,18 @@
           "type": "boolean",
           "default": true,
           "description": "Automatically detect a matching binary format (by extension and magic bytes) when opening a file."
+        },
+        "binaryViewer.formatDirectories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine-overridable",
+          "markdownDescription": "Extra folders to load binary format definitions (`*.json`) from — e.g. a shared network drive so the same formats are available on another machine. Absolute paths; `~` and `${workspaceFolder}` are expanded. These override global-storage formats but are overridden by workspace formats. New / changed files are picked up automatically."
+        },
+        "binaryViewer.showBuiltinFormats": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include the extension's built-in example formats in the Format dropdown and in automatic format detection. Turn off to show only your own formats."
         },
         "binaryViewer.maxSearchResults": {
           "type": "number",

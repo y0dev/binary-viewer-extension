@@ -1,9 +1,26 @@
 import * as vscode from 'vscode';
-import type { FormatDefinition, LoadedFormat } from '../types/format';
+import * as os from 'os';
+import type { FormatDefinition, FormatSource, LoadedFormat } from '../types/format';
 import { validateFormat } from '../core/FormatSchema';
 import { log } from '../util/logger';
 
 const WORKSPACE_REL = '.vscode/binary-viewer/formats';
+
+/** Expand `~` and `${workspaceFolder}` in a user-configured directory path. */
+export function expandDirPath(input: string): string {
+  let p = input.trim();
+  if (p === '') {
+    return p;
+  }
+  if (p === '~' || p.startsWith('~/') || p.startsWith('~\\')) {
+    p = os.homedir() + p.slice(1);
+  }
+  const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+  if (ws) {
+    p = p.replace(/\$\{workspaceFolder\}/g, ws);
+  }
+  return p;
+}
 
 export function slugify(name: string): string {
   return (
@@ -15,7 +32,10 @@ export function slugify(name: string): string {
   );
 }
 
-async function readJsonDir(dir: vscode.Uri, source: 'global' | 'workspace'): Promise<LoadedFormat[]> {
+async function readJsonDir(
+  dir: vscode.Uri,
+  source: Exclude<FormatSource, 'builtin'>,
+): Promise<LoadedFormat[]> {
   const out: LoadedFormat[] = [];
   let entries: [string, vscode.FileType][];
   try {
@@ -63,6 +83,39 @@ export class FormatStorage {
     );
   }
 
+  /** Extra folders from the `binaryViewer.formatDirectories` setting. */
+  externalDirs(): vscode.Uri[] {
+    const raw = vscode.workspace
+      .getConfiguration('binaryViewer')
+      .get<string[]>('formatDirectories', []);
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    const seen = new Set<string>();
+    const out: vscode.Uri[] = [];
+    for (const entry of raw) {
+      if (typeof entry !== 'string' || entry.trim() === '') {
+        continue;
+      }
+      const expanded = expandDirPath(entry);
+      let uri: vscode.Uri;
+      try {
+        uri = /^[a-z][a-z0-9+.-]*:\/\//i.test(expanded)
+          ? vscode.Uri.parse(expanded)
+          : vscode.Uri.file(expanded);
+      } catch {
+        log().warn(`Ignoring invalid binaryViewer.formatDirectories entry: ${entry}`);
+        continue;
+      }
+      const key = uri.toString();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(uri);
+      }
+    }
+    return out;
+  }
+
   /** Glob patterns to watch for created / changed / deleted format files. */
   allWatchableGlobs(): vscode.RelativePattern[] {
     const globs: vscode.RelativePattern[] = [
@@ -71,6 +124,9 @@ export class FormatStorage {
     ];
     for (const f of vscode.workspace.workspaceFolders ?? []) {
       globs.push(new vscode.RelativePattern(f, `${WORKSPACE_REL}/*.json`));
+    }
+    for (const dir of this.externalDirs()) {
+      globs.push(new vscode.RelativePattern(dir, '*.json'));
     }
     return globs;
   }
@@ -87,6 +143,14 @@ export class FormatStorage {
     const all: LoadedFormat[] = [];
     for (const dir of this.workspaceDirs()) {
       all.push(...(await readJsonDir(dir, 'workspace')));
+    }
+    return all;
+  }
+
+  async loadExternal(): Promise<LoadedFormat[]> {
+    const all: LoadedFormat[] = [];
+    for (const dir of this.externalDirs()) {
+      all.push(...(await readJsonDir(dir, 'external')));
     }
     return all;
   }

@@ -196,9 +196,11 @@ Matching binaries for each live in [`examples/binaries/`](../examples/binaries/)
 - A field is **either** a `type` (primitive) **or** a `fields` array (structure) —
   never both. The one exception is the bit-field form
   `{ "type": "uint8", "fields": [ { "name": "...", "bits": "0" } ] }`.
-- Use **`+ Add Array`** for repeating data and the **Reusable structures**
-  section (`+ Add Structure Definition`) for a record layout — then pick the
-  structure name as the array's element type. **⧉** duplicates any row.
+- For repeating data: **`+ Add Array`** (count + element type), or just write
+  the shorthand `"type": "float32[8]"` / `"int16[24]"` / `"Sample[100]"` in the
+  JSON. Define a record once in the **Reusable structures** section
+  (`+ Add Structure Definition`) and pick its name as the element type. **⧉**
+  duplicates any row.
 - The editor's **advanced** box merges any extra JSON onto a primitive field —
   use it for `enum`, `timestamp`, `scale`/`bias`, or the bit-field `fields`
   array.

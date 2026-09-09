@@ -7,8 +7,8 @@
 │                                                                             │
 │  extension.ts                                                               │
 │    ├─ FormatManager ── FormatStorage ── BuiltinFormats                      │
-│    │     (builtin + global + workspace; debounced watchers on BOTH          │
-│    │      locations; precedence via core/FormatMerge)                       │
+│    │     (builtin < global < external < workspace; debounced watchers on    │
+│    │      every location; precedence via core/FormatMerge)                   │
 │    ├─ BinaryEditorProvider  (CustomReadonlyEditorProvider)                  │
 │    │     ├─ BinaryDocument ── BinaryReader (range reads) ── BinaryCache     │
 │    │     └─ per-panel message router                                       │
@@ -18,10 +18,11 @@
 │                                                                             │
 │  core/  ── pure, no vscode/node ── DataTypes, Endianness, BitField,        │
 │           FieldShape (container/bit-field/primitive classification),        │
+│           FieldSyntax ("float32[8]" shorthand),                           │
 │           BinaryField, BinaryParser, FormatSchema (+ validateFormatText),  │
 │           FormatResolve (inline reusable `structures`),                    │
-│           FormatDetector, FormatMerge (name/filename precedence),          │
-│           Sections (memory-map rows), FormatScaffold, SearchPattern,       │
+│           FormatDetector, FormatMerge (name/filename precedence,           │
+│           isFormatFilePath), Sections, FormatScaffold, SearchPattern,      │
 │           humanize                                                         │
 └───────────────────────────────┬─────────────────────────────────────────────┘
                                 │  typed postMessage protocol (types/messages.ts)

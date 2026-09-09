@@ -42,6 +42,15 @@ export class FormatManager implements vscode.Disposable {
         this.scheduleReload();
       }),
       vscode.workspace.onDidGrantWorkspaceTrust(() => this.scheduleReload()),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (
+          e.affectsConfiguration('binaryViewer.formatDirectories') ||
+          e.affectsConfiguration('binaryViewer.showBuiltinFormats')
+        ) {
+          this.setupWatchers();
+          this.scheduleReload();
+        }
+      }),
     );
   }
 
@@ -71,12 +80,16 @@ export class FormatManager implements vscode.Disposable {
     }, 150);
   }
 
+  private get showBuiltin(): boolean {
+    return vscode.workspace.getConfiguration('binaryViewer').get<boolean>('showBuiltinFormats', true);
+  }
+
   async reload(): Promise<void> {
-    const builtin: LoadedFormat[] = BUILTIN_FORMATS.map((definition) => ({
-      definition,
-      source: 'builtin',
-    }));
+    const builtin: LoadedFormat[] = this.showBuiltin
+      ? BUILTIN_FORMATS.map((definition) => ({ definition, source: 'builtin' as const }))
+      : [];
     let global: LoadedFormat[] = [];
+    let external: LoadedFormat[] = [];
     let workspace: LoadedFormat[] = [];
     try {
       global = await this.storage.loadGlobal();
@@ -84,17 +97,24 @@ export class FormatManager implements vscode.Disposable {
       log().error(`Loading global formats failed: ${(e as Error).message}`);
     }
     try {
+      external = await this.storage.loadExternal();
+    } catch (e) {
+      log().error(`Loading external formats failed: ${(e as Error).message}`);
+    }
+    try {
       workspace = await this.storage.loadWorkspace();
     } catch (e) {
       log().error(`Loading workspace formats failed: ${(e as Error).message}`);
     }
 
-    this.formats = mergeFormats([builtin, global, workspace]).sort((a, b) =>
+    // Lowest priority first: builtin < global < external < workspace.
+    this.formats = mergeFormats([builtin, global, external, workspace]).sort((a, b) =>
       a.definition.name.localeCompare(b.definition.name),
     );
     log().info(
       `Loaded ${this.formats.length} binary formats ` +
-        `(${workspace.length} workspace, ${global.length} global, ${builtin.length} builtin).`,
+        `(${workspace.length} workspace, ${external.length} external, ${global.length} global, ` +
+        `${builtin.length} builtin).`,
     );
     this._onDidChange.fire();
   }

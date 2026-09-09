@@ -12,6 +12,7 @@
  */
 
 import type { FieldDefinition, FormatDefinition, StructBody } from '../types/format';
+import { expandShorthandField } from './FieldSyntax';
 
 export interface ResolveResult {
   format: FormatDefinition;
@@ -30,14 +31,10 @@ export function resolveStructures(format: FormatDefinition): ResolveResult {
   const table = format.structures ?? {};
   const names = new Set(Object.keys(table));
   const errors: string[] = [];
-
-  if (names.size === 0) {
-    return { format, errors };
-  }
-
   const MAX_DEPTH = 64;
 
-  const resolveField = (f: FieldDefinition, stack: string[]): FieldDefinition => {
+  const resolveField = (raw: FieldDefinition, stack: string[]): FieldDefinition => {
+    const f = expandShorthandField(raw); // "float32[8]" -> a real array field
     const isRef =
       typeof f.type === 'string' && names.has(f.type) && !Array.isArray(f.fields);
 

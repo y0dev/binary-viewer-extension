@@ -10,6 +10,7 @@ import { parseBitRange } from './BitField';
 import { normalizeEndianness } from './Endianness';
 import { computeFieldSize } from './BinaryField';
 import { hasType, isBitFieldForm, isContainerForm, containerChildren } from './FieldShape';
+import { expandShorthandDeep } from './FieldSyntax';
 
 const COMPOSITE_TYPES = new Set([
   'bytes',
@@ -361,7 +362,10 @@ export function validateFormat(input: unknown): ValidationResult {
   if (fmt.fields !== undefined && !Array.isArray(fmt.fields)) {
     errors.push('"fields" must be an array');
   } else if (hasFields) {
-    fmt.fields!.forEach((f, i) => validateField(f, `fields[${i}]`, result, structNames));
+    // Expand "float32[8]"-style shorthand before per-field validation.
+    expandShorthandDeep(fmt.fields as FieldDefinition[]).forEach((f, i) =>
+      validateField(f, `fields[${i}]`, result, structNames),
+    );
   }
 
   if (fmt.sections !== undefined) {
@@ -437,7 +441,7 @@ function validateStructuresMap(
     if (body.endianness !== undefined && normalizeEndianness(body.endianness) === undefined) {
       errors.push(`${path}.endianness must be "little" or "big"`);
     }
-    (body.fields as FieldDefinition[]).forEach((f, i) =>
+    expandShorthandDeep(body.fields as FieldDefinition[]).forEach((f, i) =>
       validateField(f, `${path}.fields[${i}]`, result, names),
     );
   }
@@ -446,7 +450,12 @@ function validateStructuresMap(
   const graph: Record<string, string[]> = {};
   for (const [name, raw] of entries) {
     const refs = new Set<string>();
-    collectStructRefs((raw as { fields?: FieldDefinition[] })?.fields, names, refs);
+    const bodyFields = (raw as { fields?: FieldDefinition[] })?.fields;
+    collectStructRefs(
+      Array.isArray(bodyFields) ? expandShorthandDeep(bodyFields) : bodyFields,
+      names,
+      refs,
+    );
     graph[name] = [...refs];
   }
   const state: Record<string, 0 | 1 | 2> = {};

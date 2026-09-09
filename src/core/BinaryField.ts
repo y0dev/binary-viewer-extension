@@ -7,6 +7,7 @@
 import type { EnumEntry, FieldDefinition } from '../types/format';
 import { getScalarType } from './DataTypes';
 import { isContainerForm, containerChildren } from './FieldShape';
+import { expandShorthandField } from './FieldSyntax';
 
 /**
  * Total bytes a container occupies: explicit `size` if given, otherwise the
@@ -34,6 +35,11 @@ export function computeStructSize(field: FieldDefinition): number {
 
 /** Bytes consumed by a field. Returns 0 for zero-length, throws on unknowable. */
 export function computeFieldSize(field: FieldDefinition): number {
+  // Normalise "float32[8]"-style shorthand first.
+  const expanded = expandShorthandField(field);
+  if (expanded !== field) {
+    return computeFieldSize(expanded);
+  }
   const t = field.type;
 
   // A field with nested `fields` (and no scalar type) is a structure/container.

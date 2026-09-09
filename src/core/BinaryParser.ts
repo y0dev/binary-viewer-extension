@@ -12,6 +12,7 @@ import { formatScalar, getScalarType } from './DataTypes';
 import { computeFieldSize, computeStructSize, lookupEnumLabel } from './BinaryField';
 import { decodeBits } from './BitField';
 import { isContainerForm, containerChildren } from './FieldShape';
+import { expandShorthandField } from './FieldSyntax';
 import { byteBits, byteHex, offsetHex, bigintHex } from './humanize';
 
 export interface ByteWindow {
@@ -104,7 +105,9 @@ function fieldEndianLittle(ctx: Ctx, field: FieldDefinition): boolean {
   return (field.endianness ?? ctx.defEndian) === 'little';
 }
 
-function parseField(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+function parseField(ctx: Ctx, rawField: FieldDefinition, abs: number, depth: number): number {
+  // Normalise "float32[8]"-style shorthand (a no-op for other types).
+  const field = expandShorthandField(rawField);
   const t = field.type;
 
   // A field with nested `fields` and no scalar type is a nested structure.

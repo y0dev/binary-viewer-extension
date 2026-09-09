@@ -58,8 +58,10 @@ in the hex view. Works with a fields-based format or a sections-only one.
   next / previous / all, streamed so huge files don't block.
 - **Go To Offset** — `0x1000`, `4096`, or `1000h`.
 - **Reusable structures** — define a record layout once under a top-level
-  `structures` map, then use its name as a field's or an array element's `type`.
-  The easy way to describe a large array of records.
+  `structures` map, then use its name as a field's or an array element's `type`
+  (`"type": "Sample"`, or `"Sample[100]"` for an array of them).
+- **Array shorthand** — write any type as `<base>[<n>]`: `"float32[8]"`,
+  `"int16[24]"`, `"Sample[100]"`, `"char[4]"`.
 - **Format editor** — build fields, **arrays** (`+ Add Array` → count → element
   type), and nested/reusable structures visually; reorder, **duplicate** a row
   and its subtree, move in/out, collapse; live validation; import / export JSON.
@@ -90,15 +92,17 @@ Read-only by design in this version.
 ### Custom formats
 
 Formats are plain JSON — there is no expression language and nothing in a
-definition is executed. They load with precedence **workspace → global →
-builtin**: a workspace file in `.vscode/binary-viewer/formats/*.json` shadows a
-global one when they collide **by format `name` or by file name**, so a repo can
-ship its proprietary layouts and have them win (workspace formats load only in
-trusted workspaces). New / edited / deleted JSON in either location is picked up
-automatically; the **↻** button next to the format dropdown and *Binary Viewer:
-Reload Binary Formats* force a rescan. While hand-editing a format `.json`, the
-editor title bar gains **✓ Validate** (JSON + schema check, also on save) and
-**↻ Apply to open binary** buttons. See
+definition is executed. They load from four places, in ascending priority:
+**builtin** → **global storage** → **`binaryViewer.formatDirectories`** (extra
+folders you point at a shared / network drive so the same formats travel to
+another machine) → **workspace** (`.vscode/binary-viewer/formats/*.json`,
+trusted only). A higher source shadows a lower one that collides **by format
+`name` or by file name**. Set `binaryViewer.showBuiltinFormats: false` to drop
+the shipped examples from the list. New / edited / deleted JSON anywhere is
+picked up automatically; the **↻** button and *Binary Viewer: Reload Binary
+Formats* force a rescan. While hand-editing a format `.json` (in any of those
+locations) the editor title bar gains **✓ Validate** (JSON + schema, also on
+save) and **↻ Apply to open binary** buttons. See
 [FORMAT_DEFINITIONS.md](docs/FORMAT_DEFINITIONS.md) for the full schema.
 
 ```jsonc
@@ -147,6 +151,8 @@ editor title bar gains **✓ Validate** (JSON + schema check, also on save) and
 | `binaryViewer.blockSizeBytes` | `65536` | Range-read / cache granularity |
 | `binaryViewer.cacheWindowBytes` | `8388608` | Max host-side cache per file |
 | `binaryViewer.autoDetectFormat` | `true` | Detect a format on open |
+| `binaryViewer.formatDirectories` | `[]` | Extra folders to load format `*.json` from — e.g. a shared/network drive (`~` and `${workspaceFolder}` expand) |
+| `binaryViewer.showBuiltinFormats` | `true` | Include the built-in example formats in the dropdown + detection |
 | `binaryViewer.maxSearchResults` | `5000` | Cap for *Find All* |
 
 ## Documentation

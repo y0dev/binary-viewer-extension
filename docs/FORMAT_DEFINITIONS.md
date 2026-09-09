@@ -37,16 +37,25 @@ or both. A `sections`-only format is a pure memory map.
 
 `bytes` / `mask` accept space- or comma-separated hex, with or without `0x`.
 
-**Loading & precedence.** Definitions are read from three places — builtin,
-global storage (`<globalStorage>/binary-viewer/formats/*.json`) and the
-workspace (`.vscode/binary-viewer/formats/*.json`, trusted workspaces only). A
-workspace file **shadows** a global/builtin one that collides with it **by
-format `name` or by JSON file name**. All three locations are watched, so new /
-edited / deleted files are picked up automatically (or via **Reload Binary
-Formats** / the ↻ button).
+**Loading & precedence.** Definitions are read from four places, lowest priority
+first:
+
+1. **builtin** — shipped examples (hide them with `binaryViewer.showBuiltinFormats: false`);
+2. **global storage** — `<globalStorage>/.../formats/*.json` (where the editor and
+   *Generate* save);
+3. **external** — every folder listed in `binaryViewer.formatDirectories` (a
+   shared network drive, another machine — `~` and `${workspaceFolder}` are
+   expanded);
+4. **workspace** — `.vscode/binary-viewer/formats/*.json`, trusted workspaces only.
+
+A higher source **shadows** a lower one that collides with it **by format `name`
+or by JSON file name**. Every location is watched, so new / edited / deleted
+files are picked up automatically (or via **Reload Binary Formats** / the ↻
+button). The Format dropdown tags each entry `[workspace]` / `[external]` /
+`[builtin]`.
 
 **Detection order** when a file is opened:
-1. workspace formats, then global, then builtin
+1. workspace, then external, then global, then builtin
 2. a format is a candidate if its extension matches **or** a magic entry matches
 3. a format that declares `magic` but none match is **disqualified**
 4. score: magic + extension > magic > extension; ties → alphabetical
@@ -129,6 +138,45 @@ structure — this is the easy way to describe a **large array of records**:
   clear error, as are references to an undefined name.
 - `structures` is optional and adds nothing to the wire protocol — it is
   resolved to inline `fields` before parsing.
+
+### More ways to use a structure
+
+```jsonc
+{
+  "structures": {
+    "Vec3":   { "fields": [
+      { "name": "x", "type": "float32", "offset": 0 },
+      { "name": "y", "type": "float32", "offset": 4 },
+      { "name": "z", "type": "float32", "offset": 8 } ] },
+    "Pose":   { "fields": [
+      { "name": "position", "type": "Vec3", "offset": 0 },   // struct inside a struct
+      { "name": "velocity", "type": "Vec3", "offset": 12 } ] }
+  },
+  "fields": [
+    { "name": "origin",    "type": "Vec3",     "offset": 0 },   // a single record
+    { "name": "waypoints", "type": "Vec3[64]", "offset": 12 },  // array shorthand (see below)
+    { "name": "path",      "type": "array", "offset": 780,
+      "count": 8, "items": { "name": "p", "type": "Pose" } }    // explicit array form
+  ]
+}
+```
+
+## Array shorthand — `type: "<base>[<n>]"`
+
+Any type may be written as `<base>[<n>]` to mean "a fixed run of *n*":
+
+| Shorthand | Expands to |
+| --- | --- |
+| `"float32[8]"` | `{ "type": "array", "count": 8, "items": { "type": "float32" } }` |
+| `"int16[24]"` | array of 24 `int16` |
+| `"Sample[100]"` | array of 100 of the reusable structure `Sample` |
+| `"char[4]"` | a 4-character string (`{ "type": "char", "length": 4 }`) |
+| `"ascii[16]"` / `"utf16[8]"` | fixed-length string of that many code units |
+| `"bytes[12]"` / `"binary[8]"` | `{ "type": "bytes"/"binary", "size": N }` |
+
+It works anywhere a `type` does — a top-level field, a structure field, or an
+array's `items`. The form editor's **+ Add Array** produces the same thing and
+round-trips shorthand you type by hand.
 
 ## FieldDefinition
 

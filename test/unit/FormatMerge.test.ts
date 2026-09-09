@@ -42,6 +42,15 @@ describe('FormatMerge.isFormatFilePath', () => {
     assert.ok(!isFormatFilePath('/home/u/proj/.vscode/binary-viewer/formats/sub/x.json', g));
     assert.ok(!isFormatFilePath(g + '\\firmware.txt', g));
     assert.ok(!isFormatFilePath(g + 'X\\firmware.json', g)); // sibling dir, not the formats dir
+    assert.ok(!isFormatFilePath(g + '\\sub\\firmware.json', g)); // nested, not a direct child
+  });
+
+  it('accepts a file directly inside a configured formatDirectories folder', () => {
+    const extra = ['\\\\team-nas\\share\\binviewer', '/mnt/shared/formats'];
+    assert.ok(isFormatFilePath('\\\\team-nas\\share\\binviewer\\fw.json', g, extra));
+    assert.ok(isFormatFilePath('/mnt/shared/formats/eeprom.json', g, extra));
+    assert.ok(!isFormatFilePath('/mnt/shared/formats/nested/x.json', g, extra));
+    assert.ok(!isFormatFilePath('/mnt/other/x.json', g, extra));
   });
 });
 

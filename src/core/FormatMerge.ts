@@ -13,21 +13,37 @@ import type { LoadedFormat } from '../types/format';
 /** The workspace formats folder: `<repo>/.vscode/binary-viewer/formats/*.json`. */
 const WORKSPACE_FORMAT_RE = /[/\\]\.vscode[/\\]binary-viewer[/\\]formats[/\\][^/\\]+\.json$/i;
 
+function isDirectChild(fsPath: string, dir: string): boolean {
+  const d = dir.toLowerCase().replace(/[/\\]+$/, '');
+  const p = fsPath.toLowerCase();
+  if (!p.startsWith(d + '/') && !p.startsWith(d + '\\')) {
+    return false;
+  }
+  const rest = p.slice(d.length + 1);
+  return rest.length > 0 && !rest.includes('/') && !rest.includes('\\');
+}
+
 /**
- * True when `fsPath` is a format-definition JSON file — either the workspace
- * folder above, or directly inside `globalFormatsDir` (whose name is
- * `<publisher>.<extension>`, so it needs an explicit prefix check).
+ * True when `fsPath` is a format-definition JSON file — the workspace folder
+ * `.vscode/binary-viewer/formats/`, directly inside the global storage folder
+ * (named `<publisher>.<extension>`), or directly inside one of `extraDirs`
+ * (the `binaryViewer.formatDirectories` setting).
  */
-export function isFormatFilePath(fsPath: string, globalFormatsDir: string): boolean {
+export function isFormatFilePath(
+  fsPath: string,
+  globalFormatsDir: string,
+  extraDirs: string[] = [],
+): boolean {
   if (!fsPath.toLowerCase().endsWith('.json')) {
     return false;
   }
   if (WORKSPACE_FORMAT_RE.test(fsPath)) {
     return true;
   }
-  const dir = globalFormatsDir.toLowerCase().replace(/[/\\]+$/, '');
-  const p = fsPath.toLowerCase();
-  return p.startsWith(dir + '/') || p.startsWith(dir + '\\');
+  if (isDirectChild(fsPath, globalFormatsDir)) {
+    return true;
+  }
+  return extraDirs.some((d) => isDirectChild(fsPath, d));
 }
 
 /** Lowercase file basename (without `.json`) of a uri string, or undefined. */

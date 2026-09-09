@@ -189,8 +189,12 @@ export interface FormatDefinition {
   sections?: SectionDefinition[];
 }
 
-/** Where a loaded format came from (affects override precedence and editability). */
-export type FormatSource = 'builtin' | 'global' | 'workspace';
+/**
+ * Where a loaded format came from (affects override precedence and editability).
+ * Precedence, lowest to highest: builtin < global < external < workspace.
+ * `external` = a folder listed in `binaryViewer.formatDirectories`.
+ */
+export type FormatSource = 'builtin' | 'global' | 'external' | 'workspace';
 
 export interface LoadedFormat {
   definition: FormatDefinition;

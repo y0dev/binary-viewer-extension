@@ -151,14 +151,21 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
 | Source | Location | Editable | Precedence |
 | --- | --- | --- | --- |
 | Builtin | shipped with the extension | copy-on-edit | lowest |
-| Global | `<globalStorage>/binary-viewer/formats/*.json` | yes | middle |
+| Global | `<globalStorage>/…/formats/*.json` (Generate + editor save here) | yes | ↑ |
+| External | every folder in `binaryViewer.formatDirectories` | yes (edit the file) | ↑ |
 | Workspace | `<workspace>/.vscode/binary-viewer/formats/*.json` | yes (edit the file) | highest |
 
-A workspace file replaces a global/builtin one when they collide **by format
-`name` or by JSON file name** — so dropping `firmware.json` into
+A higher source replaces a lower one when they collide **by format `name` or by
+JSON file name** — so dropping `firmware.json` into
 `.vscode/binary-viewer/formats/` shadows the global `firmware.json` even if the
-`name` fields differ. Handy for a repo full of proprietary firmware layouts.
-Workspace formats load only in **trusted** workspaces.
+`name` fields differ. Workspace formats load only in **trusted** workspaces.
+
+- **`binaryViewer.formatDirectories`** — a list of extra folders (absolute; `~`
+  and `${workspaceFolder}` expand). Point it at a team share or a synced folder
+  so the same format library is available on another machine. Files there are
+  watched like the others; the dropdown tags them `[external]`.
+- **`binaryViewer.showBuiltinFormats`** — set to `false` to hide the shipped
+  example formats from the dropdown and from auto-detection.
 
 ## Themes
 

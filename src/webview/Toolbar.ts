@@ -222,7 +222,14 @@ export class Toolbar {
     }) as HTMLSelectElement;
     select.append(el('option', { value: '', text: 'Format: (none)' }));
     for (const f of s.formats) {
-      const src = f.source === 'workspace' ? ' [workspace]' : f.source === 'builtin' ? ' [builtin]' : '';
+      const src =
+        f.source === 'workspace'
+          ? ' [workspace]'
+          : f.source === 'external'
+            ? ' [external]'
+            : f.source === 'builtin'
+              ? ' [builtin]'
+              : '';
       const tag = f.name === s.detectedFormat ? ' (detected)' : '';
       select.append(el('option', { value: f.name, text: `Format: ${f.name}${src}${tag}` }));
     }

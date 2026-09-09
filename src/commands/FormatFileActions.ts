@@ -13,8 +13,13 @@ export function registerFormatFileActions(
   formats: FormatManager,
 ): void {
   const globalFormatsDir = formats.storage.globalDir.fsPath;
-  const isFormatFile = (uri: vscode.Uri | undefined): boolean =>
-    !!uri && isFormatFilePath(uri.fsPath, globalFormatsDir);
+  const isFormatFile = (uri: vscode.Uri | undefined): boolean => {
+    if (!uri) {
+      return false;
+    }
+    const extra = formats.storage.externalDirs().map((d) => d.fsPath);
+    return isFormatFilePath(uri.fsPath, globalFormatsDir, extra);
+  };
 
   const diagnostics = vscode.languages.createDiagnosticCollection('binaryViewer.formatFile');
   context.subscriptions.push(diagnostics);

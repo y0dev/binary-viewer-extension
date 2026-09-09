@@ -6,14 +6,28 @@ import type { FormatDefinition } from '../../src/types/format';
 import type { ParsedNode } from '../../src/types/messages';
 
 describe('FormatResolve.resolveStructures', () => {
-  it('is a no-op when there are no `structures`', () => {
+  it('leaves plain fields unchanged when there are no `structures` or shorthand', () => {
     const fmt: FormatDefinition = {
       name: 'x',
       fields: [{ name: 'a', type: 'uint32', offset: 0 }],
     };
     const { format, errors } = resolveStructures(fmt);
-    assert.strictEqual(format, fmt);
     assert.deepStrictEqual(errors, []);
+    assert.strictEqual(format.structures, undefined);
+    assert.deepStrictEqual(format.fields, fmt.fields);
+  });
+
+  it('expands "float32[8]" shorthand into a real array field', () => {
+    const fmt: FormatDefinition = {
+      name: 'x',
+      fields: [{ name: 'coeffs', type: 'float32[8]', offset: 16 }],
+    };
+    const { format } = resolveStructures(fmt);
+    const f = format.fields![0];
+    assert.strictEqual(f.type, 'array');
+    assert.strictEqual(f.count, 8);
+    assert.strictEqual(f.offset, 16);
+    assert.deepStrictEqual(f.items, { name: 'item', type: 'float32' });
   });
 
   it('inlines a struct reference used directly by a field', () => {

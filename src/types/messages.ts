@@ -19,7 +19,7 @@ export interface ViewerConfig {
 export interface FormatSummary {
   name: string;
   description?: string;
-  source: 'builtin' | 'global' | 'workspace';
+  source: 'builtin' | 'global' | 'external' | 'workspace';
   fileExtensions?: string[];
 }
 

@@ -1,5 +1,6 @@
 import { el, clear } from '../dom';
 import { FORMAT_EDITOR_CSS } from './styles';
+import { parseArrayShorthand } from '../../core/FieldSyntax';
 import type { FormatDefinition, FieldDefinition, MagicSpec, BitSpec } from '../../types/format';
 import type {
   FormatEditorFromHost,
@@ -152,13 +153,22 @@ function fieldToNode(f: FieldDefinition): EditNode {
     node.children = (f.fields as FieldDefinition[]).map(fieldToNode);
     return node;
   }
-  if (f.type === 'array') {
+  const shorthand = parseArrayShorthand(f.type);
+  const STRING_OR_SIZED = new Set(['char', 'ascii', 'utf8', 'utf16', 'string', 'bytes', 'hex', 'binary', 'padding']);
+  if (f.type === 'array' || (shorthand && !STRING_OR_SIZED.has(shorthand.base))) {
     const node = emptyNode('array');
     node.name = f.name ?? '';
     node.offset = f.offset === undefined ? '' : String(f.offset);
-    node.count = f.count === undefined ? '' : String(f.count);
-    node.type = f.items?.type ?? 'uint8';
-    node.size = f.items?.size !== undefined ? String(f.items.size) : f.size !== undefined ? String(f.size) : '';
+    if (shorthand) {
+      node.count = String(shorthand.count);
+      node.type = shorthand.base;
+      node.size = f.items?.size !== undefined ? String(f.items.size) : '';
+    } else {
+      node.count = f.count === undefined ? '' : String(f.count);
+      node.type = f.items?.type ?? 'uint8';
+      node.size =
+        f.items?.size !== undefined ? String(f.items.size) : f.size !== undefined ? String(f.size) : '';
+    }
     node.endianness = f.endianness ?? '';
     node.description = f.description ?? '';
     return node;
@@ -687,6 +697,12 @@ function render(): void {
     el('div', {
       class: 'fe-hint',
       text: 'Offsets inside a structure are relative to that structure. Leave Offset blank to pack after the previous sibling. Leave a structure Size blank to size it automatically from its fields.',
+    }),
+  );
+  wrap.append(
+    el('div', {
+      class: 'fe-hint',
+      text: 'For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. In JSON you can also write the type as "float32[8]" (or "int16[24]", "Sample[100]" for a reusable structure).',
     }),
   );
   const tree = el('div', { class: 'fe-tree' });
