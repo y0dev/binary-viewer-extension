@@ -53,6 +53,10 @@ table.fe-fields input[type=text] { width: 100%; }
 .fe-tab.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .fe-warn { border: 1px solid var(--vscode-inputValidation-warningBorder, #b80); background: var(--vscode-inputValidation-warningBackground, rgba(200,140,0,0.12)); padding: 8px 10px; border-radius: 3px; white-space: pre-wrap; font-size: 0.9em; }
 .fe-json { min-height: 380px; }
+.fe-type-combo { font-family: var(--vscode-editor-font-family, monospace); }
+.fe-enum-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.fe-enum-row input { width: 130px; }
+.fe-ts-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-top: 4px; }
 
 /* ---- nested-structure tree editor ---- */
 .fe-tree { display: flex; flex-direction: column; gap: 6px; }

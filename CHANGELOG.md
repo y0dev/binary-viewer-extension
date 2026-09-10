@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.9.6
+
+- **Form editor is practical for fields / arrays / enums now** — less need for the
+  JSON tab:
+  - **Enum editor** — a value → label table right on the field (**+ Add Enum**, or
+    it appears for any `enum` field / integer scalar), instead of hand-writing
+    `{ "enum": { … } }` in the advanced box.
+  - **Timestamp editor** — size / unit / epoch dropdowns instead of JSON.
+  - **Type is now a combo box** everywhere (fields and array elements): pick a
+    scalar / composite / structure name, or type a shorthand like `float32[8]`
+    or `int16[4]` for a nested array.
+  - The advanced box is now just bits / scale / bias / unit / display.
+- **Save draft** — a second save button that writes the definition to global
+  storage even when validation fails, so a work-in-progress doesn't force you
+  into raw JSON. It's flagged as a draft and lists the problems to fix.
+
 ## 0.9.5
 
 - **"Open JSON file…" is now always in reach.** It sits next to the Form / JSON

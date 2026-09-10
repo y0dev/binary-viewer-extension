@@ -71,6 +71,29 @@ export class FormatEditorPanel {
     void this.panel.webview.postMessage(message);
   }
 
+  /** Write the definition to global storage. `asDraft` = saved despite errors. */
+  private async persist(format: FormatDefinition, asDraft = false): Promise<void> {
+    const previousName = this.pending.editing ? this.pending.format?.name : undefined;
+    try {
+      const uri = await this.formats.storage.saveGlobal(format, previousName);
+      await this.formats.reload();
+      this.pending = { format, editing: true };
+      this.send({ type: 'saved' });
+      const open = 'Open JSON';
+      const msg = asDraft
+        ? `Saved draft "${format.name}" (has validation problems — fix before using it).`
+        : `Saved binary format "${format.name}".`;
+      const choice = asDraft
+        ? await vscode.window.showWarningMessage(msg, open)
+        : await vscode.window.showInformationMessage(msg, open);
+      if (choice === open) {
+        await vscode.window.showTextDocument(uri);
+      }
+    } catch (e) {
+      void vscode.window.showErrorMessage(`Failed to save format: ${(e as Error).message}`);
+    }
+  }
+
   private async onMessage(msg: FormatEditorToHost): Promise<void> {
     switch (msg.type) {
       case 'ready':
@@ -90,23 +113,21 @@ export class FormatEditorPanel {
           void vscode.window.showErrorMessage('Binary format is not valid. See the editor for details.');
           return;
         }
-        const previousName = this.pending.editing ? this.pending.format?.name : undefined;
-        try {
-          const uri = await this.formats.storage.saveGlobal(msg.format, previousName);
-          await this.formats.reload();
-          this.pending = { format: msg.format, editing: true };
-          this.send({ type: 'saved' });
-          const open = 'Open JSON';
-          const choice = await vscode.window.showInformationMessage(
-            `Saved binary format "${msg.format.name}".`,
-            open,
-          );
-          if (choice === open) {
-            await vscode.window.showTextDocument(uri);
-          }
-        } catch (e) {
-          void vscode.window.showErrorMessage(`Failed to save format: ${(e as Error).message}`);
+        await this.persist(msg.format);
+        break;
+      }
+
+      case 'saveDraft': {
+        const draft = { ...msg.format };
+        if (typeof draft.name !== 'string' || draft.name.trim() === '') {
+          draft.name = 'Untitled draft';
         }
+        const result = validateFormat(draft);
+        this.send({
+          type: 'validationResult',
+          errors: [...result.errors, ...result.warnings.map((w) => `warning: ${w}`)],
+        });
+        await this.persist(draft, !result.valid);
         break;
       }
 

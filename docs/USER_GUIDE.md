@@ -124,11 +124,15 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
   thousands of fields.
 - **Binary Viewer: Create Binary Format** opens the form editor. Fill in the
   name, endianness, optional file extensions and magic bytes, then add fields
-  (name, type, offset — leave blank to pack after the previous field — size,
-  length, per-field endian, description). Composite fields (`flags`, `enum`,
-  `array`, `struct`, `timestamp`) take their extra properties as a small JSON
-  snippet in the row's **advanced** disclosure. A live JSON preview and
-  validation panel update as you type. **Save** writes it to global storage.
+  with **+ Add Field / Array / Enum / Structure**. Each row has a type combo box
+  (a scalar / composite / structure name, or a shorthand like `float32[8]`),
+  offset (blank = pack after the previous field), size, length and per-field
+  endian. **Enum** rows get a value → label table; **timestamp** fields get
+  size / unit / epoch dropdowns. Only `bits` / `scale` / `bias` / `unit` /
+  `display` still go in the row's **advanced** box. A live JSON preview and
+  validation panel update as you type. **Save** writes it to global storage;
+  **Save draft** writes it even with validation errors so a work-in-progress
+  isn't lost.
 - **Form ⟷ JSON tabs.** The editor has a **JSON** tab that edits the whole
   definition as text (one object, or an array of them). It opens there
   automatically for things the form can't draw — a multi-dimensional array, or

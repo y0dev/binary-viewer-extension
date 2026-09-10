@@ -41,6 +41,12 @@ interface EditNode {
   description: string;
   advanced: string;
   advancedError?: string;
+  /** Structured enum value→label rows (for `enum` type or an enum overlay). */
+  enumRows: { value: string; label: string }[];
+  /** Structured `timestamp` config; '' means "leave to the default". */
+  tsSize: string;
+  tsUnit: string;
+  tsEpoch: string;
   // struct-only
   children: EditNode[];
   collapsed: boolean;
@@ -98,7 +104,40 @@ post({ type: 'ready' });
 
 // ---- model <-> definition ----------------------------------------------
 
-const KNOWN_KEYS = new Set(['name', 'type', 'offset', 'size', 'length', 'endianness', 'description']);
+const KNOWN_KEYS = new Set([
+  'name',
+  'type',
+  'offset',
+  'size',
+  'length',
+  'endianness',
+  'description',
+  'enum',
+  'timestamp',
+]);
+
+type EnumRow = { value: string; label: string };
+
+function enumToRows(e: FieldDefinition['enum']): EnumRow[] {
+  if (!e) {
+    return [];
+  }
+  if (Array.isArray(e)) {
+    return e.map((x) => ({ value: String(x.value), label: String(x.name ?? '') }));
+  }
+  return Object.entries(e).map(([k, v]) => ({ value: k, label: String(v) }));
+}
+
+function rowsToEnum(rows: EnumRow[]): Record<string, string> | undefined {
+  const map: Record<string, string> = {};
+  for (const r of rows) {
+    const key = r.value.trim();
+    if (key !== '') {
+      map[key] = r.label;
+    }
+  }
+  return Object.keys(map).length ? map : undefined;
+}
 
 function looksLikeBitSpecs(fields: unknown): boolean {
   return (
@@ -132,9 +171,26 @@ function emptyNode(kind: EditNode['kind']): EditNode {
     endianness: '',
     description: '',
     advanced: '',
+    enumRows: [],
+    tsSize: '',
+    tsUnit: '',
+    tsEpoch: '',
     children: [],
     collapsed: false,
   };
+}
+
+/** A field node preset to an enum, ready for value rows. */
+function enumNode(): EditNode {
+  const n = emptyNode('field');
+  n.name = 'kind';
+  n.type = 'enum';
+  n.size = '4';
+  n.enumRows = [
+    { value: '0', label: '' },
+    { value: '1', label: '' },
+  ];
+  return n;
 }
 
 function emptyStruct(): EditStruct {
@@ -145,6 +201,7 @@ function cloneNode(n: EditNode): EditNode {
   return {
     ...n,
     id: uid(),
+    enumRows: n.enumRows.map((r) => ({ ...r })),
     children: n.children.map(cloneNode),
   };
 }
@@ -195,6 +252,12 @@ function fieldToNode(f: FieldDefinition): EditNode {
   node.length = f.length === undefined ? '' : String(f.length);
   node.endianness = f.endianness ?? '';
   node.description = f.description ?? '';
+  node.enumRows = enumToRows(f.enum);
+  if (f.timestamp) {
+    node.tsSize = f.timestamp.size === undefined ? '' : String(f.timestamp.size);
+    node.tsUnit = f.timestamp.unit ?? '';
+    node.tsEpoch = typeof f.timestamp.epoch === 'string' ? f.timestamp.epoch : '';
+  }
   node.advanced = Object.keys(advanced).length ? JSON.stringify(advanced, null, 2) : '';
   return node;
 }
@@ -377,6 +440,25 @@ function nodeToField(node: EditNode): FieldDefinition {
   }
   if (node.description.trim()) {
     f.description = node.description.trim();
+  }
+  const enumMap = rowsToEnum(node.enumRows);
+  if (enumMap) {
+    f.enum = enumMap;
+  }
+  if (node.tsSize || node.tsUnit || node.tsEpoch) {
+    const ts: NonNullable<FieldDefinition['timestamp']> = {};
+    if (node.tsSize === '4' || node.tsSize === '8') {
+      ts.size = Number(node.tsSize) as 4 | 8;
+    }
+    if (node.tsUnit === 's' || node.tsUnit === 'ms') {
+      ts.unit = node.tsUnit;
+    }
+    if (node.tsEpoch) {
+      ts.epoch = node.tsEpoch as NonNullable<FieldDefinition['timestamp']>['epoch'];
+    }
+    if (Object.keys(ts).length) {
+      f.timestamp = ts;
+    }
   }
   node.advancedError = undefined;
   if (node.advanced.trim()) {
@@ -621,6 +703,29 @@ function addTop(kind: EditNode['kind']): void {
   changed();
 }
 
+/** Push a preset node (e.g. an enum field) into a target list. */
+function pushNode(target: 'top' | { structId: string } | { structDefId: string }, node: EditNode): void {
+  if (target === 'top') {
+    model.tree.push(node);
+  } else if ('structId' in target) {
+    const loc = locate(target.structId);
+    if (!loc) {
+      return;
+    }
+    const s = loc.list[loc.index];
+    s.collapsed = false;
+    s.children.push(node);
+  } else {
+    const s = model.structs.find((x) => x.id === target.structDefId);
+    if (!s) {
+      return;
+    }
+    s.collapsed = false;
+    s.children.push(node);
+  }
+  changed();
+}
+
 // ---- rendering -----------------------------------------------------
 
 let errorBox: HTMLElement;
@@ -718,6 +823,7 @@ function render(): void {
   }
   clear(app);
   const wrap = el('div', { class: 'fe-wrap' });
+  wrap.append(typesDatalist());
 
   wrap.append(
     el('h1', { text: init.editing ? 'Edit Binary Format' : 'Create Binary Format' }),
@@ -858,6 +964,7 @@ function render(): void {
     addRow(0, [
       ['+ Add Field', () => addTop('field')],
       ['+ Add Array', () => addTop('array')],
+      ['+ Add Enum', () => pushNode('top', enumNode())],
       ['+ Add Structure', () => addTop('struct')],
     ]),
   );
@@ -913,17 +1020,7 @@ function render(): void {
   wrap.append(previewBox);
 
   // ---- actions ----
-  wrap.append(
-    el('div', { class: 'fe-actions' }, [
-      el('button', { text: 'Save', onclick: () => post({ type: 'save', format: buildDefinition() }) }),
-      el('button', {
-        class: 'secondary',
-        text: 'Validate',
-        onclick: () => post({ type: 'validate', format: buildDefinition() }),
-      }),
-      el('button', { class: 'secondary', text: 'Close', onclick: () => post({ type: 'cancel' }) }),
-    ]),
-  );
+  wrap.append(actionBar());
 
   app.append(wrap);
   updatePreview();
@@ -969,17 +1066,7 @@ function renderJsonMode(wrap: HTMLElement): void {
   errorBox = el('div', { class: 'fe-errors' });
   wrap.append(errorBox);
 
-  wrap.append(
-    el('div', { class: 'fe-actions' }, [
-      el('button', { text: 'Save', onclick: () => post({ type: 'save', format: buildDefinition() }) }),
-      el('button', {
-        class: 'secondary',
-        text: 'Validate',
-        onclick: () => post({ type: 'validate', format: buildDefinition() }),
-      }),
-      el('button', { class: 'secondary', text: 'Close', onclick: () => post({ type: 'cancel' }) }),
-    ]),
-  );
+  wrap.append(actionBar());
 }
 
 function switchMode(to: 'form' | 'json'): void {
@@ -1016,30 +1103,35 @@ const structNames = () =>
   model.structs.map((s) => s.name.trim()).filter((n) => n && !BASE_TYPES().includes(n));
 const ALL_TYPES = () => [...BASE_TYPES(), ...structNames()];
 
-/** A <select> of every data type, with the user's reusable structures grouped separately. */
-function typeSelect(value: string, onChange: (v: string) => void): HTMLSelectElement {
-  const sel = el('select', {
-    onchange: (e) => {
-      onChange((e.target as HTMLSelectElement).value);
+/** One shared <datalist> of every known type + the user's reusable structures. */
+function typesDatalist(): HTMLElement {
+  const dl = el('datalist', { id: 'fe-types' });
+  for (const t of ALL_TYPES()) {
+    dl.append(el('option', { value: t }));
+  }
+  return dl;
+}
+
+/**
+ * An editable type field: a text input backed by the `#fe-types` datalist, so
+ * you can pick a scalar / composite / structure name *or* type a shorthand like
+ * `float32[8]` or `int16[4]` (a nested array).
+ */
+function typeCombo(value: string, onChange: (v: string) => void): HTMLInputElement {
+  const input = el('input', {
+    type: 'text',
+    value,
+    list: 'fe-types',
+    class: 'fe-type-combo',
+    placeholder: 'type',
+    title: 'A type name, a structure name, or a shorthand like float32[8] / int16[4]',
+    oninput: (e) => {
+      onChange((e.target as HTMLInputElement).value);
       scheduleValidate();
     },
-  }) as HTMLSelectElement;
-  for (const t of BASE_TYPES()) {
-    sel.append(el('option', { value: t, text: t }));
-  }
-  const structs = structNames();
-  if (structs.length) {
-    const group = el('optgroup', { label: 'structures' });
-    for (const t of structs) {
-      group.append(el('option', { value: t, text: t }));
-    }
-    sel.append(group);
-  }
-  if (value && !ALL_TYPES().includes(value)) {
-    sel.append(el('option', { value, text: `${value} (?)` }));
-  }
-  sel.value = value;
-  return sel;
+  }) as HTMLInputElement;
+  input.style.width = '140px';
+  return input;
 }
 
 function bindInput(
@@ -1095,7 +1187,7 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
   head.append(bindInput(node, 'name', { placeholder: 'name', width: 150 }));
 
   if (node.kind === 'field') {
-    head.append(typeSelect(node.type, (v) => (node.type = v)));
+    head.append(typeCombo(node.type, (v) => (node.type = v)));
   } else if (node.kind === 'array') {
     head.append(
       labelled(
@@ -1108,7 +1200,7 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
         }),
       ),
       el('span', { class: 'fe-inline-label', text: 'of' }),
-      typeSelect(node.type, (v) => (node.type = v)),
+      typeCombo(node.type, (v) => (node.type = v)),
     );
   } else {
     head.append(el('span', { class: 'fe-badge-type', text: 'structure' }));
@@ -1159,14 +1251,22 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
     labelled('description', bindInput(node, 'description', { width: 320 })),
   ]);
   if (node.kind === 'field') {
+    const enumEd = enumEditor(node);
+    if (enumEd) {
+      line2.append(enumEd);
+    }
+    const tsEd = timestampEditor(node);
+    if (tsEd) {
+      line2.append(tsEd);
+    }
     const adv = el('details', { class: 'fe-adv' }, [
       el('summary', {
-        text: 'advanced: bits / enum / items / timestamp' + (node.advancedError ? '  (invalid JSON)' : ''),
+        text: 'advanced: bits / scale / bias / unit / display' + (node.advancedError ? '  (invalid JSON)' : ''),
       }),
       el('textarea', {
         value: node.advanced,
         placeholder:
-          '{ "fields": [ { "name": "Enabled", "bits": "0" } ] }   or   { "enum": { "0": "off", "1": "on" } }',
+          '{ "fields": [ { "name": "Enabled", "bits": "0" } ] }   or   { "scale": 0.01, "unit": "V" }',
         oninput: (e) => {
           node.advanced = (e.target as HTMLTextAreaElement).value;
           scheduleValidate();
@@ -1188,6 +1288,7 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
       addRow((depth + 1) * 18, [
         ['+ Field', () => addChild(node.id, 'field')],
         ['+ Array', () => addChild(node.id, 'array')],
+        ['+ Enum', () => pushNode({ structId: node.id }, enumNode())],
         ['+ Structure', () => addChild(node.id, 'struct')],
       ]),
     );
@@ -1201,6 +1302,140 @@ function addRow(marginLeft: number, buttons: [string, () => void][]): HTMLElemen
     { class: 'fe-row fe-add-row', style: `margin-left:${marginLeft}px` },
     buttons.map(([text, onclick]) => el('button', { class: 'secondary icon-text', text, onclick })),
   );
+}
+
+/** The sticky Save / Save draft / Validate / Close bar, shared by both modes. */
+function actionBar(): HTMLElement {
+  return el('div', { class: 'fe-actions' }, [
+    el('button', { text: 'Save', onclick: () => post({ type: 'save', format: buildDefinition() }) }),
+    el('button', {
+      class: 'secondary',
+      title: 'Write the JSON to global storage even if it has validation problems',
+      text: 'Save draft',
+      onclick: () => post({ type: 'saveDraft', format: buildDefinition() }),
+    }),
+    el('button', {
+      class: 'secondary',
+      text: 'Validate',
+      onclick: () => post({ type: 'validate', format: buildDefinition() }),
+    }),
+    el('button', { class: 'secondary', text: 'Close', onclick: () => post({ type: 'cancel' }) }),
+  ]);
+}
+
+/** Inline value→label table for an `enum` field (or an enum overlay on a scalar). */
+function enumEditor(node: EditNode): HTMLElement | null {
+  const isEnum = node.type.trim() === 'enum';
+  if (!isEnum && node.enumRows.length === 0) {
+    // Offer to start an overlay only on integer scalars.
+    const scalarInts = new Set(['uint8', 'int8', 'uint16', 'int16', 'uint32', 'int32', 'byte']);
+    if (!scalarInts.has(node.type.trim())) {
+      return null;
+    }
+    return el('details', { class: 'fe-adv' }, [
+      el('summary', { text: 'enum overlay' }),
+      el('div', { class: 'fe-row fe-add-row' }, [
+        el('button', {
+          class: 'secondary icon-text',
+          text: '+ enum value',
+          onclick: () => {
+            node.enumRows.push({ value: '0', label: '' });
+            changed();
+          },
+        }),
+      ]),
+    ]);
+  }
+  const box = el('details', { class: 'fe-adv', open: true }, [
+    el('summary', { text: `enum values (${node.enumRows.length})` }),
+  ]);
+  for (const row of node.enumRows) {
+    box.append(
+      el('div', { class: 'fe-row fe-enum-row' }, [
+        el('input', {
+          type: 'text',
+          value: row.value,
+          placeholder: 'value',
+          title: 'Numeric value (decimal or 0x…)',
+          oninput: (e) => {
+            row.value = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }),
+        el('span', { class: 'fe-inline-label', text: '→' }),
+        el('input', {
+          type: 'text',
+          value: row.label,
+          placeholder: 'label',
+          oninput: (e) => {
+            row.label = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }),
+        iconBtn('✕', 'Remove value', () => {
+          node.enumRows = node.enumRows.filter((r) => r !== row);
+          changed();
+        }),
+      ]),
+    );
+  }
+  box.append(
+    el('div', { class: 'fe-row fe-add-row' }, [
+      el('button', {
+        class: 'secondary icon-text',
+        text: '+ value',
+        onclick: () => {
+          const last = node.enumRows[node.enumRows.length - 1];
+          const next = last ? String((parseInt(last.value, last.value.startsWith('0x') ? 16 : 10) || 0) + 1) : '0';
+          node.enumRows.push({ value: next, label: '' });
+          changed();
+        },
+      }),
+    ]),
+  );
+  return box;
+}
+
+/** Structured `timestamp` config (size / unit / epoch) instead of raw JSON. */
+function timestampEditor(node: EditNode): HTMLElement | null {
+  if (node.type.trim() !== 'timestamp' && !node.tsSize && !node.tsUnit && !node.tsEpoch) {
+    return null;
+  }
+  const sel = (
+    label: string,
+    value: string,
+    options: [string, string][],
+    onChange: (v: string) => void,
+  ): HTMLElement => {
+    const s = el('select', {
+      onchange: (e) => {
+        onChange((e.target as HTMLSelectElement).value);
+        scheduleValidate();
+      },
+    }) as HTMLSelectElement;
+    for (const [v, t] of options) {
+      s.append(el('option', { value: v, text: t }));
+    }
+    s.value = value;
+    return labelled(label, s);
+  };
+  return el('div', { class: 'fe-row fe-ts-row' }, [
+    sel('bytes', node.tsSize, [['', 'default (4)'], ['4', '4'], ['8', '8']], (v) => (node.tsSize = v)),
+    sel('unit', node.tsUnit, [['', 'default (s)'], ['s', 'seconds'], ['ms', 'ms']], (v) => (node.tsUnit = v)),
+    sel(
+      'epoch',
+      node.tsEpoch,
+      [
+        ['', 'setting default'],
+        ['unix', 'unix (1970)'],
+        ['y2k', 'y2k (2000)'],
+        ['gps', 'gps (1980)'],
+        ['mac', 'mac (1904)'],
+        ['filetime', 'filetime (1601)'],
+      ],
+      (v) => (node.tsEpoch = v),
+    ),
+  ]);
 }
 
 function renderStructDef(parent: HTMLElement, s: EditStruct): void {
@@ -1262,6 +1497,7 @@ function renderStructDef(parent: HTMLElement, s: EditStruct): void {
       addRow(18, [
         ['+ Field', () => addStructChild(s.id, 'field')],
         ['+ Array', () => addStructChild(s.id, 'array')],
+        ['+ Enum', () => pushNode({ structDefId: s.id }, enumNode())],
         ['+ Structure', () => addStructChild(s.id, 'struct')],
       ]),
     );

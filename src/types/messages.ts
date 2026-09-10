@@ -184,6 +184,7 @@ export interface FormatEditorInit {
 export type FormatEditorToHost =
   | { type: 'ready' }
   | { type: 'save'; format: FormatDefinition }
+  | { type: 'saveDraft'; format: FormatDefinition }
   | { type: 'validate'; format: FormatDefinition }
   | { type: 'openJsonFile' }
   | { type: 'cancel' };
