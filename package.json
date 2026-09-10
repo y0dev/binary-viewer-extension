@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.9.6",
+  "version": "0.10.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -139,6 +139,21 @@
           "enum": [8, 16, 32],
           "default": 16,
           "description": "Default number of bytes displayed per row in the raw hex view."
+        },
+        "binaryViewer.byteGroup": {
+          "type": "string",
+          "enum": ["1", "2le", "2be", "4le", "4be", "8le", "8be"],
+          "enumDescriptions": [
+            "Plain bytes",
+            "16-bit words, bytes reversed (little-endian reads as a number)",
+            "16-bit words, kept in file order",
+            "32-bit words, bytes reversed",
+            "32-bit words, kept in file order",
+            "64-bit words, bytes reversed",
+            "64-bit words, kept in file order"
+          ],
+          "default": "1",
+          "markdownDescription": "How the **raw** hex view groups bytes into words (this does not affect the structure decoder or the inspector). `·LE` reverses the bytes so a little-endian `01 00 00 00` reads as `00000001`; `·BE` keeps file order. Remembered per file from the toolbar's **Group** control."
         },
         "binaryViewer.defaultEndianness": {
           "type": "string",

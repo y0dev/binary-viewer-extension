@@ -7,9 +7,12 @@
  */
 
 import type { Endianness, FormatDefinition } from './format';
+import type { ByteGroupMode } from '../core/humanize';
 
 export interface ViewerConfig {
   bytesPerRow: 8 | 16 | 32;
+  /** How the raw view groups bytes into words. Raw view only. */
+  byteGroup: ByteGroupMode;
   defaultEndianness: Endianness;
   showInspector: boolean;
   blockSizeBytes: number;
@@ -166,6 +169,7 @@ export type WebviewToHost =
 export interface WebviewPersistedState {
   view: ViewMode;
   bytesPerRow: 8 | 16 | 32;
+  byteGroup: ByteGroupMode;
   endianness: Endianness;
   showInspector: boolean;
   scrollTop: number;

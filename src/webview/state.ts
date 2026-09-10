@@ -1,6 +1,6 @@
 import type { Endianness } from '../types/format';
 import type { FormatSummary, ParsedNode, ParsedSection, ViewMode } from '../types/messages';
-import { offsetHex } from '../core/humanize';
+import { offsetHex, type ByteGroupMode } from '../core/humanize';
 
 export interface Selection {
   /** Start byte offset (inclusive). */
@@ -14,6 +14,8 @@ export interface AppState {
   fileName: string;
   view: ViewMode;
   bytesPerRow: 8 | 16 | 32;
+  /** How the raw view groups bytes into words. Raw view only. */
+  byteGroup: ByteGroupMode;
   endianness: Endianness;
   showInspector: boolean;
 

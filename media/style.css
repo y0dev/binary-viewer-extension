@@ -269,6 +269,12 @@ body {
   margin-left: 1ch;
 }
 
+/* Word view: keep header labels and value tokens aligned. */
+.bv-cell-w2 { min-width: 5ch; }
+.bv-cell-w4 { min-width: 9ch; }
+.bv-cell-w8 { min-width: 17ch; }
+.bv-hexcells.bv-grouped .bv-cell { font-variant-numeric: tabular-nums; }
+
 .bv-asc-sep {
   width: 2ch;
   flex: none;

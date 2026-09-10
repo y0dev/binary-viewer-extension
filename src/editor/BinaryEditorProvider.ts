@@ -8,7 +8,7 @@ import { parseFormat } from '../core/BinaryParser';
 import { computeFieldSize, hasParseTimeSize } from '../core/BinaryField';
 import { buildSections } from '../core/Sections';
 import { resolveStructures } from '../core/FormatResolve';
-import { resolveBaseAddress } from '../core/humanize';
+import { resolveBaseAddress, BYTE_GROUP_MODES, type ByteGroupMode } from '../core/humanize';
 import { searchBinary } from '../binary/BinarySearch';
 import type { FieldDefinition, TimestampEpoch } from '../types/format';
 import type {
@@ -216,6 +216,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             uriPath: document.uri.toString(),
             config: {
               bytesPerRow: cfg.bytesPerRow,
+              byteGroup: cfg.byteGroup,
               defaultEndianness: cfg.defaultEndianness,
               showInspector: cfg.showInspector,
               blockSizeBytes: cfg.blockSizeBytes,
@@ -392,10 +393,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
   private readConfig(): ResolvedConfig {
     const c = vscode.workspace.getConfiguration('binaryViewer');
     const bpr = c.get<number>('bytesPerRow', 16);
+    const bg = c.get<string>('byteGroup', '1');
     const view = c.get<ViewMode>('defaultView', 'raw');
     const epoch = c.get<TimestampEpoch>('timestamp.defaultEpoch', 'unix');
     return {
       bytesPerRow: (bpr === 8 || bpr === 32 ? bpr : 16) as 8 | 16 | 32,
+      byteGroup: (BYTE_GROUP_MODES as string[]).includes(bg) ? (bg as ByteGroupMode) : '1',
       defaultEndianness: c.get<'little' | 'big'>('defaultEndianness', 'little'),
       showInspector: c.get<boolean>('showInspectorByDefault', true),
       blockSizeBytes: Math.max(4096, c.get<number>('blockSizeBytes', 65536)),

@@ -1,6 +1,7 @@
 import { Store, displayAddr } from './state';
 import { DataProvider } from './DataProvider';
 import { VirtualGrid } from './VirtualGrid';
+import { groupHexDisplay, parseByteGroup } from '../core/humanize';
 
 const HEX_LUT: string[] = [];
 for (let i = 0; i < 256; i++) {
@@ -90,7 +91,8 @@ export class HexView {
         changed.has('caret') ||
         changed.has('activeNodeId') ||
         changed.has('baseAddress') ||
-        changed.has('formatBaseAddress')
+        changed.has('formatBaseAddress') ||
+        changed.has('byteGroup')
       ) {
         this.render(true);
       }
@@ -156,8 +158,9 @@ export class HexView {
     this.sizer.style.height = `${this.grid.sizerHeight()}px`;
     const win = this.grid.windowFor(this.scroller.scrollTop, vh);
     const bpr = this.store.state.bytesPerRow;
+    const { bytes: g, le } = parseByteGroup(this.store.state.byteGroup);
     const base = this.store.state.formatBaseAddress ?? this.store.state.baseAddress;
-    const key = `${win.firstRow}:${win.rowCount}:${bpr}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}`;
+    const key = `${win.firstRow}:${win.rowCount}:${bpr}:${g}:${le}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}`;
     if (!force && key === this.lastWindowKey) {
       return;
     }
@@ -173,7 +176,7 @@ export class HexView {
     void this.data.prefetch(Math.max(0, startOffset - spanLen), spanLen);
     void this.data.prefetch(startOffset + spanLen, spanLen);
 
-    this.renderHeader(bpr);
+    this.renderHeader(bpr, g);
 
     const sel = this.store.state.selection;
     const selEnd = sel.start + sel.length;
@@ -189,17 +192,27 @@ export class HexView {
       }
       html += `<div class="bv-row" style="height:${rowH}px">`;
       html += `<span class="bv-off">${displayAddr(this.store.state, rowOffset).slice(2)}</span>`;
-      html += '<span class="bv-hexcells">';
-      for (let c = 0; c < bpr; c++) {
+      html += `<span class="bv-hexcells${g > 1 ? ' bv-grouped' : ''}">`;
+      for (let c = 0; c < bpr; c += g) {
         const o = rowOffset + c;
         const split = c > 0 && c % 8 === 0 ? ' bv-split' : '';
         if (o >= fileSize) {
-          html += `<span class="bv-cell bv-cell-empty${split}">&nbsp;&nbsp;</span>`;
+          html += `<span class="bv-cell bv-cell-w${g} bv-cell-empty${split}">${'&nbsp;'.repeat(g * 2)}</span>`;
           continue;
         }
-        const b = bytes[o - startOffset] ?? 0;
-        const cls = this.cellClass(o, sel.start, selEnd, caret);
-        html += `<span class="bv-cell${split}${cls}" data-o="${o}">${HEX_LUT[b]}</span>`;
+        let text: string;
+        if (g === 1) {
+          text = HEX_LUT[bytes[o - startOffset] ?? 0];
+        } else {
+          const word: (number | null)[] = [];
+          for (let k = 0; k < g; k++) {
+            const bo = o + k;
+            word.push(bo < fileSize ? (bytes[bo - startOffset] ?? 0) : null);
+          }
+          text = groupHexDisplay(word, le);
+        }
+        const cls = this.groupClass(o, g, sel.start, selEnd, caret);
+        html += `<span class="bv-cell bv-cell-w${g}${split}${cls}" data-o="${o}">${text}</span>`;
       }
       html += '</span><span class="bv-asc-sep"></span><span class="bv-ascii">';
       for (let c = 0; c < bpr; c++) {
@@ -209,7 +222,7 @@ export class HexView {
           continue;
         }
         const b = bytes[o - startOffset] ?? 0;
-        const cls = this.cellClass(o, sel.start, selEnd, caret);
+        const cls = this.groupClass(o, 1, sel.start, selEnd, caret);
         html += `<span class="bv-ac${cls}" data-o="${o}">${asciiHtml(b)}</span>`;
       }
       html += '</span></div>';
@@ -219,27 +232,31 @@ export class HexView {
     this.layer.innerHTML = html;
   }
 
-  private cellClass(o: number, selStart: number, selEnd: number, caret: number): string {
+  /** Highlight class for a cell/token covering [o, o+span). */
+  private groupClass(o: number, span: number, selStart: number, selEnd: number, caret: number): string {
     let cls = '';
-    if (selEnd > selStart && o >= selStart && o < selEnd) {
+    if (selEnd > selStart && o < selEnd && o + span > selStart) {
       cls += ' bv-selected';
     }
-    if (o === caret) {
+    if (caret >= o && caret < o + span) {
       cls += ' bv-caret';
     }
     return cls;
   }
 
-  private renderHeader(bpr: number): void {
-    const key = `h${bpr}`;
+  private renderHeader(bpr: number, g: number): void {
+    const key = `h${bpr}:${g}`;
     if (this.headerInner.dataset.key === key) {
       return;
     }
     this.headerInner.dataset.key = key;
     let html = '<span class="bv-off">Offset</span><span class="bv-hexcells">';
-    for (let c = 0; c < bpr; c++) {
+    for (let c = 0; c < bpr; c += g) {
       const split = c > 0 && c % 8 === 0 ? ' bv-split' : '';
-      html += `<span class="bv-cell bv-colhead${split}">${c.toString(16).toUpperCase().padStart(2, '0')}</span>`;
+      html += `<span class="bv-cell bv-cell-w${g} bv-colhead${split}">${c
+        .toString(16)
+        .toUpperCase()
+        .padStart(2, '0')}</span>`;
     }
     html += '</span><span class="bv-asc-sep"></span><span class="bv-ascii bv-colhead">ASCII</span>';
     this.headerInner.innerHTML = html;
@@ -256,6 +273,10 @@ export class HexView {
     return Number.isFinite(o) ? o : null;
   }
 
+  private groupBytes(): number {
+    return parseByteGroup(this.store.state.byteGroup).bytes;
+  }
+
   private onMouseDown(e: MouseEvent): void {
     const o = this.offsetFromEvent(e);
     if (o === null) {
@@ -266,7 +287,13 @@ export class HexView {
     if (e.shiftKey) {
       this.extendTo(o);
     } else {
-      this.store.update({ anchor: o, caret: o, selection: { start: o, length: 1 }, activeNodeId: null });
+      const g = this.groupBytes();
+      this.store.update({
+        anchor: o,
+        caret: o,
+        selection: { start: o, length: g },
+        activeNodeId: null,
+      });
       this.dragging = true;
     }
     this.cb.onSelectionChange();
@@ -285,61 +312,64 @@ export class HexView {
   }
 
   private extendTo(o: number): void {
+    const g = this.groupBytes();
     const anchor = this.store.state.anchor;
     const start = Math.min(anchor, o);
-    const end = Math.max(anchor, o);
+    const end = Math.max(anchor, o) + g;
     this.store.update({
       caret: o,
-      selection: { start, length: end - start + 1 },
+      selection: { start, length: end - start },
       activeNodeId: null,
     });
   }
 
   private onKeyDown(e: KeyboardEvent): void {
     const bpr = this.store.state.bytesPerRow;
+    const g = this.groupBytes();
     const vh = this.scroller.clientHeight || 600;
     const pageRows = Math.max(1, Math.floor(vh / this.rowHeight) - 1);
     const last = Math.max(0, this.store.state.fileSize - 1);
+    const caret = this.store.state.caret;
     let target: number | null = null;
     switch (e.key) {
       case 'ArrowLeft':
-        target = this.store.state.caret - 1;
+        target = caret - g;
         break;
       case 'ArrowRight':
-        target = this.store.state.caret + 1;
+        target = caret + g;
         break;
       case 'ArrowUp':
-        target = this.store.state.caret - bpr;
+        target = caret - bpr;
         break;
       case 'ArrowDown':
-        target = this.store.state.caret + bpr;
+        target = caret + bpr;
         break;
       case 'PageUp':
-        target = this.store.state.caret - pageRows * bpr;
+        target = caret - pageRows * bpr;
         break;
       case 'PageDown':
-        target = this.store.state.caret + pageRows * bpr;
+        target = caret + pageRows * bpr;
         break;
       case 'Home':
-        target = e.ctrlKey || e.metaKey ? 0 : this.store.state.caret - (this.store.state.caret % bpr);
+        target = e.ctrlKey || e.metaKey ? 0 : caret - (caret % bpr);
         break;
       case 'End':
-        target = e.ctrlKey || e.metaKey
-          ? last
-          : this.store.state.caret - (this.store.state.caret % bpr) + bpr - 1;
+        target = e.ctrlKey || e.metaKey ? last : caret - (caret % bpr) + bpr - g;
         break;
       default:
         return;
     }
     e.preventDefault();
     target = Math.max(0, Math.min(target, last));
+    // Snap to the start of the word the target lands in.
+    target -= target % g;
     if (e.shiftKey) {
       this.extendTo(target);
     } else {
       this.store.update({
         anchor: target,
         caret: target,
-        selection: { start: target, length: 1 },
+        selection: { start: target, length: g },
         activeNodeId: null,
       });
     }

@@ -1,7 +1,7 @@
 import { Store, displayAddr } from './state';
 import { el, clear } from './dom';
 import { post } from './vscodeApi';
-import { parseNumericInput } from '../core/humanize';
+import { parseNumericInput, type ByteGroupMode } from '../core/humanize';
 import type { Endianness } from '../types/format';
 
 export interface ToolbarCallbacks {
@@ -59,6 +59,28 @@ export class Toolbar {
       bytesSelect.append(el('option', { value: n, text: String(n) }));
     }
     bytesSelect.value = String(this.store.state.bytesPerRow);
+
+    const groupSelect = el('select', {
+      class: 'bv-select',
+      title:
+        'Raw view only: group hex bytes into words. "·LE" reverses the bytes so a little-endian 01 00 00 00 reads as 00000001; "·BE" keeps file order.',
+      onchange: (e) => {
+        this.store.update({ byteGroup: (e.target as HTMLSelectElement).value as ByteGroupMode });
+        this.persist();
+      },
+    }) as HTMLSelectElement;
+    for (const [v, label] of [
+      ['1', '1 byte'],
+      ['2le', '16-bit ·LE'],
+      ['2be', '16-bit ·BE'],
+      ['4le', '32-bit ·LE'],
+      ['4be', '32-bit ·BE'],
+      ['8le', '64-bit ·LE'],
+      ['8be', '64-bit ·BE'],
+    ] as [string, string][]) {
+      groupSelect.append(el('option', { value: v, text: label }));
+    }
+    groupSelect.value = this.store.state.byteGroup;
 
     const endianSelect = el('select', {
       class: 'bv-select',
@@ -130,6 +152,7 @@ export class Toolbar {
     this.root.append(
       segmented,
       el('span', { class: 'bv-tool' }, [el('label', { class: 'bv-label', text: 'Bytes:' }), bytesSelect]),
+      el('span', { class: 'bv-tool' }, [el('label', { class: 'bv-label', text: 'Group:' }), groupSelect]),
       el('span', { class: 'bv-tool' }, [el('label', { class: 'bv-label', text: 'Endian:' }), endianSelect]),
       this.formatSelectWrap,
       el('span', { class: 'bv-spacer' }),
@@ -146,6 +169,9 @@ export class Toolbar {
       }
       if (changed.has('bytesPerRow')) {
         bytesSelect.value = String(this.store.state.bytesPerRow);
+      }
+      if (changed.has('byteGroup')) {
+        groupSelect.value = this.store.state.byteGroup;
       }
       if (changed.has('endianness')) {
         endianSelect.value = this.store.state.endianness;
@@ -249,6 +275,7 @@ export class Toolbar {
       state: {
         view: s.view,
         bytesPerRow: s.bytesPerRow,
+        byteGroup: s.byteGroup,
         endianness: s.endianness,
         showInspector: s.showInspector,
         scrollTop: 0,

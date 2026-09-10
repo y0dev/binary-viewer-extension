@@ -15,15 +15,21 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
 ## The toolbar
 
 ```
-[ Raw ] [ Structure ] [ Sections ]   Bytes: [16 ▼]   Endian: [Little ▼]   Format: [ … ▼ ] ↻   [ Inspector ] [ Search ] [ Go To ]   0x00000120
+[ Raw ] [ Structure ] [ Sections ]   Bytes: [16 ▼]  Group: [1 byte ▼]  Endian: [Little ▼]   Format: [ … ▼ ] ↻   [ Inspector ] [ Search ] [ Go To ]   0x00000120
 ```
 
 - **Raw / Structure / Sections** — switch views. Structure and Sections need a
   format applied (auto-detected or chosen); Sections also works from a format's
   top-level fields when it declares no `sections`.
 - **Bytes** — 8, 16 or 32 bytes per row. Default from `binaryViewer.bytesPerRow`.
+- **Group** — *raw view only.* Show the hex as 16- / 32- / 64-bit words instead
+  of single bytes. `·LE` reverses each word's bytes so a little-endian
+  `01 00 00 00` reads as `00000001`; `·BE` keeps file order. Clicking a word
+  selects it and arrow keys move word-by-word; selection, Go To and structure
+  highlighting still act on the real bytes. Default from `binaryViewer.byteGroup`.
 - **Endian** — affects the inspector and structure/sections decoding (for
-  formats/fields that don't pin their own endianness).
+  formats/fields that don't pin their own endianness). It does **not** change
+  the raw **Group** display — use `·LE` / `·BE` for that.
 - **Format** — appears when at least one format is known. Entries are tagged
   `[workspace]` / `[builtin]`; `(detected)` marks the auto-detected one. Choose
   **(none)** to go back to raw-only. The **↻** button rescans the workspace and

@@ -155,6 +155,7 @@ save) and **↻ Apply to open binary** buttons. See
 | Setting | Default | Description |
 | --- | --- | --- |
 | `binaryViewer.bytesPerRow` | `16` | Bytes per row in the raw view (8/16/32) |
+| `binaryViewer.byteGroup` | `1` | Raw-view word grouping: `1` / `2le` / `2be` / `4le` / `4be` / `8le` / `8be` (`·LE` reverses bytes so LE reads as a number) |
 | `binaryViewer.defaultEndianness` | `little` | Inspector / format default |
 | `binaryViewer.defaultView` | `raw` | Tab a file opens on (`raw` / `structure` / `sections`; falls back to `raw` with no format; last-used tab wins) |
 | `binaryViewer.baseAddress` | `""` | Show offset / address columns relative to this base (e.g. `0x08000000`); a format's own `baseAddress` overrides it |

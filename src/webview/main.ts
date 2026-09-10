@@ -130,6 +130,7 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     fileName: msg.fileName,
     view,
     bytesPerRow: persisted.bytesPerRow ?? msg.config.bytesPerRow,
+    byteGroup: persisted.byteGroup ?? msg.config.byteGroup,
     endianness: persisted.endianness ?? msg.config.defaultEndianness,
     showInspector: persisted.showInspector ?? msg.config.showInspector,
     caret: 0,
@@ -259,6 +260,7 @@ function persist(): void {
   saveState({
     view: s.view,
     bytesPerRow: s.bytesPerRow,
+    byteGroup: s.byteGroup,
     endianness: s.endianness,
     showInspector: s.showInspector,
     activeFormat: s.activeFormat,
@@ -268,6 +270,7 @@ function persist(): void {
     state: {
       view: s.view,
       bytesPerRow: s.bytesPerRow,
+      byteGroup: s.byteGroup,
       endianness: s.endianness,
       showInspector: s.showInspector,
       scrollTop: hexView?.scrollTop ?? 0,

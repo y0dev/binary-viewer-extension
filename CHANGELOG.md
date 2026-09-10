@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.10.0
+
+- **Word view in the raw hex dump.** A new **Group** control in the Raw toolbar
+  shows bytes as 16- / 32- / 64-bit words. `·LE` reverses the bytes so a
+  little-endian `01 00 00 00` reads as `00000001`; `·BE` keeps file order.
+  Clicking a word selects it, arrow keys step word-by-word, the ASCII column and
+  everything downstream (Structure, inspector, Go To) still work on the real
+  bytes. Raw view only — it does not touch the structure decoder or the
+  inspector. Remembered per file; default from `binaryViewer.byteGroup`.
+
 ## 0.9.6
 
 - **Form editor is practical for fields / arrays / enums now** — less need for the

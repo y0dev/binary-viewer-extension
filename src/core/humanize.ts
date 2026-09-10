@@ -18,6 +18,50 @@ export function byteHex(b: number): string {
   return b.toString(16).toUpperCase().padStart(2, '0');
 }
 
+/**
+ * Hex for a run of bytes shown as one word. With `littleEndian` the byte order
+ * is reversed so the value reads most-significant digit first — a little-endian
+ * `01 00 00 00` displays as `00000001`. `null` entries render as `--`.
+ */
+export function groupHexDisplay(bytes: ReadonlyArray<number | null>, littleEndian: boolean): string {
+  const pairs = bytes.map((b) => (b === null ? '--' : byteHex(b)));
+  if (littleEndian) {
+    pairs.reverse();
+  }
+  return pairs.join('');
+}
+
+/**
+ * How the raw hex view groups bytes into words. Raw-view only — it does not
+ * affect the structure decoder or the inspector.
+ *   '1'   — plain bytes (default)
+ *   '2le' — 16-bit words, little-endian bytes reversed for a numeric read
+ *   '4be' — 32-bit words, kept in file order
+ *   …and so on for 2 / 4 / 8 bytes × le / be.
+ */
+export type ByteGroupMode = '1' | '2le' | '2be' | '4le' | '4be' | '8le' | '8be';
+
+export const BYTE_GROUP_MODES: ByteGroupMode[] = ['1', '2le', '2be', '4le', '4be', '8le', '8be'];
+
+export function parseByteGroup(mode: string | undefined): { bytes: 1 | 2 | 4 | 8; le: boolean } {
+  switch (mode) {
+    case '2le':
+      return { bytes: 2, le: true };
+    case '2be':
+      return { bytes: 2, le: false };
+    case '4le':
+      return { bytes: 4, le: true };
+    case '4be':
+      return { bytes: 4, le: false };
+    case '8le':
+      return { bytes: 8, le: true };
+    case '8be':
+      return { bytes: 8, le: false };
+    default:
+      return { bytes: 1, le: false };
+  }
+}
+
 export function byteBits(b: number): string {
   return b.toString(2).padStart(8, '0');
 }
