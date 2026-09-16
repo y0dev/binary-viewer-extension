@@ -77,6 +77,23 @@ function isBitSpecs(fields: unknown): boolean {
   );
 }
 
+/**
+ * Expand one array's `items` as deeply as it chains — an element that is
+ * itself shorthand (`"int16[4][3]"`, peeled one bracket at a time by
+ * `expandShorthandField`) keeps expanding until it bottoms out, matching how
+ * the parser expands each nesting level as it descends at parse time.
+ */
+function expandItemDeep(item: FieldDefinition): FieldDefinition {
+  const f = expandShorthandField(item);
+  if (Array.isArray(f.fields) && !isBitSpecs(f.fields)) {
+    return { ...f, fields: expandShorthandDeep(f.fields as FieldDefinition[]) };
+  }
+  if (f.items) {
+    return { ...f, items: expandItemDeep(f.items) };
+  }
+  return f;
+}
+
 /** Recursively expand shorthand through `fields` and array `items`. */
 export function expandShorthandDeep(fields: FieldDefinition[]): FieldDefinition[] {
   return fields.map((raw) => {
@@ -86,10 +103,7 @@ export function expandShorthandDeep(fields: FieldDefinition[]): FieldDefinition[
       out.fields = expandShorthandDeep(f.fields as FieldDefinition[]);
     }
     if (f.items) {
-      const item = expandShorthandField(f.items);
-      out.items = Array.isArray(item.fields)
-        ? { ...item, fields: expandShorthandDeep(item.fields as FieldDefinition[]) }
-        : item;
+      out.items = expandItemDeep(f.items);
     }
     return out;
   });

@@ -71,6 +71,18 @@ describe('FieldSyntax.expandShorthandField', () => {
     assert.strictEqual(v.type, 'array');
     assert.strictEqual(v.count, 4);
   });
+  it('fully expands a 3-level chained shorthand array (not just one level into items)', () => {
+    const [f] = expandShorthandDeep([{ name: 'vol', type: 'int16[4][3][2]', offset: 0 }]);
+    assert.strictEqual(f.type, 'array');
+    assert.strictEqual(f.count, 2);
+    const plane = f.items!;
+    assert.strictEqual(plane.type, 'array');
+    assert.strictEqual(plane.count, 3);
+    const row = plane.items!;
+    assert.strictEqual(row.type, 'array');
+    assert.strictEqual(row.count, 4);
+    assert.strictEqual(row.items!.type, 'int16');
+  });
 });
 
 describe('shorthand — sizing, validation, parsing', () => {
@@ -88,6 +100,12 @@ describe('shorthand — sizing, validation, parsing', () => {
     );
     const bad = validateFormat({ name: 'x', fields: [{ name: 'c', type: 'notatype[8]', offset: 0 }] });
     assert.ok(bad.errors.some((e) => /not a known type/.test(e)));
+  });
+
+  it('accepts a 3-level chained shorthand array (a nested-array element, not just the top level)', () => {
+    const r = validateFormat({ name: 'x', fields: [{ name: 'vol', type: 'int16[4][3][2]', offset: 0 }] });
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.valid);
   });
 
   it('parses `float32[8]` — 8 float elements at the right offsets', () => {

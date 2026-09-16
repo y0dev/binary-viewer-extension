@@ -147,3 +147,46 @@ describe('FormatSchema.validateFormat — array view', () => {
     assert.ok(!r.warnings.some((w) => /no visible effect/.test(w)));
   });
 });
+
+describe('FormatSchema.validateFormat — constants', () => {
+  const withConstants = (constants: unknown) => ({
+    name: 'c',
+    constants,
+    fields: [{ name: 'a', type: 'uint8', offset: 0 }],
+  });
+
+  it('accepts numbers and "+"-sum strings, including a chain of them', () => {
+    const r = validateFormat(withConstants({ Mean: 10, Range: 5, Total: 'Mean + Range', Plus1: 'Total + 1' }));
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.valid);
+  });
+
+  it('rejects a non-object constants value', () => {
+    assert.ok(!validateFormat(withConstants([1, 2])).valid);
+    assert.ok(!validateFormat(withConstants('nope')).valid);
+  });
+
+  it('rejects an entry referencing an unknown name', () => {
+    const r = validateFormat(withConstants({ Total: 'Rows + Cols' }));
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /constants\.Total/.test(e)));
+  });
+
+  it('rejects a circular constant reference', () => {
+    const r = validateFormat(withConstants({ A: 'B + 1', B: 'A + 1' }));
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /circular/.test(e)));
+  });
+
+  it('a countField naming a constant does not warn as an unknown field', () => {
+    const r = validateFormat({
+      name: 'arr-const',
+      constants: { Size: 4 },
+      fields: [
+        { name: 'xs', type: 'array', offset: 0, countField: 'Size', items: { name: 'i', type: 'uint8' } },
+      ],
+    });
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.valid);
+  });
+});

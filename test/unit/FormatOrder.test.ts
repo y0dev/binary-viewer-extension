@@ -29,6 +29,7 @@ describe('reorderFormatKeys', () => {
       fileExtensions: ['.x'],
       magic: { offset: 0, bytes: '00' },
       baseAddress: '0x08000000',
+      constants: { Rows: 4 },
       structures: { Rec: { fields: [] } },
       sections: [{ name: 's', start: 0, length: 4 }],
       fields: [],

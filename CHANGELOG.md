@@ -1,5 +1,25 @@
 # Change Log
 
+## 0.15.0
+
+- **Named constants for array size.** A top-level `constants` map defines
+  values a field can reference by name — a plain number, or a `"+"`-separated
+  sum of other constants/numbers (e.g. `"Total": "Mean + Range"`). An array's
+  `countField` is checked against `constants` first, then falls back to the
+  existing "earlier decoded field" behavior, so existing formats are
+  unaffected. The form editor gets a **Constants** section (`+ Add Constant`)
+  above *Reusable structures*. Pure `core/FormatConstants.ts`.
+- **Nested arrays editable in the form, up to 3 dimensions.** The form
+  editor's array row now accepts a chained element type (`"int16[4][3]"`) and
+  no longer forces the "use JSON" warning for it — a fixed-size nested array
+  round-trips as shorthand text in the same element-type box, up to
+  `MAX_FORM_ARRAY_DEPTH` (3) dimensions total. Deeper nesting, a `countField`/
+  `view`/`description` at an inner level, or an array of an inline structure
+  still requires the JSON tab. Also fixes `FieldSyntax.expandShorthandDeep`
+  to fully expand a chained shorthand array (previously only one level into
+  `items`), so `FormatSchema.validateFormat` no longer misreports a 3+-level
+  chain as an unknown type.
+
 ## 0.14.0
 
 - **Consistent key order in generated format JSON.** The form editor's Save /

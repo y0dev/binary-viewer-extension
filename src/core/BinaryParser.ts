@@ -20,6 +20,7 @@ import { decodeBits } from './BitField';
 import { isContainerForm, containerChildren } from './FieldShape';
 import { expandShorthandField } from './FieldSyntax';
 import { resolveArrayView } from './ArrayView';
+import { resolveConstants } from './FormatConstants';
 import { byteBits, byteHex, offsetHex, bigintHex } from './humanize';
 
 export interface ByteWindow {
@@ -54,6 +55,8 @@ interface Ctx {
   maxNodes: number;
   maxArrayElements: number;
   timestamp: TimestampDefaults;
+  /** Resolved `format.constants` — name -> value (see `resolveArrayCount`). */
+  constants: Record<string, number>;
   idSeq: number;
   /** Stack of enclosing containers; the last entry is the current parent. */
   stack: Array<{ id: string | null; path: string[] }>;
@@ -131,6 +134,7 @@ export function parseFormat(
     maxNodes,
     maxArrayElements: arrayCap,
     timestamp: opts.timestamp ?? {},
+    constants: resolveConstants(format.constants).values,
     idSeq: 0,
     stack: [{ id: null, path: [] }],
   };
@@ -302,14 +306,18 @@ function parseField(ctx: Ctx, rawField: FieldDefinition, abs: number, depth: num
 
 /**
  * Resolve an `array` field's element count: an explicit `count` wins; otherwise
- * `countField` names an earlier integer field whose decoded value is used.
- * Returns `null` when `countField` is set but no such field was parsed.
+ * `countField` names either a format-level `constants` entry (checked first —
+ * a fixed, author-defined value) or an earlier decoded integer field (a
+ * runtime length prefix). Returns `null` when `countField` matches neither.
  */
 function resolveArrayCount(ctx: Ctx, field: FieldDefinition): number | null {
   if (field.count !== undefined) {
     return Math.max(0, Math.floor(field.count));
   }
   if (field.countField) {
+    if (Object.prototype.hasOwnProperty.call(ctx.constants, field.countField)) {
+      return Math.max(0, Math.floor(ctx.constants[field.countField]));
+    }
     for (let i = ctx.nodes.length - 1; i >= 0; i--) {
       const n = ctx.nodes[i];
       if (n.name === field.countField && typeof n.numericValue === 'number') {
@@ -390,7 +398,9 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   const resolved = resolveArrayCount(ctx, field);
   const count = resolved ?? 0;
   const countErr =
-    resolved === null ? `count field "${field.countField}" not found before this array` : undefined;
+    resolved === null
+      ? `"${field.countField}" is not a defined constant or an earlier field`
+      : undefined;
   // Static element size — reliable for scalars / fixed structs / fixed arrays,
   // but 0 when the element's size is only known at parse time (a nested array
   // sized by `countField`, or one missing `count`). The loop below advances by

@@ -13,6 +13,7 @@ import { parseNumericInput } from './humanize';
 import { hasType, isBitFieldForm, isContainerForm, containerChildren } from './FieldShape';
 import { expandShorthandDeep } from './FieldSyntax';
 import { looksLikeArrayView, isViewString } from './ArrayView';
+import { resolveConstants } from './FormatConstants';
 
 const COMPOSITE_TYPES = new Set([
   'bytes',
@@ -398,6 +399,7 @@ export function validateFormat(input: unknown): ValidationResult {
   }
 
   const structNames = validateStructuresMap(fmt.structures, result);
+  validateConstantsMap(fmt.constants, result);
 
   const hasFields = Array.isArray(fmt.fields) && fmt.fields.length > 0;
   const hasSections = Array.isArray(fmt.sections) && fmt.sections.length > 0;
@@ -523,6 +525,28 @@ function validateStructuresMap(
   }
 
   return names;
+}
+
+/** Validate the `constants` map (shape + each entry resolves cleanly). */
+function validateConstantsMap(constants: unknown, result: ValidationResult): void {
+  const { errors } = result;
+  if (constants === undefined) {
+    return;
+  }
+  if (typeof constants !== 'object' || constants === null || Array.isArray(constants)) {
+    errors.push('"constants" must be an object of { name: number | "A + B" }');
+    return;
+  }
+  for (const [name, value] of Object.entries(constants as Record<string, unknown>)) {
+    if (name.trim() === '') {
+      errors.push('a constant name must not be empty');
+    }
+    if (typeof value !== 'number' && typeof value !== 'string') {
+      errors.push(`constants["${name}"] must be a number or a string`);
+    }
+  }
+  const { errors: resolveErrors } = resolveConstants(constants as Record<string, number | string>);
+  errors.push(...resolveErrors);
 }
 
 const FLAGS_RE = /^[rwxa\- ]*$/i;

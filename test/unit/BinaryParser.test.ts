@@ -258,7 +258,52 @@ describe('BinaryParser — array countField (length prefix)', () => {
     };
     const { nodes, error } = parseFormat(bad, win([1, 2, 3]), { defaultEndianness: 'little' });
     assert.strictEqual(error, undefined);
-    assert.match(nodes[0].error ?? '', /count field "missing" not found/);
+    assert.match(nodes[0].error ?? '', /"missing" is not a defined constant or an earlier field/);
+  });
+
+  it('resolves countField against a format-level constant first', () => {
+    const withConst: FormatDefinition = {
+      name: 'lp-const',
+      endianness: 'little',
+      constants: { Size: 3 },
+      fields: [
+        { name: 'values', type: 'array', offset: 0, countField: 'Size', items: { name: 'v', type: 'uint8' } },
+      ],
+    };
+    const { nodes, error } = parseFormat(withConst, win([10, 11, 12, 0xff]), {
+      defaultEndianness: 'little',
+    });
+    assert.strictEqual(error, undefined);
+    const arr = nodes.find((n) => n.name === 'values')!;
+    assert.strictEqual(arr.value, '3 elements');
+    assert.strictEqual(arr.error, undefined);
+  });
+
+  it('resolves a derived ("A + B") constant used as countField', () => {
+    const withConst: FormatDefinition = {
+      name: 'lp-const-sum',
+      endianness: 'little',
+      constants: { Mean: 2, Range: 1, Size: 'Mean + Range' },
+      fields: [
+        { name: 'values', type: 'array', offset: 0, countField: 'Size', items: { name: 'v', type: 'uint8' } },
+      ],
+    };
+    const { nodes } = parseFormat(withConst, win([10, 11, 12]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '3 elements');
+  });
+
+  it('falls back to an earlier decoded field when countField does not match a constant', () => {
+    const withConst: FormatDefinition = {
+      name: 'lp-fallback',
+      endianness: 'little',
+      constants: { Unrelated: 99 },
+      fields: [
+        { name: 'n', type: 'uint8', offset: 0 },
+        { name: 'values', type: 'array', offset: 1, countField: 'n', items: { name: 'v', type: 'uint8' } },
+      ],
+    };
+    const { nodes } = parseFormat(withConst, win([2, 10, 11, 0xff]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '2 elements');
   });
 
   it('an explicit count still wins over countField', () => {

@@ -19,6 +19,7 @@ only describe a wrong layout.
   "endianness": "little",              // optional, default "little"
   "baseAddress": "0x08000000",         // optional — offset columns shown relative to this
   "magic": { "offset": 0, "bytes": "46 57 01 00" },  // optional, see below
+  "constants": { "Rows": 4, "Total": "Rows + 1" },   // optional, see "Constants" below
   "fields": [ /* FieldDefinition[] */ ],   // fields OR sections must be present
   "sections": [ /* SectionDefinition[] */ ] // optional, memory-map view
 }
@@ -171,6 +172,38 @@ structure — this is the easy way to describe a **large array of records**:
 }
 ```
 
+## Constants
+
+A top-level `constants` map defines named values a field can reference by
+name — most usefully as an array's `countField`, for a fixed size that isn't
+decoded from the file:
+
+```jsonc
+{
+  "name": "Grid",
+  "constants": {
+    "Rows": 4,
+    "Cols": 8,
+    "Total": "Rows + Cols"   // a "+"-separated sum of other constants/numbers
+  },
+  "fields": [
+    { "name": "cell", "type": "array", "offset": 0,
+      "countField": "Rows", "items": { "name": "v", "type": "uint8" } }
+  ]
+}
+```
+
+- A value is a plain number, or a string summing named constants and/or
+  literal integers with `+` (e.g. `"Mean + Range"`, `"Rows + 1"`). That's the
+  only operation supported — it stays declarative data, never code to
+  execute. A constant may reference another constant; cycles are rejected.
+- `countField` is checked against `constants` **first**, then against an
+  earlier decoded field (the original length-prefix behavior) — so existing
+  formats keep working unchanged, and a name only needs to be a constant
+  *or* a field, not both.
+- The form editor has its own **Constants** section (above *Reusable
+  structures*) for defining these without touching JSON.
+
 ## Array shorthand — `type: "<base>[<n>]"`
 
 Any type may be written as `<base>[<n>]` to mean "a fixed run of *n*":
@@ -185,8 +218,12 @@ Any type may be written as `<base>[<n>]` to mean "a fixed run of *n*":
 | `"bytes[12]"` / `"binary[8]"` | `{ "type": "bytes"/"binary", "size": N }` |
 
 It works anywhere a `type` does — a top-level field, a structure field, or an
-array's `items`. The form editor's **+ Add Array** produces the same thing and
-round-trips shorthand you type by hand.
+array's `items`. It also chains for a nested array — `"int16[4][3][2]"` is a
+2×3×4 grid of `int16` (the rightmost bracket is the outermost dimension). The
+form editor's **+ Add Array** produces the same thing and round-trips
+shorthand you type by hand, including a chained element type (e.g. typing
+`"int16[4][3]"` as the element type of a count-2 array) up to 3 dimensions
+total — deeper nesting, or an array of an inline structure, needs the JSON tab.
 
 ## FieldDefinition
 
@@ -199,7 +236,7 @@ round-trips shorthand you type by hand.
 | `size` | structure, `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width (structure: total size; omitted ⇒ computed from children) |
 | `length` | strings, `char` | number of characters / code units |
 | `count` | `array` | fixed element count |
-| `countField` | `array` | name of an earlier integer field to read the element count from (a length prefix); `count` wins if both are set |
+| `countField` | `array` | name to read the element count from — checked against a top-level `constants` entry first, then an earlier decoded integer field (a length prefix); `count` wins if either is set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
 | `view` | `array` | which element indices the Structure view renders — `{ start, end }` (0-based, inclusive) or the shorthand string `"start...end"`; doesn't affect the array's actual count/size/offsets |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
@@ -242,9 +279,10 @@ round-trips shorthand you type by hand.
   ms. When `epoch` is omitted the `binaryViewer.timestamp.defaultEpoch` setting
   applies. `binaryViewer.timestamp.displayUTC` picks UTC (default) vs local time.
 - `struct` — nested record; `fields` offsets are relative to the struct's start
-- `array` — `count` elements of `items`; or set `countField` to the name of an
-  earlier integer field (in the same or an enclosing structure) to size the
-  array from a decoded length prefix:
+- `array` — `count` elements of `items`; or set `countField` to a name to size
+  the array from — a `constants` entry (see [Constants](#constants) above) or
+  an earlier integer field (in the same or an enclosing structure), checked in
+  that order:
 
   ```jsonc
   { "name": "n",      "type": "uint16", "offset": 0 },
@@ -352,6 +390,9 @@ Size, and (for primitives) Type / Length / Endianness. Use:
 
 - **`+ Add Field`** / **`+ Add Array`** / **`+ Add Structure`** at the top level,
   and the same three inside every structure;
+- **Constants** — a top-level section with **`+ Add Constant`** for named
+  values (see [Constants](#constants) above); reference one by name in an
+  array's Count/CountField box;
 - **Reusable structures** — a top-level section with **`+ Add Structure
   Definition`**. Any structure you define here appears in every type dropdown
   (grouped under *structures*), so an array of records is just

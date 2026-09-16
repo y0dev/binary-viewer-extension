@@ -73,10 +73,16 @@ in the hex view. Works with a fields-based format or a sections-only one.
   (`"type": "Sample"`, or `"Sample[100]"` for an array of them).
 - **Array shorthand** — write any type as `<base>[<n>]`: `"float32[8]"`,
   `"int16[24]"`, `"Sample[100]"`, `"char[4]"`.
-- **Length-prefixed arrays** — `"countField": "n"` sizes an array from an earlier
-  integer field's decoded value instead of a fixed `count`.
+- **Length-prefixed arrays** — `"countField": "n"` sizes an array from a
+  top-level `constants` entry, or (failing that) an earlier integer field's
+  decoded value, instead of a fixed `count`.
+- **Constants** — a top-level `constants` map of named values (a number, or a
+  `"+"`-separated sum of other constants) a field can reference by name, e.g.
+  for an array's `countField`.
 - **Array views** — `"view": "20...35"` renders just that slice of a big array
   in the Structure view; the array's own count/size/offsets are unaffected.
+- **Nested arrays in the form** — a chained element type (`"int16[4][3]"`) is
+  form-editable up to 3 dimensions; deeper nesting needs the JSON tab.
 - **Format editor** — build fields, **arrays** (`+ Add Array` → count → element
   type), and nested/reusable structures visually; reorder, **duplicate** a row
   and its subtree, move in/out, collapse; live validation; import / export JSON.

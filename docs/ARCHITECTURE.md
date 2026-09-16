@@ -22,6 +22,7 @@
 │           FieldSyntax ("float32[8]" shorthand), ArrayView (array `view`    │
 │           windows), FieldColors (raw-view highlight ranges),               │
 │           FormatOrder (canonical top-level key order),                     │
+│           FormatConstants (named `constants` values, e.g. for countField), │
 │           BinaryField, BinaryParser, FormatSchema (+ validateFormatText),  │
 │           FormatResolve (inline reusable `structures`),                    │
 │           FormatDetector, FormatMerge (name/filename precedence,           │

@@ -95,10 +95,11 @@ export interface FieldDefinition {
   /** For `array`: number of elements. Mutually exclusive with `countField`. */
   count?: number;
   /**
-   * For `array`: take the element count from the decoded value of an earlier
-   * integer field with this name (a length prefix). The field must be parsed
-   * before this array — an earlier sibling, or a field in an enclosing
-   * structure. `count`, when present, wins.
+   * For `array`: take the element count from a name — checked first against
+   * the format's top-level `constants` (a fixed, author-defined value), then
+   * against an earlier decoded integer field with this name (a length
+   * prefix; must be parsed before this array — an earlier sibling, or a
+   * field in an enclosing structure). `count`, when present, wins.
    */
   countField?: string;
   /** For `array`: the element type (a nested field definition without a name is allowed). */
@@ -217,6 +218,14 @@ export interface FormatDefinition {
    * arrays of records.
    */
   structures?: Record<string, StructBody>;
+  /**
+   * Named constant values a field can reference by name — most usefully as
+   * an array's `countField`, for a fixed size that isn't decoded from the
+   * file (e.g. `"Rows": 4, "Cols": 8, "Total": "Rows + Cols"`). A value is
+   * either a plain number or a string summing other constants/integers with
+   * `+`. Never executable code — see `core/FormatConstants`.
+   */
+  constants?: Record<string, number | string>;
   /** Top-level fields. Optional when `sections` is provided. */
   fields?: FieldDefinition[];
   /** Named regions for the Sections / memory-map view. */

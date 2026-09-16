@@ -73,6 +73,8 @@ interface Model {
   endianness: 'little' | 'big';
   magicOffset: string;
   magicBytes: string;
+  /** Named values a field can reference (e.g. an array's countField) — the top-level `constants` map. */
+  constants: { id: string; name: string; value: string }[];
   structs: EditStruct[];
   tree: EditNode[];
   /** Raw JSON text for the `sections` array (memory-map view). '' == none. */
@@ -215,6 +217,82 @@ function cloneNode(n: EditNode): EditNode {
   };
 }
 
+/** Element types shorthand never expands to an array (a string/sized type instead). */
+const STRING_OR_SIZED = new Set(['char', 'ascii', 'utf8', 'utf16', 'string', 'bytes', 'hex', 'binary', 'padding']);
+
+/** How many `[n]` levels deep `type` chains, e.g. `shorthandDepth("int16[4][3]") === 2`. 0 = not shorthand. */
+function shorthandDepth(type: string | undefined): number {
+  let depth = 0;
+  let cur = type;
+  for (;;) {
+    const m = parseArrayShorthand(cur);
+    if (!m || STRING_OR_SIZED.has(m.base)) {
+      break;
+    }
+    depth++;
+    cur = m.base;
+  }
+  return depth;
+}
+
+interface CollapsedArray {
+  /** A single shorthand type string equivalent to `f`, e.g. "int16[4][3]". */
+  typeString: string;
+  /** Array dimensions encoded in `typeString`, including `f` itself. */
+  depth: number;
+}
+
+/**
+ * Try to express array-shaped `f` — written with the "<base>[<n>]" shorthand
+ * or the explicit `{ type: 'array', count, items }` form — as one shorthand
+ * type string, so the form can show/edit it as plain text no matter how deep
+ * it nests (a string always round-trips through a text box losslessly). An
+ * explicit level only collapses when it has nothing beyond `type`/`count`/
+ * `items` — `countField`, `view`, `size` or `description` at that level need
+ * the JSON tab instead. Returns `null` when `f` isn't array-shaped, or a
+ * level can't be expressed as text.
+ */
+function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
+  const sh = parseArrayShorthand(f.type);
+  if (sh && !STRING_OR_SIZED.has(sh.base)) {
+    return { typeString: f.type as string, depth: shorthandDepth(f.type) };
+  }
+  if (f.type !== 'array') {
+    return null;
+  }
+  if (
+    f.countField !== undefined ||
+    f.view !== undefined ||
+    f.size !== undefined ||
+    f.description !== undefined ||
+    f.endianness !== undefined ||
+    typeof f.count !== 'number' ||
+    !f.items
+  ) {
+    return null;
+  }
+  const inner = tryCollapseArray(f.items);
+  if (inner) {
+    return { typeString: `${inner.typeString}[${f.count}]`, depth: inner.depth + 1 };
+  }
+  // Bottom of the chain: `items` must be a plain scalar/struct-name field —
+  // nothing else a shorthand string could carry (a bit-field breakdown is
+  // fine; it isn't part of the type string either way).
+  const items = f.items;
+  if (
+    items.type === undefined ||
+    items.countField !== undefined ||
+    items.view !== undefined ||
+    items.size !== undefined ||
+    items.description !== undefined ||
+    items.endianness !== undefined ||
+    (Array.isArray(items.fields) && !looksLikeBitSpecs(items.fields))
+  ) {
+    return null;
+  }
+  return { typeString: `${items.type}[${f.count}]`, depth: 1 };
+}
+
 function fieldToNode(f: FieldDefinition): EditNode {
   if (isNestedStructure(f)) {
     const node = emptyNode('struct');
@@ -227,7 +305,6 @@ function fieldToNode(f: FieldDefinition): EditNode {
     return node;
   }
   const shorthand = parseArrayShorthand(f.type);
-  const STRING_OR_SIZED = new Set(['char', 'ascii', 'utf8', 'utf16', 'string', 'bytes', 'hex', 'binary', 'padding']);
   if (f.type === 'array' || (shorthand && !STRING_OR_SIZED.has(shorthand.base))) {
     const node = emptyNode('array');
     node.name = f.name ?? '';
@@ -239,7 +316,14 @@ function fieldToNode(f: FieldDefinition): EditNode {
     } else {
       node.count =
         f.count !== undefined ? String(f.count) : typeof f.countField === 'string' ? f.countField : '';
-      node.type = f.items?.type ?? 'uint8';
+      if (f.items && f.items.type === 'array') {
+        // Explicit nested-array items — show as shorthand text when it fits
+        // cleanly, so it's editable in the same box rather than reading "array".
+        const collapsed = tryCollapseArray(f.items);
+        node.type = collapsed ? collapsed.typeString : 'array';
+      } else {
+        node.type = f.items?.type ?? 'uint8';
+      }
       node.size =
         f.items?.size !== undefined ? String(f.items.size) : f.size !== undefined ? String(f.size) : '';
     }
@@ -276,30 +360,21 @@ function fieldToNode(f: FieldDefinition): EditNode {
   return node;
 }
 
+/** Array nesting depth the form's single element-type text box still allows — see `tryCollapseArray`. */
+const MAX_FORM_ARRAY_DEPTH = 3;
+
 /**
- * True when the visual tree editor can round-trip every field. The form has no
- * UI for an array whose element is itself an array or an inline structure
- * (multi-dimensional arrays, `items: { fields: [...] }`) — those must be edited
- * as JSON so no detail is silently dropped.
+ * True when the visual tree editor can round-trip every field. A nested array
+ * (up to `MAX_FORM_ARRAY_DEPTH` dimensions) round-trips as shorthand text in
+ * the element-type box — see `tryCollapseArray`. The form still has no UI for
+ * an array of an inline structure (`items: { fields: [...] }`) or nesting
+ * deeper than that cap; those must be edited as JSON so no detail is silently
+ * dropped.
  */
 function formCanRepresent(def: FormatDefinition | null): boolean {
   if (!def) {
     return true;
   }
-  const STRING_OR_SIZED = new Set(['char', 'ascii', 'utf8', 'utf16', 'string', 'bytes', 'hex', 'binary', 'padding']);
-  const itemIsComplex = (items: FieldDefinition | undefined): boolean => {
-    if (!items) {
-      return false;
-    }
-    if (items.type === 'array') {
-      return true;
-    }
-    const sh = parseArrayShorthand(items.type);
-    if (sh && !STRING_OR_SIZED.has(sh.base)) {
-      return true;
-    }
-    return Array.isArray(items.fields) && !looksLikeBitSpecs(items.fields);
-  };
   // A `view` object with only one of start/end can't round-trip through the
   // form's single "start...end" text box.
   const viewIsPartialObject = (view: FieldDefinition['view']): boolean =>
@@ -311,8 +386,11 @@ function formCanRepresent(def: FormatDefinition | null): boolean {
     for (const f of fields ?? []) {
       const sh = parseArrayShorthand(f.type);
       const isArray = f.type === 'array' || (sh && !STRING_OR_SIZED.has(sh.base));
-      if (isArray && itemIsComplex(f.items)) {
-        return false;
+      if (isArray) {
+        const collapsed = tryCollapseArray(f);
+        if (!collapsed || collapsed.depth > MAX_FORM_ARRAY_DEPTH) {
+          return false;
+        }
       }
       if (isArray && viewIsPartialObject(f.view)) {
         return false;
@@ -361,6 +439,11 @@ function toModel(def: FormatDefinition | null): Model {
     endianness: def?.endianness ?? 'little',
     magicOffset: magic ? String(magic.offset) : '',
     magicBytes: magic?.bytes ?? '',
+    constants: Object.entries(def?.constants ?? {}).map(([name, value]) => ({
+      id: uid(),
+      name,
+      value: String(value),
+    })),
     structs: Object.entries(def?.structures ?? {}).map(([name, body]) => ({
       id: uid(),
       name,
@@ -428,7 +511,8 @@ function nodeToField(node: EditNode): FieldDefinition {
     if (countNum !== undefined) {
       f.count = countNum;
     } else if (countField) {
-      // A non-numeric value names an earlier field to take the length from.
+      // A non-numeric value names a constant, or (failing that) an earlier
+      // field, to take the length from — see FormatConstants.
       f.countField = countField;
     } else {
       f.count = 0;
@@ -521,6 +605,20 @@ function buildDefinition(): FormatDefinition {
     fields: model.tree.map(nodeToField),
     endianness: model.endianness,
   };
+
+  const constants: Record<string, number | string> = {};
+  for (const c of model.constants) {
+    const key = c.name.trim();
+    const value = c.value.trim();
+    if (!key || !value) {
+      continue;
+    }
+    const n = Number(value);
+    constants[key] = Number.isFinite(n) && /^-?\d+(\.\d+)?$/.test(value) ? n : value;
+  }
+  if (Object.keys(constants).length) {
+    def.constants = constants;
+  }
 
   const structs: Record<string, { fields: FieldDefinition[]; description?: string }> = {};
   for (const s of model.structs) {
@@ -921,7 +1019,7 @@ function render(): void {
       el('div', {
         class: 'fe-warn',
         text:
-          'This format has fields the form can’t fully show — a multi-dimensional array, or an array whose element is an inline structure. Editing here may drop that detail. Use the JSON tab to keep it.',
+          `This format has fields the form can’t fully show — an array nested more than ${MAX_FORM_ARRAY_DEPTH} deep, an array with a countField/view/description at an inner level, or an array whose element is an inline structure. Editing here may drop that detail. Use the JSON tab to keep it.`,
       }),
     );
   }
@@ -973,6 +1071,52 @@ function render(): void {
     ]),
   );
 
+  // ---- constants ----
+  wrap.append(el('h2', { text: 'Constants' }));
+  wrap.append(
+    el('div', {
+      class: 'fe-hint',
+      text: 'Named values a field can reference by name — most useful in an array\'s Count/CountField box (checked before an earlier field name). A value is a number, or a "+"-separated sum of other constant names/numbers, e.g. "Mean + Range".',
+    }),
+  );
+  const constantsWrap = el('div', { class: 'fe-tree' });
+  for (const c of model.constants) {
+    constantsWrap.append(
+      el('div', { class: 'fe-row fe-enum-row' }, [
+        el('input', {
+          type: 'text',
+          value: c.name,
+          placeholder: 'name, e.g. Rows',
+          oninput: (e) => {
+            c.name = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }),
+        el('span', { class: 'fe-inline-label', text: '=' }),
+        el('input', {
+          type: 'text',
+          value: c.value,
+          placeholder: 'e.g. 4  or  Mean + Range',
+          oninput: (e) => {
+            c.value = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }),
+        iconBtn('✕', 'Remove constant', () => {
+          model.constants = model.constants.filter((x) => x.id !== c.id);
+          changed();
+        }),
+      ]),
+    );
+  }
+  wrap.append(constantsWrap);
+  wrap.append(
+    addRow(0, [['+ Add Constant', () => {
+      model.constants.push({ id: uid(), name: '', value: '' });
+      changed();
+    }]]),
+  );
+
   // ---- reusable structures ----
   wrap.append(el('h2', { text: 'Reusable structures' }));
   wrap.append(
@@ -1004,7 +1148,7 @@ function render(): void {
   wrap.append(
     el('div', {
       class: 'fe-hint',
-      text: 'For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. In JSON you can also write the type as "float32[8]" (or "int16[24]", "Sample[100]" for a reusable structure). For a length-prefixed array, put the name of an earlier integer field in the count box instead of a number. For a large array, use the array row\'s view box (e.g. "20...35") to render only that slice in the Structure view — the array itself is unaffected.',
+      text: `For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. For a nested array (up to ${MAX_FORM_ARRAY_DEPTH} dimensions) type a chained element type like "int16[4][3]" instead of a plain type. In the count box, a name is checked against Constants first, then an earlier integer field (length-prefixed array). For a large array, use the array row's view box (e.g. "20...35") to render only that slice in the Structure view — the array itself is unaffected.`,
     }),
   );
   const tree = el('div', { class: 'fe-tree' });
@@ -1083,7 +1227,7 @@ function renderJsonMode(wrap: HTMLElement): void {
   wrap.append(
     el('div', {
       class: 'fe-hint',
-      text: 'Edit the whole definition as JSON — a single object, or an array of objects. Everything the form supports plus multi-dimensional arrays, countField, and reusable structures. Switch to the form when it can represent what you have.',
+      text: `Edit the whole definition as JSON — a single object, or an array of objects. Everything the form supports plus arrays nested deeper than ${MAX_FORM_ARRAY_DEPTH}, an array of an inline structure, countField, and reusable structures. Switch to the form when it can represent what you have.`,
     }),
   );
   const ta = el('textarea', {

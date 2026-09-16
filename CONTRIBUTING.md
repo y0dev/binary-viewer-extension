@@ -63,7 +63,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
 - `src/core/` — pure, dependency-free logic: data types, bit fields, field-shape
   classification, `FieldSyntax` (`"float32[8]"` shorthand), `ArrayView` (the
   array `view` window), `FieldColors` (raw-view highlight ranges),
-  `FormatOrder` (canonical top-level key order), the parser,
+  `FormatOrder` (canonical top-level key order), `FormatConstants` (named
+  `constants` values, e.g. for an array's `countField`), the parser,
   `FormatSchema` (+ `validateFormatText`), `FormatResolve` (inline reusable
   `structures`), `FormatDetector`, `FormatMerge` (name/filename precedence +
   `isFormatFilePath`), `Sections` (memory-map rows), `FormatScaffold`, the

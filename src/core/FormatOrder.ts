@@ -20,6 +20,7 @@ export const FORMAT_KEY_ORDER: ReadonlyArray<keyof FormatDefinition> = [
   'fileExtensions',
   'magic',
   'baseAddress',
+  'constants',
   'structures',
   'sections',
   'fields',

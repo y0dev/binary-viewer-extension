@@ -85,18 +85,24 @@ name, endianness, magic bytes, then **+ Add Field / Array / Enum / Structure**
 (or just type `array` / `struct` into a field's type box — it switches that
 row to the right kind and reveals the controls it needs). Type boxes accept a
 scalar, a structure name, or a shorthand (`float32[8]`, `int16[4]` for nested
-arrays, `Sample[100]`). Enum fields get a value → label table; timestamp
-fields get size/unit/epoch dropdowns — no JSON needed for either. **Save**
-writes to the format's file (shown in the **File:** row — **Change file…**
-redirects it); a brand-new format writes to global storage on first save.
-**Save draft** saves even with validation errors, always as a separate
-global-storage copy so it can't clobber a real file with something invalid.
+arrays, `Sample[100]`) — a chained shorthand like `int16[4][3]` as an array's
+element type gives a nested array (up to 3 dimensions total in the form).
+Enum fields get a value → label table; timestamp fields get size/unit/epoch
+dropdowns — no JSON needed for either. The **Constants** section defines named
+values you can reference by name in an array's Count/CountField box (checked
+before an earlier field name) — handy for a fixed size that isn't decoded
+from the file. **Save** writes to the format's file (shown in the **File:**
+row — **Change file…** redirects it); a brand-new format writes to global
+storage on first save. **Save draft** saves even with validation errors,
+always as a separate global-storage copy so it can't clobber a real file with
+something invalid.
 
 **Prefer JSON?** The editor's **JSON** tab edits the whole definition as text
-— it opens there automatically for anything the form can't fully draw (a
-multi-dimensional array, or an array of an inline structure). **Open JSON
-file…**, next to the tabs in either mode, starts the editor from an existing
-definition on disk instead of the blank template, and ties future saves to it.
+— it opens there automatically for anything the form can't fully draw (an
+array nested more than 3 deep, or an array of an inline structure). **Open
+JSON file…**, next to the tabs in either mode, starts the editor from an
+existing definition on disk instead of the blank template, and ties future
+saves to it.
 
 Walkthrough of a real format end-to-end: [Creating a binary
 format](CREATING_A_FORMAT.md). Full field/type reference:
@@ -148,6 +154,11 @@ Settings UI (search `Binary Viewer`).
   (length-prefixed) array, the decode window auto-widens to the whole file
   (capped at 8 MB); a file bigger than that with dynamic content past 8 MB
   will still show this for the tail.
+- **A `countField` array shows `"<name>" is not a defined constant or an
+  earlier field`** — the name in `countField` didn't match a top-level
+  `constants` entry (checked first) or an earlier decoded integer field
+  (checked second, same or an enclosing structure, parsed before this array).
+  Check the spelling against whichever you meant.
 - **An array is truncated with "… N more not shown"** — raise
   `binaryViewer.structure.maxArrayElements` (`0` = no limit); it's the
   authoritative cap, so raising it always shows more. To only ever look at one
