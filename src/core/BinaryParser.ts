@@ -304,29 +304,52 @@ function parseField(ctx: Ctx, rawField: FieldDefinition, abs: number, depth: num
   return size;
 }
 
+/** A literal integer, a `constants` entry, or an earlier decoded field's numeric value. */
+function resolveCountTerm(ctx: Ctx, term: string): number | undefined {
+  if (/^-?\d+$/.test(term)) {
+    return Number(term);
+  }
+  if (Object.prototype.hasOwnProperty.call(ctx.constants, term)) {
+    return ctx.constants[term];
+  }
+  for (let i = ctx.nodes.length - 1; i >= 0; i--) {
+    const n = ctx.nodes[i];
+    if (n.name === term && typeof n.numericValue === 'number') {
+      return n.numericValue;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Resolve an `array` field's element count: an explicit `count` wins; otherwise
- * `countField` names either a format-level `constants` entry (checked first —
- * a fixed, author-defined value) or an earlier decoded integer field (a
- * runtime length prefix). Returns `null` when `countField` matches neither.
+ * `countField` is a `"+"`-separated sum of terms — each one a literal integer,
+ * a format-level `constants` entry (a fixed, author-defined value), or an
+ * earlier decoded integer field (a runtime length prefix, in the same or an
+ * enclosing structure) — so `"Number of Dogs + Number of Cats"` sums two
+ * decoded header fields directly. Returns `null` (with `badTerm` set) when a
+ * term matches none of those.
  */
-function resolveArrayCount(ctx: Ctx, field: FieldDefinition): number | null {
+function resolveArrayCount(ctx: Ctx, field: FieldDefinition): { count: number | null; badTerm?: string } {
   if (field.count !== undefined) {
-    return Math.max(0, Math.floor(field.count));
+    return { count: Math.max(0, Math.floor(field.count)) };
   }
   if (field.countField) {
-    if (Object.prototype.hasOwnProperty.call(ctx.constants, field.countField)) {
-      return Math.max(0, Math.floor(ctx.constants[field.countField]));
+    const terms = field.countField.split('+').map((t) => t.trim());
+    if (terms.length === 0 || terms.some((t) => t === '')) {
+      return { count: null, badTerm: field.countField };
     }
-    for (let i = ctx.nodes.length - 1; i >= 0; i--) {
-      const n = ctx.nodes[i];
-      if (n.name === field.countField && typeof n.numericValue === 'number') {
-        return Math.max(0, Math.floor(n.numericValue));
+    let sum = 0;
+    for (const term of terms) {
+      const v = resolveCountTerm(ctx, term);
+      if (v === undefined) {
+        return { count: null, badTerm: term };
       }
+      sum += v;
     }
-    return null;
+    return { count: Math.max(0, Math.floor(sum)) };
   }
-  return 0;
+  return { count: 0 };
 }
 
 function describeScalar(raw: number | bigint | boolean, sizeBytes: number, category: string): string {
@@ -395,11 +418,11 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
 
 function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
   const item = field.items!;
-  const resolved = resolveArrayCount(ctx, field);
+  const { count: resolved, badTerm } = resolveArrayCount(ctx, field);
   const count = resolved ?? 0;
   const countErr =
     resolved === null
-      ? `"${field.countField}" is not a defined constant or an earlier field`
+      ? `"${badTerm}" is not a defined constant or an earlier field`
       : undefined;
   // Static element size — reliable for scalars / fixed structs / fixed arrays,
   // but 0 when the element's size is only known at parse time (a nested array

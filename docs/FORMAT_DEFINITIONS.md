@@ -196,11 +196,15 @@ decoded from the file:
 - A value is a plain number, or a string summing named constants and/or
   literal integers with `+` (e.g. `"Mean + Range"`, `"Rows + 1"`). That's the
   only operation supported — it stays declarative data, never code to
-  execute. A constant may reference another constant; cycles are rejected.
-- `countField` is checked against `constants` **first**, then against an
-  earlier decoded field (the original length-prefix behavior) — so existing
-  formats keep working unchanged, and a name only needs to be a constant
-  *or* a field, not both.
+  execute. A constant may reference another constant; cycles are rejected. A
+  name can contain spaces (`"Number of Dogs"`) — it just can't contain a
+  literal `+`.
+- **A constant is fixed at format-authoring time — it never sees decoded file
+  bytes.** If the values you want to add are themselves fields in the file
+  (e.g. a header stores "number of dogs" and "number of cats" as bytes), don't
+  put them in `constants` — sum the **field names** directly in `countField`
+  instead (see below). `constants` is for a size the format author picked
+  ahead of time, not one read from the file.
 - The form editor has its own **Constants** section (above *Reusable
   structures*) for defining these without touching JSON.
 
@@ -236,7 +240,7 @@ total — deeper nesting, or an array of an inline structure, needs the JSON tab
 | `size` | structure, `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width (structure: total size; omitted ⇒ computed from children) |
 | `length` | strings, `char` | number of characters / code units |
 | `count` | `array` | fixed element count |
-| `countField` | `array` | name to read the element count from — checked against a top-level `constants` entry first, then an earlier decoded integer field (a length prefix); `count` wins if either is set |
+| `countField` | `array` | a `"+"`-separated sum of terms to read the element count from (a single name is just a one-term sum) — each term is a literal integer, a top-level `constants` entry, or an earlier decoded integer field (a length prefix); `count` wins if it's also set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
 | `view` | `array` | which element indices the Structure view renders — `{ start, end }` (0-based, inclusive) or the shorthand string `"start...end"`; doesn't affect the array's actual count/size/offsets |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
@@ -279,15 +283,28 @@ total — deeper nesting, or an array of an inline structure, needs the JSON tab
   ms. When `epoch` is omitted the `binaryViewer.timestamp.defaultEpoch` setting
   applies. `binaryViewer.timestamp.displayUTC` picks UTC (default) vs local time.
 - `struct` — nested record; `fields` offsets are relative to the struct's start
-- `array` — `count` elements of `items`; or set `countField` to a name to size
-  the array from — a `constants` entry (see [Constants](#constants) above) or
-  an earlier integer field (in the same or an enclosing structure), checked in
-  that order:
+- `array` — `count` elements of `items`; or set `countField` to a `"+"`-sum of
+  terms to size the array from. Each term is a literal integer, a `constants`
+  entry (see [Constants](#constants) above), or an earlier integer field (in
+  the same or an enclosing structure) — checked in that order, term by term:
 
   ```jsonc
   { "name": "n",      "type": "uint16", "offset": 0 },
   { "name": "values", "type": "array",  "offset": 2,
     "countField": "n", "items": { "name": "v", "type": "float32" } }
+  ```
+
+  A single name is just a one-term sum, so this is backward compatible with
+  every existing `countField` format. Summing two *decoded* fields — say a
+  header stores dog and cat counts separately and you want one array sized by
+  the total — needs no `constants` at all, just name both fields:
+
+  ```jsonc
+  { "name": "Number of Dogs", "type": "uint8", "offset": 0 },
+  { "name": "Number of Cats", "type": "uint8", "offset": 1 },
+  { "name": "animals", "type": "array", "offset": 2,
+    "countField": "Number of Dogs + Number of Cats",
+    "items": { "name": "id", "type": "uint8" } }
   ```
 
   A following packed field lands after the resolved run. The Structure view's

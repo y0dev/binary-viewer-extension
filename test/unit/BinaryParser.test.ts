@@ -334,6 +334,73 @@ describe('BinaryParser — array countField (length prefix)', () => {
     assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '2 elements');
   });
 
+  it('sums two decoded header fields directly as countField (no constants involved)', () => {
+    const fmt: FormatDefinition = {
+      name: 'animal-census',
+      endianness: 'little',
+      fields: [
+        { name: 'Number of Dogs', type: 'uint8', offset: 0 },
+        { name: 'Number of Cats', type: 'uint8', offset: 1 },
+        {
+          name: 'animals',
+          type: 'array',
+          offset: 2,
+          countField: 'Number of Dogs + Number of Cats',
+          items: { name: 'id', type: 'uint8' },
+        },
+      ],
+    };
+    const { nodes, error } = parseFormat(
+      fmt,
+      win([3, 5, 10, 11, 12, 13, 14, 15, 16, 17]),
+      { defaultEndianness: 'little' },
+    );
+    assert.strictEqual(error, undefined);
+    const arr = nodes.find((n) => n.name === 'animals')!;
+    assert.strictEqual(arr.value, '8 elements');
+    assert.strictEqual(arr.error, undefined);
+  });
+
+  it('mixes a constant and a decoded field in the same countField sum', () => {
+    const fmt: FormatDefinition = {
+      name: 'mixed-sum',
+      endianness: 'little',
+      constants: { Extra: 1 },
+      fields: [
+        { name: 'n', type: 'uint8', offset: 0 },
+        {
+          name: 'values',
+          type: 'array',
+          offset: 1,
+          countField: 'n + Extra',
+          items: { name: 'v', type: 'uint8' },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([2, 10, 11, 12, 0xff]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '3 elements');
+  });
+
+  it('reports the specific failing term in a countField sum', () => {
+    const fmt: FormatDefinition = {
+      name: 'bad-sum',
+      endianness: 'little',
+      fields: [
+        { name: 'n', type: 'uint8', offset: 0 },
+        {
+          name: 'values',
+          type: 'array',
+          offset: 1,
+          countField: 'n + Missing',
+          items: { name: 'v', type: 'uint8' },
+        },
+      ],
+    };
+    const { nodes, error } = parseFormat(fmt, win([2, 10, 11]), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    assert.match(nodes.find((n) => n.name === 'values')!.error ?? '', /"Missing" is not a defined constant or an earlier field/);
+  });
+
   it('an explicit count still wins over countField', () => {
     const both: FormatDefinition = {
       name: 'both',

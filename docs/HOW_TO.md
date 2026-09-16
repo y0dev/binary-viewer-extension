@@ -88,10 +88,12 @@ scalar, a structure name, or a shorthand (`float32[8]`, `int16[4]` for nested
 arrays, `Sample[100]`) — a chained shorthand like `int16[4][3]` as an array's
 element type gives a nested array (up to 3 dimensions total in the form).
 Enum fields get a value → label table; timestamp fields get size/unit/epoch
-dropdowns — no JSON needed for either. The **Constants** section defines named
-values you can reference by name in an array's Count/CountField box (checked
-before an earlier field name) — handy for a fixed size that isn't decoded
-from the file. **Save** writes to the format's file (shown in the **File:**
+dropdowns — no JSON needed for either. An array's Count/CountField box takes a
+`"+"`-separated sum of terms — a literal number, a **Constants** entry (a
+fixed value the format author picked, not decoded from the file), or an
+earlier field's name (its *decoded* value at parse time) — so
+`"Number of Dogs + Number of Cats"` sums two header fields directly, no
+Constants section needed. **Save** writes to the format's file (shown in the **File:**
 row — **Change file…** redirects it); a brand-new format writes to global
 storage on first save. **Save draft** saves even with validation errors,
 always as a separate global-storage copy so it can't clobber a real file with
@@ -154,11 +156,16 @@ Settings UI (search `Binary Viewer`).
   (length-prefixed) array, the decode window auto-widens to the whole file
   (capped at 8 MB); a file bigger than that with dynamic content past 8 MB
   will still show this for the tail.
-- **A `countField` array shows `"<name>" is not a defined constant or an
-  earlier field`** — the name in `countField` didn't match a top-level
-  `constants` entry (checked first) or an earlier decoded integer field
-  (checked second, same or an enclosing structure, parsed before this array).
-  Check the spelling against whichever you meant.
+- **A `countField` array shows `"<term>" is not a defined constant or an
+  earlier field`** — `countField` is a `"+"`-sum of terms, checked one at a
+  time (a single name is a one-term sum). Each term must be a literal
+  integer, a top-level `constants` entry, or an earlier decoded integer field
+  (same or an enclosing structure, parsed before this array). The error names
+  the specific term that didn't match either — check its spelling, and check
+  it's not a field further down that hasn't been parsed yet. **A `constants`
+  entry never sees decoded bytes** — if the values are themselves fields in
+  the file, sum the field names directly in `countField` instead of putting
+  them in `constants`.
 - **An array is truncated with "… N more not shown"** — raise
   `binaryViewer.structure.maxArrayElements` (`0` = no limit); it's the
   authoritative cap, so raising it always shows more. To only ever look at one

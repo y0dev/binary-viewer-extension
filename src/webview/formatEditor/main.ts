@@ -511,8 +511,9 @@ function nodeToField(node: EditNode): FieldDefinition {
     if (countNum !== undefined) {
       f.count = countNum;
     } else if (countField) {
-      // A non-numeric value names a constant, or (failing that) an earlier
-      // field, to take the length from — see FormatConstants.
+      // A non-numeric value is a "+"-sum of terms (a single name is a
+      // one-term sum) — each resolved against Constants, then an earlier
+      // field, to take the length from. See FormatConstants / BinaryParser.
       f.countField = countField;
     } else {
       f.count = 0;
@@ -1076,7 +1077,7 @@ function render(): void {
   wrap.append(
     el('div', {
       class: 'fe-hint',
-      text: 'Named values a field can reference by name — most useful in an array\'s Count/CountField box (checked before an earlier field name). A value is a number, or a "+"-separated sum of other constant names/numbers, e.g. "Mean + Range".',
+      text: 'Named, fixed values — picked by you, not decoded from the file. A value is a number, or a "+"-separated sum of other constant names/numbers, e.g. "Mean + Range". An array\'s Count/CountField box can also sum earlier *field* names directly (e.g. "Number of Dogs + Number of Cats") without using Constants at all — see the Fields hint below.',
     }),
   );
   const constantsWrap = el('div', { class: 'fe-tree' });
@@ -1148,7 +1149,7 @@ function render(): void {
   wrap.append(
     el('div', {
       class: 'fe-hint',
-      text: `For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. For a nested array (up to ${MAX_FORM_ARRAY_DEPTH} dimensions) type a chained element type like "int16[4][3]" instead of a plain type. In the count box, a name is checked against Constants first, then an earlier integer field (length-prefixed array). For a large array, use the array row's view box (e.g. "20...35") to render only that slice in the Structure view — the array itself is unaffected.`,
+      text: `For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. For a nested array (up to ${MAX_FORM_ARRAY_DEPTH} dimensions) type a chained element type like "int16[4][3]" instead of a plain type. The Count/CountField box takes a "+"-separated sum of terms — each one a Constants entry or an earlier integer field's decoded value (length-prefixed array), checked in that order — so "Number of Dogs + Number of Cats" sums two decoded header fields directly. For a large array, use the array row's view box (e.g. "20...35") to render only that slice in the Structure view — the array itself is unaffected.`,
     }),
   );
   const tree = el('div', { class: 'fe-tree' });

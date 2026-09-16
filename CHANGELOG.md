@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.16.0
+
+- **`countField` sums multiple terms, including decoded fields directly.**
+  `countField` is now a `"+"`-separated sum (a single name is a one-term sum,
+  so every existing format keeps working) — each term is a literal integer, a
+  `constants` entry, or an earlier decoded field, checked in that order. So a
+  header that stores, say, a dog count and a cat count as separate fields can
+  size an array from their total with `"countField": "Number of Dogs +
+  Number of Cats"` — no `constants` involved, since `constants` are fixed at
+  authoring time and never see decoded bytes. A resolution failure now names
+  the specific term that didn't match.
+
 ## 0.15.1
 
 - **Fix: multi-word constant names in a "+" sum.** A `constants` entry like

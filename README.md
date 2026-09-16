@@ -73,12 +73,13 @@ in the hex view. Works with a fields-based format or a sections-only one.
   (`"type": "Sample"`, or `"Sample[100]"` for an array of them).
 - **Array shorthand** — write any type as `<base>[<n>]`: `"float32[8]"`,
   `"int16[24]"`, `"Sample[100]"`, `"char[4]"`.
-- **Length-prefixed arrays** — `"countField": "n"` sizes an array from a
-  top-level `constants` entry, or (failing that) an earlier integer field's
-  decoded value, instead of a fixed `count`.
-- **Constants** — a top-level `constants` map of named values (a number, or a
-  `"+"`-separated sum of other constants) a field can reference by name, e.g.
-  for an array's `countField`.
+- **Length-prefixed arrays** — `countField` sizes an array from a `"+"`-sum of
+  terms instead of a fixed `count` — each term a literal number, a top-level
+  `constants` entry, or an earlier integer field's decoded value, e.g.
+  `"countField": "Number of Dogs + Number of Cats"`.
+- **Constants** — a top-level `constants` map of named, fixed values (a
+  number, or a `"+"`-separated sum of other constants) a field can reference
+  by name — for a size the format author picked, not one read from the file.
 - **Array views** — `"view": "20...35"` renders just that slice of a big array
   in the Structure view; the array's own count/size/offsets are unaffected.
 - **Nested arrays in the form** — a chained element type (`"int16[4][3]"`) is
