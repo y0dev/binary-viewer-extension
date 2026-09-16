@@ -1,0 +1,84 @@
+{
+  // ============================================================
+  // Binary Viewer & Structure Inspector — example workspace config
+  // Copy this file (and the sibling binary-viewer/formats/ folder)
+  // into a repo's .vscode/ to ship both settings and formats with
+  // the code. Every setting below is optional; VS Code falls back
+  // to the defaults shown for anything you remove.
+  // ============================================================
+
+  // ---- Format sources ----------------------------------------
+  // This workspace ships its own formats in .vscode/binary-viewer/formats/
+  // — hide the shipped example formats so the dropdown and auto-detection
+  // only ever offer this project's own. Default: true.
+  "binaryViewer.showBuiltinFormats": false,
+
+  // Extra folders to also load format *.json from — a team share or a
+  // synced folder, so the same formats are available on another machine.
+  // "~" and "${workspaceFolder}" expand. These sit between global-storage
+  // formats and this workspace's own in precedence. Default: [].
+  "binaryViewer.formatDirectories": [
+    // "\\\\team-nas\\firmware\\binary-viewer-formats",
+    // "${workspaceFolder}/../shared-formats"
+  ],
+
+  // ---- What a file opens on -----------------------------------
+  // Tab a file opens on: "raw" | "structure" | "sections". Falls back to
+  // "raw" when no format applies; the last-used tab for a file still wins.
+  // Default: "raw".
+  "binaryViewer.defaultView": "raw",
+
+  // Detect a matching format (by extension + magic bytes) on open.
+  // Default: true.
+  "binaryViewer.autoDetectFormat": true,
+
+  // Extra file extensions this project's binaries use, opened in Binary
+  // Viewer automatically — on top of the built-in .bin .hex .img .dat .fw
+  // .rom .dump .raw .eeprom .nvram list. Default: [].
+  "binaryViewer.additionalExtensions": ["s19", "mot"],
+
+  // ---- Raw view -------------------------------------------------
+  // Bytes per row: 8 | 16 | 32. Default: 16.
+  "binaryViewer.bytesPerRow": 16,
+
+  // Raw-view word grouping: "1" (plain bytes) | "2le"/"2be" | "4le"/"4be" |
+  // "8le"/"8be". "·le" reverses each word's bytes so a little-endian
+  // 01 00 00 00 reads as 00000001; "·be" keeps file order. Raw view only —
+  // doesn't affect structure/inspector decoding. Default: "1".
+  "binaryViewer.byteGroup": "1",
+
+  // Internal flash on this board is memory-mapped here — offsets shown in
+  // the UI (and Go To) then match the datasheet / linker map. A format's
+  // own "baseAddress" overrides this. Leave "" for plain file offsets.
+  // Default: "".
+  "binaryViewer.baseAddress": "0x08000000",
+
+  // ---- Decoding ---------------------------------------------------
+  // Default endianness for the inspector and for fields/formats that don't
+  // pin their own: "little" | "big". Default: "little".
+  "binaryViewer.defaultEndianness": "little",
+
+  // Cap on elements rendered per array field in the Structure view — the
+  // authoritative limit, so raising it always shows more (0 = no cap, but
+  // a large array renders and parses more slowly). Default: 1000.
+  "binaryViewer.structure.maxArrayElements": 1000,
+
+  // Epoch assumed for `timestamp` fields with no epoch of their own:
+  // "unix" | "y2k" | "gps" | "mac" | "filetime". Default: "unix".
+  "binaryViewer.timestamp.defaultEpoch": "unix",
+
+  // Show decoded timestamps in UTC (true) or the host's local time (false).
+  // Default: true.
+  "binaryViewer.timestamp.displayUTC": true,
+
+  // ---- Misc --------------------------------------------------------
+  // Show the data inspector panel on open. Default: true.
+  "binaryViewer.showInspectorByDefault": true,
+
+  // Cap for "Find All" search results. Default: 5000.
+  "binaryViewer.maxSearchResults": 5000
+
+  // Rarely need changing, so left at their defaults here:
+  //   "binaryViewer.blockSizeBytes": 65536      — range-read / cache granularity
+  //   "binaryViewer.cacheWindowBytes": 8388608  — max host-side cache per file
+}

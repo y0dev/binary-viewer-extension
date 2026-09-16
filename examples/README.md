@@ -36,15 +36,15 @@ Regenerate with `npm run gen-examples` (or `node scripts/gen-examples.js`).
 | `telemetry.pkt` | Import `formats/packet.json`; check the **Timestamp** and scaled **Latitude** |
 | `sample.dat` | No format matches — stays in Raw mode. Search ASCII `BINARY VIEWER DEMO`, or Go To `0x400` |
 
-## Workspace format layout — `workspace-setup/`
+## Workspace format layout & settings — `workspace-setup/`
 
-Copy the `.vscode/` folder into a repository so its proprietary formats travel
-with the code and shadow any global definition with the same format `name` **or
-JSON file name**:
+Copy the `.vscode/` folder into a repository so its proprietary formats **and**
+its Binary Viewer settings travel with the code:
 
 ```
 <your repo>/
   .vscode/
+    settings.json              # example binaryViewer.* settings, one per line, commented
     binary-viewer/
       formats/
         firmware.json
@@ -57,7 +57,15 @@ JSON file name**:
         packet.json
 ```
 
-Workspace formats load only in **trusted** workspaces. New / edited files in
+`settings.json` is a fully-commented reference for every `binaryViewer.*`
+setting — hiding the built-in example formats (since this workspace ships its
+own), pointing at a shared formats folder, a memory-mapped `baseAddress` for
+this project's flash layout, extra file extensions, and so on. Trim it to
+just what you actually want to override; VS Code falls back to the defaults
+for anything you remove.
+
+The formats shadow any global definition with the same format `name` **or**
+JSON file name, and load only in **trusted** workspaces. New / edited files in
 this folder **and** in global storage are picked up automatically (debounced
 file watchers); the **↻** button by the format dropdown and **Binary Viewer:
 Reload Binary Formats** force a rescan.
