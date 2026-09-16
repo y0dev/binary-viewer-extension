@@ -1,5 +1,24 @@
 # Change Log
 
+## 0.12.0
+
+- **Format editor tracks its backing file.** A "File: …" row (both Form and
+  JSON tabs) shows the JSON file a format is tied to — a workspace, external,
+  or global one, or "not saved to a file yet" for a brand-new format. **Save**
+  now writes there directly instead of always creating a global-storage copy;
+  **Change file…** opens a Save-As dialog to redirect future saves elsewhere.
+  Editing an existing format (by name, or via **Open JSON file…** / **Locate
+  JSON…**) now correctly ties to its real file. **Save draft** always writes a
+  separate global-storage copy — it never overwrites a known real file with
+  content that doesn't validate yet.
+- **Fix — picking "array" or "struct" as a field's type did nothing.** The
+  type box let you type/select `array` or `struct`, but a plain field row has
+  no count/element-type or child-field controls, so the result was a silently
+  incomplete definition. Committing (blur, or a datalist pick) either value
+  now switches that row to the matching kind and reveals what it needs — count
+  + element type for an array, a first child field for a struct — without
+  interrupting typing along the way.
+
 ## 0.11.0
 
 - **Field Colors — highlight each field's bytes in the raw hex view.** A new

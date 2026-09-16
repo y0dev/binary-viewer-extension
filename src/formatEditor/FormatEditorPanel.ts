@@ -3,8 +3,16 @@ import { getNonce } from '../util/nonce';
 import { validateFormat, COMPOSITE_TYPE_NAMES } from '../core/FormatSchema';
 import { SCALAR_TYPE_NAMES } from '../core/DataTypes';
 import { FormatManager } from '../formats/FormatManager';
+import { slugify } from '../formats/FormatStorage';
 import type { FormatDefinition } from '../types/format';
 import type { FormatEditorToHost, FormatEditorFromHost } from '../types/messages';
+
+interface ShowOptions {
+  format: FormatDefinition | null;
+  editing: boolean;
+  /** The backing file, when this definition is already tied to one on disk. */
+  sourceUri?: vscode.Uri;
+}
 
 /**
  * A singleton webview panel that provides a form-based editor for binary format
@@ -13,11 +21,7 @@ import type { FormatEditorToHost, FormatEditorFromHost } from '../types/messages
 export class FormatEditorPanel {
   private static instance: FormatEditorPanel | undefined;
 
-  static show(
-    context: vscode.ExtensionContext,
-    formats: FormatManager,
-    initial: { format: FormatDefinition | null; editing: boolean },
-  ): void {
+  static show(context: vscode.ExtensionContext, formats: FormatManager, initial: ShowOptions): void {
     const column = vscode.ViewColumn.Active;
     if (FormatEditorPanel.instance) {
       FormatEditorPanel.instance.panel.reveal(column);
@@ -37,13 +41,13 @@ export class FormatEditorPanel {
     FormatEditorPanel.instance = new FormatEditorPanel(panel, context, formats, initial);
   }
 
-  private pending: { format: FormatDefinition | null; editing: boolean };
+  private pending: ShowOptions;
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly context: vscode.ExtensionContext,
     private readonly formats: FormatManager,
-    initial: { format: FormatDefinition | null; editing: boolean },
+    initial: ShowOptions,
   ) {
     this.pending = initial;
     this.panel.webview.html = this.html(this.panel.webview);
@@ -56,7 +60,7 @@ export class FormatEditorPanel {
     });
   }
 
-  private load(initial: { format: FormatDefinition | null; editing: boolean }): void {
+  private load(initial: ShowOptions): void {
     this.pending = initial;
     this.send({
       type: 'init',
@@ -64,6 +68,7 @@ export class FormatEditorPanel {
       editing: initial.editing,
       scalarTypes: SCALAR_TYPE_NAMES,
       compositeTypes: COMPOSITE_TYPE_NAMES,
+      sourcePath: initial.sourceUri ? this.displayPath(initial.sourceUri) : null,
     });
   }
 
@@ -71,26 +76,66 @@ export class FormatEditorPanel {
     void this.panel.webview.postMessage(message);
   }
 
-  /** Write the definition to global storage. `asDraft` = saved despite errors. */
-  private async persist(format: FormatDefinition, asDraft = false): Promise<void> {
-    const previousName = this.pending.editing ? this.pending.format?.name : undefined;
+  private displayPath(uri: vscode.Uri): string {
+    return uri.scheme === 'file' ? uri.fsPath : uri.toString();
+  }
+
+  /**
+   * Validated save: writes to the known backing file, if any, otherwise to
+   * global storage (adopting the result as the backing file from then on).
+   */
+  private async persist(format: FormatDefinition): Promise<void> {
     try {
-      const uri = await this.formats.storage.saveGlobal(format, previousName);
+      let uri: vscode.Uri;
+      if (this.pending.sourceUri) {
+        uri = this.pending.sourceUri;
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify(format, null, 2) + '\n', 'utf8'));
+      } else {
+        const previousName = this.pending.editing ? this.pending.format?.name : undefined;
+        uri = await this.formats.storage.saveGlobal(format, previousName);
+      }
       await this.formats.reload();
-      this.pending = { format, editing: true };
-      this.send({ type: 'saved' });
+      this.pending = { format, editing: true, sourceUri: uri };
+      this.send({ type: 'saved', sourcePath: this.displayPath(uri) });
       const open = 'Open JSON';
-      const msg = asDraft
-        ? `Saved draft "${format.name}" (has validation problems — fix before using it).`
-        : `Saved binary format "${format.name}".`;
-      const choice = asDraft
-        ? await vscode.window.showWarningMessage(msg, open)
-        : await vscode.window.showInformationMessage(msg, open);
+      const choice = await vscode.window.showInformationMessage(`Saved binary format "${format.name}".`, open);
       if (choice === open) {
         await vscode.window.showTextDocument(uri);
       }
     } catch (e) {
       void vscode.window.showErrorMessage(`Failed to save format: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Save-despite-errors safety net: always a *separate* global-storage copy,
+   * so a draft that doesn't validate yet never overwrites a known real file
+   * (workspace / external / already tied to this editor).
+   */
+  private async persistDraft(format: FormatDefinition, valid: boolean): Promise<void> {
+    try {
+      const uri = await this.formats.storage.saveGlobal(format, undefined);
+      await this.formats.reload();
+      const keepsRealFileAsTarget = !!this.pending.sourceUri;
+      if (!keepsRealFileAsTarget) {
+        this.pending = { format, editing: true, sourceUri: uri };
+      }
+      const shownUri = keepsRealFileAsTarget ? this.pending.sourceUri! : uri;
+      this.send({ type: 'saved', sourcePath: this.displayPath(shownUri) });
+      const problems = valid ? '' : ' (has validation problems — fix before using it)';
+      const msg = keepsRealFileAsTarget
+        ? `Saved a draft copy to global storage${problems}. The file this editor is tied to ` +
+          'is untouched — use Save to write there.'
+        : `Saved draft "${format.name}" to global storage${problems}.`;
+      const open = 'Open Draft JSON';
+      const choice = valid
+        ? await vscode.window.showInformationMessage(msg, open)
+        : await vscode.window.showWarningMessage(msg, open);
+      if (choice === open) {
+        await vscode.window.showTextDocument(uri);
+      }
+    } catch (e) {
+      void vscode.window.showErrorMessage(`Failed to save draft: ${(e as Error).message}`);
     }
   }
 
@@ -127,7 +172,7 @@ export class FormatEditorPanel {
           type: 'validationResult',
           errors: [...result.errors, ...result.warnings.map((w) => `warning: ${w}`)],
         });
-        await this.persist(draft, !result.valid);
+        await this.persistDraft(draft, result.valid);
         break;
       }
 
@@ -144,11 +189,40 @@ export class FormatEditorPanel {
           const raw = await vscode.workspace.fs.readFile(picks[0]);
           const parsed = JSON.parse(Buffer.from(raw).toString('utf8'));
           const def = (Array.isArray(parsed) ? parsed[0] : parsed) as FormatDefinition;
-          this.load({ format: def, editing: false });
+          this.load({ format: def, editing: true, sourceUri: picks[0] });
         } catch (e) {
           void vscode.window.showErrorMessage(
             `Couldn't read that format JSON: ${(e as Error).message}`,
           );
+        }
+        break;
+      }
+
+      case 'changeSavePath': {
+        const suggestedName = `${slugify(msg.format.name)}.json`;
+        const target = await vscode.window.showSaveDialog({
+          defaultUri: this.pending.sourceUri
+            ? this.pending.sourceUri
+            : vscode.Uri.joinPath(this.formats.storage.globalDir, suggestedName),
+          filters: { 'Binary format JSON': ['json'] },
+          saveLabel: 'Save format here',
+        });
+        if (!target) {
+          return;
+        }
+        try {
+          await vscode.workspace.fs.writeFile(
+            target,
+            Buffer.from(JSON.stringify(msg.format, null, 2) + '\n', 'utf8'),
+          );
+          await this.formats.reload();
+          this.pending = { format: msg.format, editing: true, sourceUri: target };
+          this.send({ type: 'saved', sourcePath: this.displayPath(target) });
+          void vscode.window.showInformationMessage(
+            `"${msg.format.name}" now saves to ${this.displayPath(target)}.`,
+          );
+        } catch (e) {
+          void vscode.window.showErrorMessage(`Couldn't write that file: ${(e as Error).message}`);
         }
         break;
       }

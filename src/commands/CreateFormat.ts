@@ -48,13 +48,21 @@ export function registerFormatAuthoringCommands(
     vscode.commands.registerCommand('binaryViewer.editFormat', async (nameArg?: string) => {
       let def: FormatDefinition | undefined;
       let editing = true;
+      let sourceUri: vscode.Uri | undefined;
       if (typeof nameArg === 'string') {
         const loaded = formats.get(nameArg);
         def = loaded?.definition;
         editing = loaded?.source !== 'builtin';
+        if (editing && loaded?.uri) {
+          sourceUri = vscode.Uri.parse(loaded.uri);
+        }
       } else {
         def = await pickFormat(formats, 'Edit Binary Format', false);
-        editing = def ? formats.get(def.name)?.source !== 'builtin' : true;
+        const loaded = def ? formats.get(def.name) : undefined;
+        editing = loaded?.source !== 'builtin';
+        if (editing && loaded?.uri) {
+          sourceUri = vscode.Uri.parse(loaded.uri);
+        }
       }
       if (!def) {
         // The active format may have been applied from a JSON file that lives
@@ -80,7 +88,11 @@ export function registerFormatAuthoringCommands(
             const raw = await vscode.workspace.fs.readFile(picks[0]);
             const parsed = JSON.parse(Buffer.from(raw).toString('utf8'));
             const fromFile = (Array.isArray(parsed) ? parsed[0] : parsed) as FormatDefinition;
-            FormatEditorPanel.show(context, formats, { format: fromFile, editing: false });
+            FormatEditorPanel.show(context, formats, {
+              format: fromFile,
+              editing: true,
+              sourceUri: picks[0],
+            });
           } catch (e) {
             void vscode.window.showErrorMessage(
               `Couldn't read that format JSON: ${(e as Error).message}`,
@@ -97,7 +109,7 @@ export function registerFormatAuthoringCommands(
         });
         return;
       }
-      FormatEditorPanel.show(context, formats, { format: structuredClone(def), editing: true });
+      FormatEditorPanel.show(context, formats, { format: structuredClone(def), editing: true, sourceUri });
     }),
 
     vscode.commands.registerCommand('binaryViewer.duplicateFormat', async () => {

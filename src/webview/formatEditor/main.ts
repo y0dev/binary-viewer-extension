@@ -85,16 +85,21 @@ interface Model {
 }
 
 let model: Model;
+/** The backing file's display path for the format currently loaded, if any. */
+let sourcePath: string | null = null;
 
 window.addEventListener('message', (ev: MessageEvent<FormatEditorFromHost>) => {
   const msg = ev.data;
   if (msg.type === 'init') {
     init = msg;
+    sourcePath = msg.sourcePath;
     model = toModel(msg.format);
     render();
   } else if (msg.type === 'validationResult') {
     showErrors(msg.errors);
   } else if (msg.type === 'saved') {
+    sourcePath = msg.sourcePath;
+    updateFileRow();
     showErrors([]);
     flashSaved();
   }
@@ -730,7 +735,30 @@ function pushNode(target: 'top' | { structId: string } | { structDefId: string }
 
 let errorBox: HTMLElement;
 let previewBox: HTMLElement;
+let fileRowPath: HTMLElement | undefined;
 let debounce: number | undefined;
+
+/** The "File: <path>" row — shared by both modes, updated in place after Save. */
+function renderFileRow(): HTMLElement {
+  fileRowPath = el('span', { class: 'fe-mono', text: sourcePath ?? 'not saved to a file yet' });
+  return el('div', { class: 'fe-file-row' }, [
+    el('span', { class: 'fe-inline-label', text: 'File:' }),
+    fileRowPath,
+    el('button', {
+      class: 'secondary icon-text',
+      text: 'Change file…',
+      title: 'Save this definition to a different file and use it as the save target from now on',
+      onclick: () => post({ type: 'changeSavePath', format: buildDefinition() }),
+    }),
+  ]);
+}
+
+/** Reflect a just-changed `sourcePath` without a full re-render (keeps focus). */
+function updateFileRow(): void {
+  if (fileRowPath) {
+    fileRowPath.textContent = sourcePath ?? 'not saved to a file yet';
+  }
+}
 
 function changed(): void {
   render();
@@ -831,6 +859,7 @@ function render(): void {
       class: 'fe-hint',
       text: 'Definitions are pure data and are stored as JSON in global storage. Nothing here executes code.',
     }),
+    renderFileRow(),
   );
 
   // ---- form / JSON toggle + load-from-file (both modes) ----
@@ -1115,9 +1144,15 @@ function typesDatalist(): HTMLElement {
 /**
  * An editable type field: a text input backed by the `#fe-types` datalist, so
  * you can pick a scalar / composite / structure name *or* type a shorthand like
- * `float32[8]` or `int16[4]` (a nested array).
+ * `float32[8]` or `int16[4]` (a nested array). `onCommit` (change, i.e. once you
+ * pick a datalist option or leave the field) is for actions too disruptive to
+ * run on every keystroke, such as switching the row to a different kind.
  */
-function typeCombo(value: string, onChange: (v: string) => void): HTMLInputElement {
+function typeCombo(
+  value: string,
+  onChange: (v: string) => void,
+  onCommit?: (v: string) => void,
+): HTMLInputElement {
   const input = el('input', {
     type: 'text',
     value,
@@ -1129,9 +1164,35 @@ function typeCombo(value: string, onChange: (v: string) => void): HTMLInputEleme
       onChange((e.target as HTMLInputElement).value);
       scheduleValidate();
     },
+    onchange: (e) => onCommit?.((e.target as HTMLInputElement).value),
   }) as HTMLInputElement;
   input.style.width = '140px';
   return input;
+}
+
+/**
+ * When a field row's type is committed as exactly "array" or "struct", switch
+ * the row to that kind so the controls it actually needs appear (count +
+ * element type, or child fields) instead of silently producing an incomplete
+ * definition. Only fires on commit (blur / datalist pick), not per keystroke,
+ * so a full re-render never interrupts typing.
+ */
+function maybeMorphKind(node: EditNode, typed: string): void {
+  const t = typed.trim().toLowerCase();
+  if (node.kind !== 'field' || (t !== 'array' && t !== 'struct')) {
+    return;
+  }
+  node.kind = t;
+  node.type = 'uint8';
+  if (t === 'array' && !node.count.trim()) {
+    node.count = '4';
+  } else if (t === 'struct') {
+    if (node.children.length === 0) {
+      node.children = [emptyNode('field')];
+    }
+    node.collapsed = false;
+  }
+  changed();
 }
 
 function bindInput(
@@ -1187,7 +1248,13 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
   head.append(bindInput(node, 'name', { placeholder: 'name', width: 150 }));
 
   if (node.kind === 'field') {
-    head.append(typeCombo(node.type, (v) => (node.type = v)));
+    head.append(
+      typeCombo(
+        node.type,
+        (v) => (node.type = v),
+        (v) => maybeMorphKind(node, v),
+      ),
+    );
   } else if (node.kind === 'array') {
     head.append(
       labelled(

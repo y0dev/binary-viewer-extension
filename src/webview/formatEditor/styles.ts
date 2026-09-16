@@ -57,6 +57,8 @@ table.fe-fields input[type=text] { width: 100%; }
 .fe-enum-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
 .fe-enum-row input { width: 130px; }
 .fe-ts-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-top: 4px; }
+.fe-file-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fe-mono { font-family: var(--vscode-editor-font-family, monospace); font-size: 0.85em; opacity: 0.85; word-break: break-all; }
 
 /* ---- nested-structure tree editor ---- */
 .fe-tree { display: flex; flex-direction: column; gap: 6px; }

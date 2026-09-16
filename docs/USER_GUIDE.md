@@ -141,16 +141,25 @@ full schema see [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md). Quick tour:
   offset (blank = pack after the previous field), size, length and per-field
   endian. **Enum** rows get a value → label table; **timestamp** fields get
   size / unit / epoch dropdowns. Only `bits` / `scale` / `bias` / `unit` /
-  `display` still go in the row's **advanced** box. A live JSON preview and
-  validation panel update as you type. **Save** writes it to global storage;
-  **Save draft** writes it even with validation errors so a work-in-progress
-  isn't lost.
+  `display` still go in the row's **advanced** box. Picking `array` or
+  `struct` as a field's type switches that row to the matching kind, revealing
+  the count/element-type or child-field controls it needs. A live JSON preview
+  and validation panel update as you type. **Save** writes it to global
+  storage; **Save draft** writes it even with validation errors so a
+  work-in-progress isn't lost.
+- **The editor tracks its file.** A **File:** row (both tabs) shows the JSON
+  file this format is tied to, or "not saved to a file yet". **Save** writes
+  there directly; **Change file…** opens a Save-As dialog to point future
+  saves somewhere else (e.g. move a global format into the workspace). **Save
+  draft** never touches a known file with unvalidated content — it always
+  writes a separate copy to global storage instead.
 - **Form ⟷ JSON tabs.** The editor has a **JSON** tab that edits the whole
   definition as text (one object, or an array of them). It opens there
   automatically for things the form can't draw — a multi-dimensional array, or
   an array of an inline structure. **Open JSON file…** (next to the tabs, in
   either mode) starts the editor from an existing definition on disk instead of
-  the blank template.
+  the blank template — and, like editing an existing named format, ties future
+  saves to that file.
 - **Edit** an existing format the same way (built-ins open as an editable copy).
   If the active format was applied from a file outside a scanned folder, **Edit
   Format** offers **Locate JSON…** to pick it.

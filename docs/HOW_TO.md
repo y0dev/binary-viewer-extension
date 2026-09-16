@@ -81,18 +81,22 @@ the Structure/Sections empty-state buttons) — scaffolds a valid starter JSON
 to finish by hand.
 
 From scratch: **Binary Viewer: Create Binary Format** opens the form editor —
-name, endianness, magic bytes, then **+ Add Field / Array / Enum / Structure**.
-Type boxes accept a scalar, a structure name, or a shorthand
-(`float32[8]`, `int16[4]` for nested arrays, `Sample[100]`). Enum fields get a
-value → label table; timestamp fields get size/unit/epoch dropdowns — no JSON
-needed for either. **Save** writes it to global storage; **Save draft** saves
-even with validation errors so you don't lose work.
+name, endianness, magic bytes, then **+ Add Field / Array / Enum / Structure**
+(or just type `array` / `struct` into a field's type box — it switches that
+row to the right kind and reveals the controls it needs). Type boxes accept a
+scalar, a structure name, or a shorthand (`float32[8]`, `int16[4]` for nested
+arrays, `Sample[100]`). Enum fields get a value → label table; timestamp
+fields get size/unit/epoch dropdowns — no JSON needed for either. **Save**
+writes to the format's file (shown in the **File:** row — **Change file…**
+redirects it); a brand-new format writes to global storage on first save.
+**Save draft** saves even with validation errors, always as a separate
+global-storage copy so it can't clobber a real file with something invalid.
 
 **Prefer JSON?** The editor's **JSON** tab edits the whole definition as text
 — it opens there automatically for anything the form can't fully draw (a
 multi-dimensional array, or an array of an inline structure). **Open JSON
 file…**, next to the tabs in either mode, starts the editor from an existing
-definition on disk instead of the blank template.
+definition on disk instead of the blank template, and ties future saves to it.
 
 Walkthrough of a real format end-to-end: [Creating a binary
 format](CREATING_A_FORMAT.md). Full field/type reference:

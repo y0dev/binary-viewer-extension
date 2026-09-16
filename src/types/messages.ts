@@ -184,6 +184,8 @@ export interface FormatEditorInit {
   editing: boolean;
   scalarTypes: string[];
   compositeTypes: string[];
+  /** The backing file's display path, e.g. `fsPath`; null when not yet tied to one. */
+  sourcePath: string | null;
 }
 
 export type FormatEditorToHost =
@@ -192,9 +194,10 @@ export type FormatEditorToHost =
   | { type: 'saveDraft'; format: FormatDefinition }
   | { type: 'validate'; format: FormatDefinition }
   | { type: 'openJsonFile' }
+  | { type: 'changeSavePath'; format: FormatDefinition }
   | { type: 'cancel' };
 
 export type FormatEditorFromHost =
   | FormatEditorInit
   | { type: 'validationResult'; errors: string[] }
-  | { type: 'saved' };
+  | { type: 'saved'; sourcePath: string | null };
