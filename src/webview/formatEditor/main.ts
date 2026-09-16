@@ -1,6 +1,7 @@
 import { el, clear } from '../dom';
 import { FORMAT_EDITOR_CSS } from './styles';
 import { parseArrayShorthand } from '../../core/FieldSyntax';
+import { reorderFormatKeys } from '../../core/FormatOrder';
 import type { FormatDefinition, FieldDefinition, MagicSpec, BitSpec } from '../../types/format';
 import type {
   FormatEditorFromHost,
@@ -578,7 +579,8 @@ function buildDefinition(): FormatDefinition {
   if (def.fields && def.fields.length === 0 && def.sections && def.sections.length) {
     delete def.fields;
   }
-  return def;
+  // `name` first, `fields` last, everything else in between — see FormatOrder.
+  return reorderFormatKeys(def);
 }
 
 // ---- tree operations -------------------------------------------------

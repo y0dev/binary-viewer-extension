@@ -21,6 +21,7 @@
 │           FieldShape (container/bit-field/primitive classification),        │
 │           FieldSyntax ("float32[8]" shorthand), ArrayView (array `view`    │
 │           windows), FieldColors (raw-view highlight ranges),               │
+│           FormatOrder (canonical top-level key order),                     │
 │           BinaryField, BinaryParser, FormatSchema (+ validateFormatText),  │
 │           FormatResolve (inline reusable `structures`),                    │
 │           FormatDetector, FormatMerge (name/filename precedence,           │

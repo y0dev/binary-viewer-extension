@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.14.0
+
+- **Consistent key order in generated format JSON.** The form editor's Save /
+  Save draft / JSON Preview now always emit `name` first and `fields` last,
+  with `endianness`, `description`, `version`, `author`, `fileExtensions`,
+  `magic`, `baseAddress`, `structures` and `sections` (whichever are present)
+  in between — instead of whatever order the form happened to build them in.
+  Only governs what the *form* generates; hand-written JSON in the editor's
+  JSON tab is never reordered. Pure `core/FormatOrder.ts`.
+
 ## 0.13.0
 
 - **Array views — render just a slice of a big array.** An `array` field can
