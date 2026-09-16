@@ -416,6 +416,27 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
   return size;
 }
 
+/**
+ * A readable type label for an array field, e.g. `"int16[4][3][2]"` for a 3D
+ * array — the shorthand-chain form, innermost dimension first, matching
+ * `FieldSyntax`'s own `<base>[<n>]` convention. Recurses through a nested
+ * `items: { type: 'array', ... }` chain instead of stopping at the literal
+ * string `"array"`, which is what made a middle dimension's row unreadable
+ * before. `count` overrides the outermost level's count with the
+ * already-resolved value (constants/countField), so the label reflects what
+ * was actually decoded, not just the static definition.
+ */
+function arrayTypeLabel(field: FieldDefinition, count: number | undefined): string {
+  const resolvedCount = count !== undefined ? count : field.count;
+  const via = field.count === undefined && field.countField ? ` ← ${field.countField}` : '';
+  const countStr = resolvedCount !== undefined ? String(resolvedCount) : '?';
+  const item = field.items;
+  if (item && item.type === 'array') {
+    return `${arrayTypeLabel(item, undefined)}[${countStr}${via}]`;
+  }
+  return `${item?.type ?? 'struct'}[${countStr}${via}]`;
+}
+
 function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
   const item = field.items!;
   const { count: resolved, badTerm } = resolveArrayCount(ctx, field);
@@ -437,11 +458,10 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   const startIdx = view ? view.start : 0;
   const windowCount = view ? view.end - view.start + 1 : count - startIdx;
 
-  const via = field.count === undefined && field.countField ? ` ← ${field.countField}` : '';
   const viewSuffix = view ? ` (view ${view.start}…${view.end})` : '';
   const node = pushNode(ctx, {
     name: field.name,
-    typeLabel: `${item.type ?? 'struct'}[${count}${via}]${viewSuffix}`,
+    typeLabel: `${arrayTypeLabel(field, count)}${viewSuffix}`,
     offset: abs,
     size,
     value: `${count} element${count === 1 ? '' : 's'}`,

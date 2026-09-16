@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.17.0
+
+- **Readable type labels for nested arrays.** In the Structure view, every
+  level of a nested array now shows the full remaining shorthand-chain type
+  (e.g. `int16[4][3][2]` for the outer level of a 3D array, `int16[4][3]` for
+  a "plane", `int16[4]` for a "row") instead of the uninformative `array[N]`
+  it showed before. A level sized by `countField` shows `?` in place of the
+  count it can't know statically (e.g. `uint8[? ← rows][2]`). No change to
+  parsing, offsets, or the tree shape itself — display only.
+
 ## 0.16.0
 
 - **`countField` sums multiple terms, including decoded fields directly.**

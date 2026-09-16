@@ -491,6 +491,50 @@ describe('BinaryParser — nested-array element stride', () => {
     assert.deepStrictEqual(rowsOf0.map((n) => n.offset), [0, 8, 16]);
   });
 
+  it('describes each level of a 3D array with a readable shorthand-chain type label', () => {
+    const fmt: FormatDefinition = {
+      name: '3d-labels',
+      endianness: 'little',
+      fields: [
+        {
+          name: 'vol',
+          type: 'array',
+          offset: 0,
+          count: 2,
+          items: {
+            name: 'plane',
+            type: 'array',
+            count: 3,
+            items: { name: 'row', type: 'array', count: 4, items: { name: 'c', type: 'int16' } },
+          },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win(new Array(48).fill(0)), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'vol')!.typeLabel, 'int16[4][3][2]');
+    assert.strictEqual(nodes.find((n) => n.name === 'vol[0]')!.typeLabel, 'int16[4][3]');
+    assert.strictEqual(nodes.find((n) => n.name === 'vol[0][0]')!.typeLabel, 'int16[4]');
+  });
+
+  it('marks a dynamically-sized (countField) level in the type label instead of a number', () => {
+    const fmt: FormatDefinition = {
+      name: 'dyn-label',
+      endianness: 'little',
+      fields: [
+        { name: 'rows', type: 'uint8', offset: 0 },
+        {
+          name: 'grid',
+          type: 'array',
+          offset: 1,
+          count: 2,
+          items: { name: 'plane', type: 'array', countField: 'rows', items: { name: 'c', type: 'uint8' } },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([3, 10, 11, 12, 20, 21, 22]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'grid')!.typeLabel, 'uint8[? ← rows][2]');
+  });
+
   it('advances by a runtime (countField) inner array size', () => {
     const fmt: FormatDefinition = {
       name: 'dyn',

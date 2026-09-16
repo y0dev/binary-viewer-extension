@@ -229,6 +229,14 @@ shorthand you type by hand, including a chained element type (e.g. typing
 `"int16[4][3]"` as the element type of a count-2 array) up to 3 dimensions
 total — deeper nesting, or an array of an inline structure, needs the JSON tab.
 
+In the Structure view, every level of a nested array shows the full remaining
+shorthand chain as its type label, not just the word "array" — for a 3D
+`vol[2][3][4]` of `int16`, the `vol` row reads `int16[4][3][2]`, each `vol[i]`
+"plane" row reads `int16[4][3]`, and each `vol[i][j]` "row" row reads
+`int16[4]`, so you can tell at a glance what a collapsed level actually holds.
+A level sized by `countField` shows `?` in place of the count it doesn't know
+yet (e.g. `uint8[? ← rows][2]`).
+
 ## FieldDefinition
 
 | Property | Applies to | Meaning |
