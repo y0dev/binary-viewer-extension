@@ -1,6 +1,6 @@
 # Change Log
 
-## 0.18.0
+## 0.17.0
 
 - **Refresh button in the format editor.** A new **↻ Refresh** button next to
   **Change file…** in the **File:** row reloads the definition from its
@@ -8,9 +8,6 @@
   format), discarding unsaved edits in the editor — with a confirmation
   prompt first. Handy after editing the JSON outside the editor, or to back
   out changes you don't want.
-
-## 0.17.0
-
 - **Readable type labels for nested arrays.** In the Structure view, every
   level of a nested array now shows the full remaining shorthand-chain type
   (e.g. `int16[4][3][2]` for the outer level of a 3D array, `int16[4][3]` for
