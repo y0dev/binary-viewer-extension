@@ -104,6 +104,16 @@ export interface FieldDefinition {
   /** For `array`: the element type (a nested field definition without a name is allowed). */
   items?: FieldDefinition;
   /**
+   * For `array`: which element indices the Structure view renders — handy for
+   * an array with 50+ elements where you only care about a slice of it. Either
+   * `{ start, end }` (0-based, both inclusive, either order) or the shorthand
+   * string `"start...end"` (e.g. `"20...35"`). Elements outside the view still
+   * count toward the array's size/offsets; only the display is windowed.
+   * Independent of `binaryViewer.structure.maxArrayElements`, which still caps
+   * the total number of elements shown.
+   */
+  view?: { start?: number; end?: number } | string;
+  /**
    * Nested content:
    *  - `FieldDefinition[]` — a nested structure (with or without `type: "struct"`).
    *    Child offsets are relative to this structure.

@@ -500,3 +500,82 @@ describe('BinaryParser — nested-array element stride', () => {
     assert.deepStrictEqual(recs.map((n) => n.size), [3, 4]);
   });
 });
+
+describe('BinaryParser — array view (windowed rendering)', () => {
+  // int16[50], value at index i == i. "view" only affects what's rendered —
+  // count, size and offsets of the array itself are unaffected.
+  const N = 50;
+  const bytes: number[] = [];
+  for (let i = 0; i < N; i++) {
+    bytes.push(i & 0xff, (i >> 8) & 0xff);
+  }
+  const fmt = (view: unknown): FormatDefinition => ({
+    name: 'v',
+    endianness: 'little',
+    fields: [
+      { name: 'xs', type: 'array', offset: 0, count: N, view: view as never, items: { name: 'v', type: 'int16' } },
+    ],
+  });
+
+  it('renders only the requested window, with correct offsets and values', () => {
+    const { nodes } = parseFormat(fmt('20...35'), win(bytes), { defaultEndianness: 'little' });
+    const shown = nodes.filter((n) => /^xs\[\d+\]$/.test(n.name));
+    assert.strictEqual(shown.length, 16); // 20..35 inclusive
+    assert.strictEqual(shown[0].name, 'xs[20]');
+    assert.strictEqual(shown[0].offset, 40); // 20 * 2 bytes
+    assert.strictEqual(shown[0].value, '20');
+    assert.strictEqual(shown[shown.length - 1].name, 'xs[35]');
+    assert.strictEqual(shown[shown.length - 1].value, '35');
+  });
+
+  it('reports the array itself unaffected by the view — full count, full size', () => {
+    const { nodes } = parseFormat(fmt('20...35'), win(bytes), { defaultEndianness: 'little' });
+    const arr = nodes.find((n) => n.name === 'xs')!;
+    assert.strictEqual(arr.value, '50 elements');
+    assert.strictEqual(arr.size, 100); // 50 * 2 bytes, not just the view
+    assert.match(arr.typeLabel, /view 20…35/);
+  });
+
+  it('summarises elements before and after the view', () => {
+    const { nodes } = parseFormat(fmt('20...35'), win(bytes), { defaultEndianness: 'little' });
+    const before = nodes.find((n) => n.name === 'xs[…]' && /before this view/.test(n.value));
+    const after = nodes.find((n) => n.name === 'xs[…]' && /view ends at element 35/.test(n.value));
+    assert.ok(before, 'expected a "before this view" summary row');
+    assert.match(before!.value, /20 elements before this view/);
+    assert.ok(after, 'expected a "view ends at element 35" summary row');
+    assert.match(after!.value, /14 more elements/); // 50 - 36 = 14 after index 35
+  });
+
+  it('supports "0...5" from the very start (no "before" row)', () => {
+    const { nodes } = parseFormat(fmt('0...5'), win(bytes), { defaultEndianness: 'little' });
+    const shown = nodes.filter((n) => /^xs\[\d+\]$/.test(n.name));
+    assert.deepStrictEqual(shown.map((n) => n.name), ['xs[0]', 'xs[1]', 'xs[2]', 'xs[3]', 'xs[4]', 'xs[5]']);
+    assert.ok(!nodes.some((n) => n.name === 'xs[…]' && /before this view/.test(n.value)));
+  });
+
+  it('accepts a reversed range and the { start, end } object form', () => {
+    const a = parseFormat(fmt('35...20'), win(bytes), { defaultEndianness: 'little' });
+    const b = parseFormat(fmt({ start: 20, end: 35 }), win(bytes), { defaultEndianness: 'little' });
+    const namesOf = (r: typeof a) => r.nodes.filter((n) => /^xs\[\d+\]$/.test(n.name)).map((n) => n.name);
+    assert.deepStrictEqual(namesOf(a), namesOf(b));
+    assert.strictEqual(namesOf(a)[0], 'xs[20]');
+  });
+
+  it('still respects maxArrayElements as a cap inside the view', () => {
+    const { nodes } = parseFormat(fmt('0...49'), win(bytes), {
+      defaultEndianness: 'little',
+      maxArrayElements: 5,
+    });
+    const shown = nodes.filter((n) => /^xs\[\d+\]$/.test(n.name));
+    assert.strictEqual(shown.length, 5);
+    const after = nodes.find((n) => n.name === 'xs[…]')!;
+    assert.match(after.value, /raise binaryViewer\.structure\.maxArrayElements/);
+  });
+
+  it('has no effect when unset', () => {
+    const { nodes } = parseFormat(fmt(undefined), win(bytes), { defaultEndianness: 'little' });
+    const shown = nodes.filter((n) => /^xs\[\d+\]$/.test(n.name));
+    assert.strictEqual(shown.length, N);
+    assert.strictEqual(shown[0].name, 'xs[0]');
+  });
+});

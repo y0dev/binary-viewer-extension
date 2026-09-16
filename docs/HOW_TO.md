@@ -150,7 +150,10 @@ Settings UI (search `Binary Viewer`).
   will still show this for the tail.
 - **An array is truncated with "… N more not shown"** — raise
   `binaryViewer.structure.maxArrayElements` (`0` = no limit); it's the
-  authoritative cap, so raising it always shows more.
+  authoritative cap, so raising it always shows more. To only ever look at one
+  slice of a big array instead, give the field a `view` (e.g. `"20...35"`, or
+  the array row's **view** box in the form editor) — see [Format
+  definitions](FORMAT_DEFINITIONS.md#data-types).
 - **"Edit Format" does nothing** — the active format was applied from a JSON
   file outside any scanned folder, so it isn't registered by name. Use
   **Locate JSON…** in the prompt that follows, or the JSON tab's **Open JSON

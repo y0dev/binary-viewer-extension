@@ -12,6 +12,7 @@ import { computeFieldSize } from './BinaryField';
 import { parseNumericInput } from './humanize';
 import { hasType, isBitFieldForm, isContainerForm, containerChildren } from './FieldShape';
 import { expandShorthandDeep } from './FieldSyntax';
+import { looksLikeArrayView, isViewString } from './ArrayView';
 
 const COMPOSITE_TYPES = new Set([
   'bytes',
@@ -300,6 +301,29 @@ function validateField(
     if (!hasCount && !hasCountField) {
       errors.push(`${path}: "array" requires a non-negative "count" (or a "countField")`);
     }
+    if (field.view !== undefined) {
+      if (!looksLikeArrayView(field.view)) {
+        errors.push(`${path}: "view" must be a "start...end" string or { start, end }`);
+      } else if (typeof field.view === 'string' && !isViewString(field.view)) {
+        errors.push(`${path}: "view" string must look like "20...35"`);
+      } else if (typeof field.view === 'object') {
+        const v = field.view as { start?: unknown; end?: unknown };
+        if (v.start !== undefined && (typeof v.start !== 'number' || v.start < 0)) {
+          errors.push(`${path}.view.start must be a non-negative number`);
+        }
+        if (v.end !== undefined && (typeof v.end !== 'number' || v.end < 0)) {
+          errors.push(`${path}.view.end must be a non-negative number`);
+        }
+      }
+      if (hasCount && field.count! > 0 && field.count! <= 50) {
+        warnings.push(
+          `${path}: "view" is set on an array of only ${field.count} element${field.count === 1 ? '' : 's'} ` +
+            '(≤ 50) — it has no visible effect at that size',
+        );
+      }
+    }
+  } else if (field.view !== undefined) {
+    errors.push(`${path}: "view" only applies to "array" fields`);
   }
 
   const scalarWithBits = isScalarType(t) && isBitSpecArray(field.fields);

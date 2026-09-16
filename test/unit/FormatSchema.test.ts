@@ -100,3 +100,50 @@ describe('FormatSchema.validateFormatText (for the Validate button)', () => {
     assert.ok(r.warnings.length >= 1);
   });
 });
+
+describe('FormatSchema.validateFormat — array view', () => {
+  const withView = (view: unknown, count = 1000) => ({
+    name: 'v',
+    fields: [
+      { name: 'xs', type: 'array', offset: 0, count, view, items: { name: 'i', type: 'uint8' } },
+    ],
+  });
+
+  it('accepts a "start...end" string and a { start, end } object', () => {
+    assert.ok(validateFormat(withView('20...35')).valid);
+    assert.ok(validateFormat(withView({ start: 20, end: 35 })).valid);
+    assert.ok(validateFormat(withView({ start: 20 })).valid);
+  });
+
+  it('rejects an unparseable view string or a non-string/non-object value', () => {
+    assert.ok(!validateFormat(withView('twenty to thirty-five')).valid);
+    assert.ok(!validateFormat(withView(42)).valid);
+    assert.ok(!validateFormat(withView(['20', '35'])).valid);
+  });
+
+  it('rejects negative start/end in the object form', () => {
+    assert.ok(!validateFormat(withView({ start: -1, end: 5 })).valid);
+    assert.ok(!validateFormat(withView({ start: 0, end: -5 })).valid);
+  });
+
+  it('rejects "view" on a non-array field', () => {
+    const r = validateFormat({
+      name: 'v',
+      fields: [{ name: 'x', type: 'uint32', offset: 0, view: '0...5' }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /only applies to "array"/.test(e)));
+  });
+
+  it('warns (does not fail) when set on an array of 50 or fewer elements', () => {
+    const r = validateFormat(withView('0...5', 20));
+    assert.ok(r.valid);
+    assert.ok(r.warnings.some((w) => /no visible effect/.test(w)));
+  });
+
+  it('does not warn past 50 elements', () => {
+    const r = validateFormat(withView('0...5', 51));
+    assert.ok(r.valid);
+    assert.ok(!r.warnings.some((w) => /no visible effect/.test(w)));
+  });
+});

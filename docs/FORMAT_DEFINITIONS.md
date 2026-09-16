@@ -201,6 +201,7 @@ round-trips shorthand you type by hand.
 | `count` | `array` | fixed element count |
 | `countField` | `array` | name of an earlier integer field to read the element count from (a length prefix); `count` wins if both are set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
+| `view` | `array` | which element indices the Structure view renders — `{ start, end }` (0-based, inclusive) or the shorthand string `"start...end"`; doesn't affect the array's actual count/size/offsets |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
 | `endianness` | scalars & multi-byte composites | `"little"` / `"big"` override |
 | `enum` | `enum` + any integer scalar | value→label map or `[{value,name}]` |
@@ -256,6 +257,20 @@ round-trips shorthand you type by hand.
   prefix can't explode the tree. A struct that *contains* a `countField` array
   should give that struct an explicit `size` (or make the dynamic array its last
   field), since the struct's auto-size can't include a run it doesn't know yet.
+
+  For a large array (50+ elements), set `view` to render just a slice of it in
+  the Structure view — either endpoints-inclusive `{ "start": 20, "end": 35 }`,
+  or the shorthand string `"20...35"` (either order; missing endpoints default
+  to the array's bounds). The array's own `count`/size/offsets are unaffected —
+  `view` is purely a display window, and independent of
+  `binaryViewer.structure.maxArrayElements` (which still caps how many
+  elements a view, or the whole array without one, can render at once). The
+  form editor's array rows have their own **view** box for the same shorthand:
+
+  ```jsonc
+  { "name": "samples", "type": "array", "offset": 0, "count": 1000,
+    "view": "20...35", "items": { "name": "v", "type": "int16" } }
+  ```
 
 ## Bit fields
 

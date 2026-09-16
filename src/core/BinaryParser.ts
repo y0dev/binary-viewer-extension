@@ -19,6 +19,7 @@ import { computeFieldSize, computeStructSize, lookupEnumLabel } from './BinaryFi
 import { decodeBits } from './BitField';
 import { isContainerForm, containerChildren } from './FieldShape';
 import { expandShorthandField } from './FieldSyntax';
+import { resolveArrayView } from './ArrayView';
 import { byteBits, byteHex, offsetHex, bigintHex } from './humanize';
 
 export interface ByteWindow {
@@ -396,10 +397,18 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   // what each element actually consumes and only falls back to this.
   const staticEach = computeFieldSize({ ...item, name: item.name || 'item' });
   let size = field.size ?? staticEach * count;
+
+  // An optional window into which elements to render — "view element 20…35"
+  // of a 1000-element array — independent of the maxArrayElements cap.
+  const view = resolveArrayView(field.view, count);
+  const startIdx = view ? view.start : 0;
+  const windowCount = view ? view.end - view.start + 1 : count - startIdx;
+
   const via = field.count === undefined && field.countField ? ` ← ${field.countField}` : '';
+  const viewSuffix = view ? ` (view ${view.start}…${view.end})` : '';
   const node = pushNode(ctx, {
     name: field.name,
-    typeLabel: `${item.type ?? 'struct'}[${count}${via}]`,
+    typeLabel: `${item.type ?? 'struct'}[${count}${via}]${viewSuffix}`,
     offset: abs,
     size,
     value: `${count} element${count === 1 ? '' : 's'}`,
@@ -409,28 +418,52 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
     error: countErr,
   });
   ctx.stack.push({ id: node.id, path: node.path! });
-  const limit = Math.min(count, ctx.maxArrayElements);
-  let cursor = abs;
+
+  // Elements before the view start are never parsed — their byte offsets are
+  // exact for a fixed-size element (the common case) and an estimate for a
+  // dynamically-sized one (rare: an element that is itself a countField array).
+  let cursor = abs + startIdx * staticEach;
+  if (startIdx > 0) {
+    pushNode(ctx, {
+      name: `${field.name}[…]`,
+      typeLabel: '',
+      offset: abs,
+      size: 0,
+      value: `… ${startIdx} element${startIdx === 1 ? '' : 's'} before this view not shown`,
+      depth: depth + 1,
+    });
+  }
+
+  const renderLimit = Math.min(windowCount, ctx.maxArrayElements);
   let parsed = 0;
-  for (let i = 0; i < limit; i++) {
+  for (let i = 0; i < renderLimit; i++) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
     }
+    const idx = startIdx + i;
     const consumed = parseField(
       ctx,
-      { ...item, name: `${field.name}[${i}]`, offset: undefined },
+      { ...item, name: `${field.name}[${idx}]`, offset: undefined },
       cursor,
       depth + 1,
     );
     cursor += consumed || staticEach;
     parsed++;
   }
-  if (parsed < count) {
-    const more = count - parsed;
-    const why =
-      limit < count
-        ? ' (raise binaryViewer.structure.maxArrayElements)'
-        : ' (structure node budget reached)';
+
+  const shown = startIdx + parsed;
+  if (shown < count) {
+    const more = count - shown;
+    let why: string;
+    if (parsed < renderLimit) {
+      why = ' (structure node budget reached)';
+    } else if (renderLimit < windowCount) {
+      why = ' (raise binaryViewer.structure.maxArrayElements)';
+    } else if (view) {
+      why = ` (view ends at element ${view.end})`;
+    } else {
+      why = ' (raise binaryViewer.structure.maxArrayElements)';
+    }
     pushNode(ctx, {
       name: `${field.name}[…]`,
       typeLabel: '',
@@ -441,10 +474,11 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
     });
   }
   ctx.stack.pop();
-  // Only trust the running cursor when *every* element was parsed (not stopped
-  // by the element cap or the node budget); otherwise fall back to the static
-  // estimate, which stays correct for a fully fixed-size array.
-  if (field.size === undefined && parsed === count && count > 0) {
+  // Only trust the running cursor when *every* element was actually parsed,
+  // sequentially from 0 (no view skipped ahead, nothing capped or budgeted);
+  // otherwise fall back to the static estimate, which stays correct for a
+  // fully fixed-size array.
+  if (field.size === undefined && !view && shown === count && count > 0) {
     size = cursor - abs;
     node.size = size;
   }

@@ -75,6 +75,8 @@ in the hex view. Works with a fields-based format or a sections-only one.
   `"int16[24]"`, `"Sample[100]"`, `"char[4]"`.
 - **Length-prefixed arrays** — `"countField": "n"` sizes an array from an earlier
   integer field's decoded value instead of a fixed `count`.
+- **Array views** — `"view": "20...35"` renders just that slice of a big array
+  in the Structure view; the array's own count/size/offsets are unaffected.
 - **Format editor** — build fields, **arrays** (`+ Add Array` → count → element
   type), and nested/reusable structures visually; reorder, **duplicate** a row
   and its subtree, move in/out, collapse; live validation; import / export JSON.

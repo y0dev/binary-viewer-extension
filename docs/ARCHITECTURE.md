@@ -19,7 +19,8 @@
 │                                                                             │
 │  core/  ── pure, no vscode/node ── DataTypes, Endianness, BitField,        │
 │           FieldShape (container/bit-field/primitive classification),        │
-│           FieldSyntax ("float32[8]" shorthand),                           │
+│           FieldSyntax ("float32[8]" shorthand), ArrayView (array `view`    │
+│           windows), FieldColors (raw-view highlight ranges),               │
 │           BinaryField, BinaryParser, FormatSchema (+ validateFormatText),  │
 │           FormatResolve (inline reusable `structures`),                    │
 │           FormatDetector, FormatMerge (name/filename precedence,           │

@@ -35,6 +35,8 @@ interface EditNode {
   type: string;
   /** array only: element count. */
   count: string;
+  /** array only: which elements to render, e.g. "20...35". '' = all of them. */
+  view: string;
   size: string;
   length: string;
   endianness: string;
@@ -171,6 +173,7 @@ function emptyNode(kind: EditNode['kind']): EditNode {
     offset: '',
     type: 'uint8',
     count: kind === 'array' ? '4' : '',
+    view: '',
     size: '',
     length: '',
     endianness: '',
@@ -239,6 +242,11 @@ function fieldToNode(f: FieldDefinition): EditNode {
       node.size =
         f.items?.size !== undefined ? String(f.items.size) : f.size !== undefined ? String(f.size) : '';
     }
+    if (typeof f.view === 'string') {
+      node.view = f.view;
+    } else if (f.view && typeof f.view === 'object' && f.view.start !== undefined && f.view.end !== undefined) {
+      node.view = `${f.view.start}...${f.view.end}`;
+    }
     node.endianness = f.endianness ?? '';
     node.description = f.description ?? '';
     return node;
@@ -291,11 +299,21 @@ function formCanRepresent(def: FormatDefinition | null): boolean {
     }
     return Array.isArray(items.fields) && !looksLikeBitSpecs(items.fields);
   };
+  // A `view` object with only one of start/end can't round-trip through the
+  // form's single "start...end" text box.
+  const viewIsPartialObject = (view: FieldDefinition['view']): boolean =>
+    !!view &&
+    typeof view === 'object' &&
+    !Array.isArray(view) &&
+    (view.start === undefined) !== (view.end === undefined);
   const walk = (fields: FieldDefinition[] | undefined): boolean => {
     for (const f of fields ?? []) {
       const sh = parseArrayShorthand(f.type);
       const isArray = f.type === 'array' || (sh && !STRING_OR_SIZED.has(sh.base));
       if (isArray && itemIsComplex(f.items)) {
+        return false;
+      }
+      if (isArray && viewIsPartialObject(f.view)) {
         return false;
       }
       if (f.items && !walk([f.items])) {
@@ -417,6 +435,9 @@ function nodeToField(node: EditNode): FieldDefinition {
     const off = num(node.offset);
     if (off !== undefined) {
       f.offset = off;
+    }
+    if (node.view.trim()) {
+      f.view = node.view.trim();
     }
     if (node.endianness === 'little' || node.endianness === 'big') {
       f.endianness = node.endianness;
@@ -981,7 +1002,7 @@ function render(): void {
   wrap.append(
     el('div', {
       class: 'fe-hint',
-      text: 'For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. In JSON you can also write the type as "float32[8]" (or "int16[24]", "Sample[100]" for a reusable structure). For a length-prefixed array, put the name of an earlier integer field in the count box instead of a number.',
+      text: 'For a fixed array — e.g. 8 floats — use "+ Add Array": set count to 8 and the element type to float32. In JSON you can also write the type as "float32[8]" (or "int16[24]", "Sample[100]" for a reusable structure). For a length-prefixed array, put the name of an earlier integer field in the count box instead of a number. For a large array, use the array row\'s view box (e.g. "20...35") to render only that slice in the Structure view — the array itself is unaffected.',
     }),
   );
   const tree = el('div', { class: 'fe-tree' });
@@ -1341,6 +1362,18 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
       }),
     ]);
     line2.append(adv);
+  } else if (node.kind === 'array') {
+    line2.append(
+      labelled(
+        'view',
+        bindInput(node, 'view', {
+          width: 110,
+          placeholder: 'optional, e.g. 20...35',
+          title:
+            'Only render these element indices in the Structure view (0-based, inclusive, either order) — handy once the array has 50+ elements. The array itself (count, size, offsets) is unaffected.',
+        }),
+      ),
+    );
   }
   rowEl.append(line2);
 

@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.13.0
+
+- **Array views — render just a slice of a big array.** An `array` field can
+  set `"view": "20...35"` (or `{ "start": 20, "end": 35 }`, both inclusive,
+  either order) so the Structure view renders only that window of elements
+  instead of always starting at 0. Elements outside the view are summarised as
+  "… N elements before/after this view not shown"; the array's own count,
+  size and offsets are completely unaffected, and it composes with
+  `binaryViewer.structure.maxArrayElements`, which still caps how many
+  elements are shown at once. The form editor's array rows get a matching
+  **view** box. Warns (doesn't fail validation) when set on an array of 50 or
+  fewer elements, where it has no visible effect. Pure `core/ArrayView.ts`.
+
 ## 0.12.0
 
 - **Format editor tracks its backing file.** A "File: …" row (both Form and
