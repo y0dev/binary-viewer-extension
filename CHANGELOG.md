@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.15.1
+
+- **Fix: multi-word constant names in a "+" sum.** A `constants` entry like
+  `"Num of Animals": "Number of Dogs + Number of Cats"` failed to resolve —
+  each term was checked against an identifier pattern that rejected spaces.
+  A term is now matched against the other defined constant names directly, so
+  any name works as long as it doesn't contain a literal `+`.
+
 ## 0.15.0
 
 - **Named constants for array size.** A top-level `constants` map defines

@@ -4,9 +4,11 @@
  * instead of only an earlier decoded field's value.
  *
  * A constant is either a plain number, or a string that sums named constants
- * and/or literal integers with `+` (e.g. `"Mean + Range"`, `"Rows + 1"`).
- * That's the only operation supported — this stays declarative data, never
- * code to execute.
+ * and/or literal integers with `+` (e.g. `"Mean + Range"`, `"Number of Dogs +
+ * Number of Cats"`, `"Rows + 1"`). A name can contain spaces — a term is
+ * matched against the other defined constant names, not an identifier
+ * pattern — so it just can't contain a literal `+`. That's the only
+ * operation supported — this stays declarative data, never code to execute.
  */
 
 export type ConstantsMap = Record<string, number | string>;
@@ -18,7 +20,6 @@ export interface ResolveConstantsResult {
   errors: string[];
 }
 
-const IDENT_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const INT_RE = /^-?\d+$/;
 
 /** Resolve every entry in `constants`, following `"A + B + 1"`-style sums, with cycle detection. */
@@ -59,7 +60,7 @@ export function resolveConstants(constants: ConstantsMap | undefined): ResolveCo
         }
         if (INT_RE.test(term)) {
           sum += Number(term);
-        } else if (IDENT_RE.test(term)) {
+        } else if (Object.prototype.hasOwnProperty.call(constants!, term)) {
           const v = resolveOne(term);
           if (v === undefined) {
             ok = false;

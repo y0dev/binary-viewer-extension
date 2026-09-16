@@ -20,6 +20,16 @@ describe('resolveConstants', () => {
     assert.deepStrictEqual(r.errors, []);
   });
 
+  it('supports multi-word constant names as terms', () => {
+    const r = resolveConstants({
+      'Number of Dogs': 3,
+      'Number of Cats': 5,
+      'Num of Animals': 'Number of Dogs + Number of Cats',
+    });
+    assert.strictEqual(r.values['Num of Animals'], 8);
+    assert.deepStrictEqual(r.errors, []);
+  });
+
   it('sums a constant and a literal integer', () => {
     const r = resolveConstants({ Rows: 4, RowsPlusOne: 'Rows + 1' });
     assert.strictEqual(r.values.RowsPlusOne, 5);

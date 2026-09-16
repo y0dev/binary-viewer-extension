@@ -292,6 +292,34 @@ describe('BinaryParser — array countField (length prefix)', () => {
     assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '3 elements');
   });
 
+  it('resolves a derived constant whose name and terms contain spaces', () => {
+    const withConst: FormatDefinition = {
+      name: 'lp-const-spaces',
+      endianness: 'little',
+      constants: {
+        'Number of Dogs': 3,
+        'Number of Cats': 5,
+        'Num of Animals': 'Number of Dogs + Number of Cats',
+      },
+      fields: [
+        {
+          name: 'values',
+          type: 'array',
+          offset: 0,
+          countField: 'Num of Animals',
+          items: { name: 'v', type: 'uint8' },
+        },
+      ],
+    };
+    const { nodes, error } = parseFormat(
+      withConst,
+      win([1, 2, 3, 4, 5, 6, 7, 8]),
+      { defaultEndianness: 'little' },
+    );
+    assert.strictEqual(error, undefined);
+    assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '8 elements');
+  });
+
   it('falls back to an earlier decoded field when countField does not match a constant', () => {
     const withConst: FormatDefinition = {
       name: 'lp-fallback',
