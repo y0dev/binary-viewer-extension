@@ -13,6 +13,7 @@ export class Toolbar {
   private offsetReadout: HTMLElement;
   private formatSelectWrap: HTMLElement;
   private inspectorBtn: HTMLButtonElement;
+  private highlightBtn: HTMLButtonElement;
   private rawBtn: HTMLButtonElement;
   private structBtn: HTMLButtonElement;
   private sectionsBtn: HTMLButtonElement;
@@ -111,6 +112,20 @@ export class Toolbar {
       },
     });
 
+    this.highlightBtn = el('button', {
+      class: 'bv-btn',
+      text: 'Field Colors',
+      title:
+        'Raw view only. Tint each byte by its top-level field so boundaries are visible at a glance. Requires an applied format.',
+      onclick: () => {
+        if (!this.store.state.activeFormat) {
+          return;
+        }
+        this.store.update({ fieldHighlight: !this.store.state.fieldHighlight });
+        this.persist();
+      },
+    });
+
     const searchBtn = el('button', { class: 'bv-btn', text: 'Search', onclick: () => this.cb.onToggleSearch() });
 
     this.gotoInput = el('input', {
@@ -157,6 +172,7 @@ export class Toolbar {
       this.formatSelectWrap,
       el('span', { class: 'bv-spacer' }),
       this.inspectorBtn,
+      this.highlightBtn,
       searchBtn,
       gotoBtn,
       this.gotoInput,
@@ -179,6 +195,12 @@ export class Toolbar {
       if (changed.has('showInspector')) {
         this.inspectorBtn.classList.toggle('bv-btn-active', this.store.state.showInspector);
       }
+      if (changed.has('fieldHighlight')) {
+        this.highlightBtn.classList.toggle('bv-btn-active', this.store.state.fieldHighlight);
+      }
+      if (changed.has('activeFormat')) {
+        this.syncHighlightBtn();
+      }
       if (
         changed.has('caret') ||
         changed.has('selection') ||
@@ -196,6 +218,19 @@ export class Toolbar {
     this.syncOffset();
     this.renderFormatSelect();
     this.inspectorBtn.classList.toggle('bv-btn-active', this.store.state.showInspector);
+    this.highlightBtn.classList.toggle('bv-btn-active', this.store.state.fieldHighlight);
+    this.syncHighlightBtn();
+  }
+
+  /** Field Colors only makes sense with a format applied — disable it, and
+   * turn it off, otherwise. */
+  private syncHighlightBtn(): void {
+    const has = this.store.state.activeFormat !== null;
+    this.highlightBtn.disabled = !has;
+    if (!has && this.store.state.fieldHighlight) {
+      this.store.update({ fieldHighlight: false });
+      this.persist();
+    }
   }
 
   private setView(view: 'raw' | 'structure' | 'sections'): void {
@@ -278,6 +313,7 @@ export class Toolbar {
         byteGroup: s.byteGroup,
         endianness: s.endianness,
         showInspector: s.showInspector,
+        fieldHighlight: s.fieldHighlight,
         scrollTop: 0,
         activeFormat: s.activeFormat,
       },

@@ -2,6 +2,8 @@ import { Store, displayAddr } from './state';
 import { DataProvider } from './DataProvider';
 import { VirtualGrid } from './VirtualGrid';
 import { groupHexDisplay, parseByteGroup } from '../core/humanize';
+import { computeFieldColorRanges, fieldColorAt, FieldColorRange } from '../core/FieldColors';
+import type { ParsedNode } from '../types/messages';
 
 const HEX_LUT: string[] = [];
 for (let i = 0; i < 256; i++) {
@@ -44,6 +46,9 @@ export class HexView {
   private lastWindowKey = '';
   private measured = false;
   private forceNext = false;
+  /** Field Colors overlay: memoized against the `parsed` array it was built from. */
+  private fieldRanges: FieldColorRange[] = [];
+  private fieldRangesSrc: ParsedNode[] | null = null;
 
   constructor(
     private root: HTMLElement,
@@ -92,7 +97,10 @@ export class HexView {
         changed.has('activeNodeId') ||
         changed.has('baseAddress') ||
         changed.has('formatBaseAddress') ||
-        changed.has('byteGroup')
+        changed.has('byteGroup') ||
+        changed.has('fieldHighlight') ||
+        changed.has('parsed') ||
+        changed.has('activeFormat')
       ) {
         this.render(true);
       }
@@ -160,7 +168,8 @@ export class HexView {
     const bpr = this.store.state.bytesPerRow;
     const { bytes: g, le } = parseByteGroup(this.store.state.byteGroup);
     const base = this.store.state.formatBaseAddress ?? this.store.state.baseAddress;
-    const key = `${win.firstRow}:${win.rowCount}:${bpr}:${g}:${le}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}`;
+    this.ensureFieldRanges();
+    const key = `${win.firstRow}:${win.rowCount}:${bpr}:${g}:${le}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}:${this.fieldRanges.length}`;
     if (!force && key === this.lastWindowKey) {
       return;
     }
@@ -212,7 +221,8 @@ export class HexView {
           text = groupHexDisplay(word, le);
         }
         const cls = this.groupClass(o, g, sel.start, selEnd, caret);
-        html += `<span class="bv-cell bv-cell-w${g}${split}${cls}" data-o="${o}">${text}</span>`;
+        const style = this.fieldStyle(o);
+        html += `<span class="bv-cell bv-cell-w${g}${split}${cls}"${style} data-o="${o}">${text}</span>`;
       }
       html += '</span><span class="bv-asc-sep"></span><span class="bv-ascii">';
       for (let c = 0; c < bpr; c++) {
@@ -223,13 +233,37 @@ export class HexView {
         }
         const b = bytes[o - startOffset] ?? 0;
         const cls = this.groupClass(o, 1, sel.start, selEnd, caret);
-        html += `<span class="bv-ac${cls}" data-o="${o}">${asciiHtml(b)}</span>`;
+        const style = this.fieldStyle(o);
+        html += `<span class="bv-ac${cls}"${style} data-o="${o}">${asciiHtml(b)}</span>`;
       }
       html += '</span></div>';
     }
 
     this.layer.style.transform = `translateY(${win.layerTop}px)`;
     this.layer.innerHTML = html;
+  }
+
+  /** Recompute the Field Colors ranges when the toggle, format or parse result changed. */
+  private ensureFieldRanges(): void {
+    const s = this.store.state;
+    if (!s.fieldHighlight || !s.activeFormat) {
+      this.fieldRanges = [];
+      this.fieldRangesSrc = null;
+      return;
+    }
+    if (this.fieldRangesSrc !== s.parsed) {
+      this.fieldRanges = computeFieldColorRanges(s.parsed);
+      this.fieldRangesSrc = s.parsed;
+    }
+  }
+
+  /** A `style="--field-bg:…"` attribute for offset `o` (group start for words), or ''. */
+  private fieldStyle(o: number): string {
+    if (this.fieldRanges.length === 0) {
+      return '';
+    }
+    const color = fieldColorAt(this.fieldRanges, o);
+    return color ? ` style="--field-bg:${color}33"` : '';
   }
 
   /** Highlight class for a cell/token covering [o, o+span). */

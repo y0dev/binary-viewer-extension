@@ -18,6 +18,8 @@ export interface AppState {
   byteGroup: ByteGroupMode;
   endianness: Endianness;
   showInspector: boolean;
+  /** Raw view only: tint bytes by their top-level field. Needs an applied format. */
+  fieldHighlight: boolean;
 
   /** Caret byte offset. */
   caret: number;

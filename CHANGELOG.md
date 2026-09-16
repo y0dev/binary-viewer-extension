@@ -1,5 +1,18 @@
 # Change Log
 
+## 0.11.0
+
+- **Field Colors — highlight each field's bytes in the raw hex view.** A new
+  toolbar toggle tints every byte by the top-level field it belongs to (a
+  nested struct/array is one color for its whole span), so field boundaries
+  are visible without switching to Structure. Off by default and disabled
+  until a format is applied to the file — there's nothing to color by
+  otherwise — and it turns itself back off if the format is cleared. Byte
+  selection and the caret outline stay fully visible over the tint, so the raw
+  view is still just as usable for plain selection. Pure
+  `core/FieldColors.ts` (Okabe–Ito colorblind-safe palette, cycled by
+  top-level field order; binary-search byte→color lookup).
+
 ## 0.10.0
 
 - **Word view in the raw hex dump.** A new **Group** control in the Raw toolbar

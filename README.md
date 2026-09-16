@@ -38,6 +38,10 @@ in the hex view. Works with a fields-based format or a sections-only one.
 
 - **16 / 8 / 32 bytes per row**, virtualized rendering, horizontal + vertical
   scroll, full keyboard navigation, hex ⟷ ASCII selection sync.
+- **Word view & Field Colors** — group the raw hex into 16/32/64-bit words
+  (`·LE` reverses bytes so a little-endian `01 00 00 00` reads as `00000001`),
+  and optionally tint each byte by its top-level field once a format is
+  applied — both raw-view-only, selection still works normally either way.
 - **Data inspector** — per-byte hex/binary/octal/signed/unsigned/ASCII and
   `int8…int64` / `uint8…uint64` / `float32` / `float64` for the selection in both
   endiannesses.

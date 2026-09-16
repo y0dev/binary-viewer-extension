@@ -172,6 +172,7 @@ export interface WebviewPersistedState {
   byteGroup: ByteGroupMode;
   endianness: Endianness;
   showInspector: boolean;
+  fieldHighlight: boolean;
   scrollTop: number;
   activeFormat: string | null;
 }

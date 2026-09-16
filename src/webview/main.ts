@@ -133,6 +133,9 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     byteGroup: persisted.byteGroup ?? msg.config.byteGroup,
     endianness: persisted.endianness ?? msg.config.defaultEndianness,
     showInspector: persisted.showInspector ?? msg.config.showInspector,
+    // Needs an applied format; don't restore it "on" against a file that no
+    // longer has one active.
+    fieldHighlight: (persisted.fieldHighlight ?? false) && activeFormat !== null,
     caret: 0,
     anchor: 0,
     selection: { start: 0, length: 1 },
@@ -263,6 +266,7 @@ function persist(): void {
     byteGroup: s.byteGroup,
     endianness: s.endianness,
     showInspector: s.showInspector,
+    fieldHighlight: s.fieldHighlight,
     activeFormat: s.activeFormat,
   });
   post({
@@ -273,6 +277,7 @@ function persist(): void {
       byteGroup: s.byteGroup,
       endianness: s.endianness,
       showInspector: s.showInspector,
+      fieldHighlight: s.fieldHighlight,
       scrollTop: hexView?.scrollTop ?? 0,
       activeFormat: s.activeFormat,
     },

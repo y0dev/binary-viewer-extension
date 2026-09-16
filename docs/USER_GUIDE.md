@@ -15,7 +15,7 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
 ## The toolbar
 
 ```
-[ Raw ] [ Structure ] [ Sections ]   Bytes: [16 ▼]  Group: [1 byte ▼]  Endian: [Little ▼]   Format: [ … ▼ ] ↻   [ Inspector ] [ Search ] [ Go To ]   0x00000120
+[ Raw ] [ Structure ] [ Sections ]   Bytes: [16 ▼]  Group: [1 byte ▼]  Endian: [Little ▼]   Format: [ … ▼ ] ↻   [ Inspector ] [ Field Colors ] [ Search ] [ Go To ]   0x00000120
 ```
 
 - **Raw / Structure / Sections** — switch views. Structure and Sections need a
@@ -34,6 +34,12 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
   `[workspace]` / `[builtin]`; `(detected)` marks the auto-detected one. Choose
   **(none)** to go back to raw-only. The **↻** button rescans the workspace and
   global formats folders.
+- **Field Colors** — *raw view only.* Tints each byte by its top-level field
+  (a nested struct/array is one color for its whole span) so field boundaries
+  are visible directly in the hex dump. Off by default; the button is
+  disabled until a format is applied to the file (there's nothing to color by
+  otherwise) and turns itself back off if the format is cleared. Selection and
+  the caret outline still show clearly over the tint.
 - **Inspector / Search / Go To** — toggles and tools (also on the command
   palette and keybindings).
 - The right-hand readout shows the caret offset and `+N` selection length.
