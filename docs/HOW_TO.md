@@ -94,10 +94,12 @@ fixed value the format author picked, not decoded from the file), or an
 earlier field's name (its *decoded* value at parse time) — so
 `"Number of Dogs + Number of Cats"` sums two header fields directly, no
 Constants section needed. **Save** writes to the format's file (shown in the **File:**
-row — **Change file…** redirects it); a brand-new format writes to global
-storage on first save. **Save draft** saves even with validation errors,
-always as a separate global-storage copy so it can't clobber a real file with
-something invalid.
+row — **Change file…** redirects it, **↻ Refresh** reloads from that file,
+discarding unsaved edits here — handy after editing the JSON outside the
+editor, or to back out changes you don't want); a brand-new format writes to
+global storage on first save. **Save draft** saves even with validation
+errors, always as a separate global-storage copy so it can't clobber a real
+file with something invalid.
 
 **Prefer JSON?** The editor's **JSON** tab edits the whole definition as text
 — it opens there automatically for anything the form can't fully draw (an

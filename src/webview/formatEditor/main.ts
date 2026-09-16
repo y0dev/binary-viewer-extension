@@ -868,6 +868,18 @@ function renderFileRow(): HTMLElement {
     fileRowPath,
     el('button', {
       class: 'secondary icon-text',
+      text: '↻ Refresh',
+      title: sourcePath
+        ? 'Reload this definition from its file, discarding unsaved edits here'
+        : 'Reset the form back to what was last loaded, discarding unsaved edits here',
+      onclick: () => {
+        if (confirm('Reload from the last save, discarding unsaved changes in this editor?')) {
+          post({ type: 'reload' });
+        }
+      },
+    }),
+    el('button', {
+      class: 'secondary icon-text',
       text: 'Change file…',
       title: 'Save this definition to a different file and use it as the save target from now on',
       onclick: () => post({ type: 'changeSavePath', format: buildDefinition() }),

@@ -227,6 +227,27 @@ export class FormatEditorPanel {
         break;
       }
 
+      case 'reload': {
+        if (!this.pending.sourceUri) {
+          // Never saved to a file — nothing on disk to re-read; just reset
+          // the form back to whatever was last loaded/saved in this session.
+          this.load(this.pending);
+          break;
+        }
+        try {
+          const raw = await vscode.workspace.fs.readFile(this.pending.sourceUri);
+          const parsed = JSON.parse(Buffer.from(raw).toString('utf8'));
+          const def = (Array.isArray(parsed) ? parsed[0] : parsed) as FormatDefinition;
+          this.pending = { format: def, editing: true, sourceUri: this.pending.sourceUri };
+          this.load(this.pending);
+        } catch (e) {
+          void vscode.window.showErrorMessage(
+            `Couldn't reload the format file: ${(e as Error).message}`,
+          );
+        }
+        break;
+      }
+
       case 'cancel':
         this.panel.dispose();
         break;
