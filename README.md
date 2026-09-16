@@ -177,6 +177,7 @@ save) and **↻ Apply to open binary** buttons. See
 
 ## Documentation
 
+- [**How To** — task-oriented quick reference](docs/HOW_TO.md)
 - [User guide](docs/USER_GUIDE.md)
 - [**Creating a binary format** — step-by-step walkthrough](docs/CREATING_A_FORMAT.md)
 - [Format-definition reference](docs/FORMAT_DEFINITIONS.md)

@@ -12,6 +12,9 @@
   view is still just as usable for plain selection. Pure
   `core/FieldColors.ts` (Okabe–Ito colorblind-safe palette, cycled by
   top-level field order; binary-search byte→color lookup).
+- **New [`docs/HOW_TO.md`](docs/HOW_TO.md)** — a task-oriented quick reference
+  ("how do I…") linking out to the deeper guides, with a troubleshooting
+  section.
 
 ## 0.10.0
 
