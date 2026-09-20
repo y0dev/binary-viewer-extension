@@ -88,12 +88,17 @@ scalar, a structure name, or a shorthand (`float32[8]`, `int16[4]` for nested
 arrays, `Sample[100]`) — a chained shorthand like `int16[4][3]` as an array's
 element type gives a nested array (up to 3 dimensions total in the form).
 Enum fields get a value → label table; timestamp fields get size/unit/epoch
-dropdowns — no JSON needed for either. An array's Count/CountField box takes a
-`"+"`-separated sum of terms — a literal number, a **Constants** entry (a
-fixed value the format author picked, not decoded from the file), or an
-earlier field's name (its *decoded* value at parse time) — so
-`"Number of Dogs + Number of Cats"` sums two header fields directly, no
-Constants section needed. **Save** writes to the format's file (shown in the **File:**
+dropdowns — no JSON needed for either. An array's Count/CountField box, and
+every field's Offset box, take a `"+"`-separated sum of terms — a literal
+number, a **Constants** entry (a fixed value the format author picked, not
+decoded from the file), or an earlier field's decoded value at parse time —
+so `"Number of Dogs + Number of Cats"` sums two header fields directly, no
+Constants section needed, and a field's Offset can point past a pointer
+stored earlier in the file (e.g. a boot header's image-table offset) instead
+of a fixed number. Each row also has an **id** box (second line) for a short
+reference name — handy when the field's own Name is long or awkward to
+retype into another field's Count/CountField or Offset box; referencing by
+Name still works too. **Save** writes to the format's file (shown in the **File:**
 row — **Change file…** redirects it, **↻ Refresh** reloads from that file,
 discarding unsaved edits here — handy after editing the JSON outside the
 editor, or to back out changes you don't want); a brand-new format writes to
@@ -111,8 +116,8 @@ saves to it.
 Walkthrough of a real format end-to-end: [Creating a binary
 format](CREATING_A_FORMAT.md). Full field/type reference:
 [Format definitions](FORMAT_DEFINITIONS.md) (arrays incl. length-prefixed
-`countField`, reusable `structures`, `sections`, `baseAddress`, timestamp
-epochs, bit-fields, enums).
+`countField`, pointer-style `offsetField`, reusable `structures`, `sections`,
+`baseAddress`, timestamp epochs, bit-fields, enums).
 
 ## Edit a format's JSON by hand, outside the form editor
 
@@ -155,19 +160,21 @@ Settings UI (search `Binary Viewer`).
   `offset` + size goes beyond the file; check it against the hex view.
 - **A Structure row shows `outside loaded window`** — for most files this
   means an offset/size mistake in the format. For a `countField`
-  (length-prefixed) array, the decode window auto-widens to the whole file
-  (capped at 8 MB); a file bigger than that with dynamic content past 8 MB
-  will still show this for the tail.
-- **A `countField` array shows `"<term>" is not a defined constant or an
-  earlier field`** — `countField` is a `"+"`-sum of terms, checked one at a
-  time (a single name is a one-term sum). Each term must be a literal
-  integer, a top-level `constants` entry, or an earlier decoded integer field
-  (same or an enclosing structure, parsed before this array). The error names
-  the specific term that didn't match either — check its spelling, and check
-  it's not a field further down that hasn't been parsed yet. **A `constants`
-  entry never sees decoded bytes** — if the values are themselves fields in
-  the file, sum the field names directly in `countField` instead of putting
-  them in `constants`.
+  (length-prefixed) array, or a field with `offsetField` (a pointer), the
+  decode window auto-widens to the whole file (capped at 8 MB); a file
+  bigger than that with dynamic content past 8 MB will still show this for
+  the tail.
+- **A `countField`/`offsetField` shows `"<term>" is not a defined constant or
+  an earlier field`** — both are a `"+"`-sum of terms, checked one at a time
+  (a single name is a one-term sum). Each term must be a literal integer, a
+  top-level `constants` entry, or an earlier decoded integer field — matched
+  by `id` first, then `name` (same or an enclosing structure, parsed before
+  this field). The error names the specific term that didn't match either —
+  check its spelling, and check it's not a field further down that hasn't
+  been parsed yet. **A `constants` entry never sees decoded bytes** — if the
+  values are themselves fields in the file, sum the field names (or ids)
+  directly in `countField`/`offsetField` instead of putting them in
+  `constants`.
 - **An array is truncated with "… N more not shown"** — raise
   `binaryViewer.structure.maxArrayElements` (`0` = no limit); it's the
   authoritative cap, so raising it always shows more. To only ever look at one

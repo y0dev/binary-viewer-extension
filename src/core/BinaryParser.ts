@@ -145,7 +145,10 @@ export function parseFormat(
       if (ctx.nodes.length >= ctx.maxNodes) {
         return { nodes: ctx.nodes, error: 'Structure truncated: too many fields' };
       }
-      const abs = field.offset ?? cursor;
+      const abs = resolveFieldOffset(ctx, field, 0, cursor, 0);
+      if (abs === null) {
+        continue;
+      }
       const size = parseField(ctx, field, abs, 0);
       cursor = abs + size;
     }
@@ -300,12 +303,18 @@ function parseField(ctx: Ctx, rawField: FieldDefinition, abs: number, depth: num
     detail: field.description ? `${field.description} — ${detail}` : detail,
     depth,
     numericValue: typeof raw === 'number' && scalar.category === 'int' ? raw : undefined,
+    fieldId: field.id,
   });
   return size;
 }
 
-/** A literal integer, a `constants` entry, or an earlier decoded field's numeric value. */
-function resolveCountTerm(ctx: Ctx, term: string): number | undefined {
+/**
+ * A literal integer, a `constants` entry, or an earlier decoded field's
+ * numeric value — matched by `id` first, then `name` (so a field with an
+ * awkward display name can still be referenced by a short id, while every
+ * existing name-based reference keeps working).
+ */
+function resolveTerm(ctx: Ctx, term: string): number | undefined {
   if (/^-?\d+$/.test(term)) {
     return Number(term);
   }
@@ -314,7 +323,7 @@ function resolveCountTerm(ctx: Ctx, term: string): number | undefined {
   }
   for (let i = ctx.nodes.length - 1; i >= 0; i--) {
     const n = ctx.nodes[i];
-    if (n.name === term && typeof n.numericValue === 'number') {
+    if (typeof n.numericValue === 'number' && (n.fieldId === term || n.name === term)) {
       return n.numericValue;
     }
   }
@@ -322,34 +331,92 @@ function resolveCountTerm(ctx: Ctx, term: string): number | undefined {
 }
 
 /**
- * Resolve an `array` field's element count: an explicit `count` wins; otherwise
- * `countField` is a `"+"`-separated sum of terms — each one a literal integer,
- * a format-level `constants` entry (a fixed, author-defined value), or an
- * earlier decoded integer field (a runtime length prefix, in the same or an
- * enclosing structure) — so `"Number of Dogs + Number of Cats"` sums two
- * decoded header fields directly. Returns `null` (with `badTerm` set) when a
- * term matches none of those.
+ * Resolve a `"+"`-separated sum of terms shared by `countField` and
+ * `offsetField` — each term a literal integer, a format-level `constants`
+ * entry (a fixed, author-defined value), or an earlier decoded integer field
+ * by `id` or `name` (in the same or an enclosing structure). A single name is
+ * just a one-term sum. Returns `null` (with `badTerm` set) when a term
+ * matches none of those.
+ */
+function resolveTermSum(ctx: Ctx, expr: string): { value: number | null; badTerm?: string } {
+  const terms = expr.split('+').map((t) => t.trim());
+  if (terms.length === 0 || terms.some((t) => t === '')) {
+    return { value: null, badTerm: expr };
+  }
+  let sum = 0;
+  for (const term of terms) {
+    const v = resolveTerm(ctx, term);
+    if (v === undefined) {
+      return { value: null, badTerm: term };
+    }
+    sum += v;
+  }
+  return { value: sum };
+}
+
+/**
+ * Resolve an `array` field's element count: an explicit `count` wins;
+ * otherwise `countField` is resolved via `resolveTermSum` — so
+ * `"Number of Dogs + Number of Cats"` sums two decoded header fields
+ * directly. Returns `null` (with `badTerm` set) when a term can't be resolved.
  */
 function resolveArrayCount(ctx: Ctx, field: FieldDefinition): { count: number | null; badTerm?: string } {
   if (field.count !== undefined) {
     return { count: Math.max(0, Math.floor(field.count)) };
   }
   if (field.countField) {
-    const terms = field.countField.split('+').map((t) => t.trim());
-    if (terms.length === 0 || terms.some((t) => t === '')) {
-      return { count: null, badTerm: field.countField };
-    }
-    let sum = 0;
-    for (const term of terms) {
-      const v = resolveCountTerm(ctx, term);
-      if (v === undefined) {
-        return { count: null, badTerm: term };
-      }
-      sum += v;
-    }
-    return { count: Math.max(0, Math.floor(sum)) };
+    const { value, badTerm } = resolveTermSum(ctx, field.countField);
+    return { count: value === null ? null : Math.max(0, Math.floor(value)), badTerm };
   }
   return { count: 0 };
+}
+
+/**
+ * Resolve a field's absolute position from `offsetField` — a pointer stored
+ * elsewhere in the file (or a fixed `constants` value), via the same
+ * `resolveTermSum` as `countField`. Always absolute from the start of the
+ * file, regardless of nesting. Returns `null` (with `badTerm` set) on failure.
+ */
+function resolveOffsetField(ctx: Ctx, field: FieldDefinition): { offset: number | null; badTerm?: string } {
+  const { value, badTerm } = resolveTermSum(ctx, field.offsetField!);
+  return { offset: value === null ? null : Math.max(0, Math.floor(value)), badTerm };
+}
+
+/**
+ * Where `field` should be parsed: `field.offset` (relative to `base`, so
+ * absolute at the top level where `base` is 0) if set; otherwise
+ * `offsetField` resolved to an absolute file position (a pointer); otherwise
+ * packed after `cursor`, relative to `base`. On an unresolvable
+ * `offsetField`, pushes an error node in `field`'s place and returns `null`
+ * — the caller should skip parsing it (there's no valid position to read at).
+ */
+function resolveFieldOffset(
+  ctx: Ctx,
+  field: FieldDefinition,
+  base: number,
+  cursor: number,
+  depth: number,
+): number | null {
+  if (field.offset !== undefined) {
+    return base + field.offset;
+  }
+  if (field.offsetField) {
+    const { offset, badTerm } = resolveOffsetField(ctx, field);
+    if (offset === null) {
+      pushNode(ctx, {
+        name: field.name,
+        typeLabel: '',
+        offset: base + cursor,
+        size: 0,
+        value: '',
+        depth,
+        error: `"${badTerm}" is not a defined constant or an earlier field`,
+      });
+      return null;
+    }
+    return offset;
+  }
+  return base + cursor;
 }
 
 function describeScalar(raw: number | bigint | boolean, sizeBytes: number, category: string): string {
@@ -399,8 +466,12 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
     }
-    const rel = f.offset ?? cursor;
-    const csize = parseField(ctx, f, abs + rel, depth + 1);
+    const childAbs = resolveFieldOffset(ctx, f, abs, cursor, depth + 1);
+    if (childAbs === null) {
+      continue;
+    }
+    const rel = childAbs - abs;
+    const csize = parseField(ctx, f, childAbs, depth + 1);
     cursor = rel + csize;
     end = Math.max(end, cursor);
   }
@@ -632,6 +703,7 @@ function parseEnum(ctx: Ctx, field: FieldDefinition, abs: number, depth: number)
     detail: field.description ? `${field.description} — ${rawHex}` : rawHex,
     depth,
     numericValue: typeof raw === 'number' ? raw : undefined,
+    fieldId: field.id,
   });
   return sizeBytes;
 }

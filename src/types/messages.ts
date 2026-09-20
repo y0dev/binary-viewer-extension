@@ -53,9 +53,12 @@ export interface ParsedNode {
   bits?: ParsedBit[];
   /**
    * Decoded integer value, set for plain integer scalars and `enum` fields so a
-   * later `array` can use this field as its `countField` (length prefix).
+   * later `array` can use this field as its `countField` (length prefix), or
+   * another field as its `offsetField` (a pointer).
    */
   numericValue?: number;
+  /** The originating `FieldDefinition.id`, when set — an alternative to `name` for `countField`/`offsetField`. */
+  fieldId?: string;
   error?: string;
 }
 

@@ -34,14 +34,19 @@ export function computeStructSize(field: FieldDefinition): number {
 }
 
 /**
- * True when any field in the tree is sized only at parse time — an `array`
- * with `countField` and no fixed `count`. Callers that need to bound a read
- * ahead of parsing (the editor's decode window) must widen it in that case,
- * since `computeFieldSize` reports 0 for such a field.
+ * True when any field in the tree is positioned or sized only at parse time —
+ * an `array` with `countField` and no fixed `count`, or a field with
+ * `offsetField` and no fixed `offset` (a pointer stored elsewhere in the
+ * file). Callers that need to bound a read ahead of parsing (the editor's
+ * decode window) must widen it in that case, since `computeFieldSize`
+ * reports 0 for such a field and its position could be anywhere in the file.
  */
 export function hasParseTimeSize(fields: readonly FieldDefinition[] | undefined): boolean {
   for (const f of fields ?? []) {
     if (f.type === 'array' && f.countField && f.count === undefined) {
+      return true;
+    }
+    if (f.offsetField && f.offset === undefined) {
       return true;
     }
     if (f.items && hasParseTimeSize([f.items])) {

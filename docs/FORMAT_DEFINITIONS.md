@@ -237,18 +237,67 @@ shorthand chain as its type label, not just the word "array" — for a 3D
 A level sized by `countField` shows `?` in place of the count it doesn't know
 yet (e.g. `uint8[? ← rows][2]`).
 
+## Pointer-style offsets — `offsetField`
+
+Some formats store an offset *inside the file itself* that points to another
+part of the file — common in bootloader/firmware headers. The Xilinx Zynq
+MPSoC `BOOT.BIN` is a good example: the boot header has a 32-bit
+"Image Header Table Offset" field, and the actual Image Header Table lives
+wherever that value points, not at a fixed spot:
+
+```jsonc
+{
+  "name": "Zynq MPSoC BOOT.BIN (partial)",
+  "endianness": "little",
+  "fields": [
+    { "name": "Width Detection Word", "id": "widthWord", "type": "uint32", "offset": 0 },
+    { "name": "Image Header Table Offset", "id": "ihtOffset", "type": "uint32", "offset": 0x24 },
+    {
+      "name": "Image Header Table",
+      "offsetField": "ihtOffset",
+      "fields": [
+        { "name": "Version", "type": "uint32", "offset": 0 }
+      ]
+    }
+  ]
+}
+```
+
+`Image Header Table` has no `offset` — its position comes from the *decoded
+value* of the `Image Header Table Offset` field at parse time. Like
+`countField`, `offsetField` is a `"+"`-separated sum of terms — a literal
+integer, a `constants` entry, or an earlier decoded field by `id` or `name` —
+so it can also add a fixed base (`"ihtOffset + 4"`) if the pointer needs
+adjusting. Unlike a plain `offset`, it is always **absolute** from the start
+of the file, even inside a nested structure, since a pointer's value doesn't
+care which structure happens to contain the field that stores it. A struct
+containing an `offsetField` child should usually get an explicit `size`, for
+the same reason a `countField` array's enclosing struct should — the child's
+real position isn't known until parse time. The decode window widens to the
+whole file (capped, same as `countField`) whenever a format uses `offsetField`,
+so the pointed-to bytes are actually available to read.
+
+`id` is what makes long, descriptive field names practical to reference —
+`"Width Detection Word"` is a mouthful to retype into a `countField` or
+`offsetField` box, so give it a short `id` (`"widthWord"`) and reference that
+instead. Referencing by `name` still works exactly as before (that's what
+every existing format already does); `id` is purely an additional option,
+checked first. IDs must be unique across the whole format.
+
 ## FieldDefinition
 
 | Property | Applies to | Meaning |
 | --- | --- | --- |
 | `name` | all | required label |
+| `id` | all | short, stable identifier for referencing this field from a `countField`/`offsetField` elsewhere — an alternative to typing out `name` (handy when `name` is a long display label). Referencing by `name` keeps working too; must be unique across the format |
 | `type` | primitives only | see the type table below. **Omit** for a nested structure |
 | `fields` | structure | nested `FieldDefinition[]`; child offsets are **relative** to this structure |
 | `offset` | all | byte offset — absolute at the top level, **relative to the parent** inside a structure. **Omit** to pack immediately after the previous sibling |
+| `offsetField` | all | a `"+"`-sum of terms (same syntax as `countField`) to take this field's position from instead of `offset`/packing — always an **absolute** file offset regardless of nesting, for pointer-style formats. `offset`, when present, wins |
 | `size` | structure, `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width (structure: total size; omitted ⇒ computed from children) |
 | `length` | strings, `char` | number of characters / code units |
 | `count` | `array` | fixed element count |
-| `countField` | `array` | a `"+"`-separated sum of terms to read the element count from (a single name is just a one-term sum) — each term is a literal integer, a top-level `constants` entry, or an earlier decoded integer field (a length prefix); `count` wins if it's also set |
+| `countField` | `array` | a `"+"`-separated sum of terms to read the element count from (a single name is just a one-term sum) — each term is a literal integer, a top-level `constants` entry, or an earlier decoded integer field by `id` or `name` (a length prefix); `count` wins if it's also set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
 | `view` | `array` | which element indices the Structure view renders — `{ start, end }` (0-based, inclusive) or the shorthand string `"start...end"`; doesn't affect the array's actual count/size/offsets |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
@@ -411,13 +460,18 @@ plus matching files in [`examples/binaries/`](../examples/binaries/).
 ### The form editor
 
 Fields and structures are edited as a **tree**. Each row has Name, Offset,
-Size, and (for primitives) Type / Length / Endianness. Use:
+Size, and (for primitives) Type / Length / Endianness — plus, on the row's
+second line, an **id** box for a short reference name (see
+[Pointer-style offsets](#pointer-style-offsets--offsetfield) above). Use:
 
 - **`+ Add Field`** / **`+ Add Array`** / **`+ Add Structure`** at the top level,
   and the same three inside every structure;
+- The **Offset** box (like **Count**) takes a number, or a name/`"+"`-sum to
+  size it from — a Constants entry or an earlier field's decoded value,
+  referenced by its **id** or its Name;
 - **Constants** — a top-level section with **`+ Add Constant`** for named
   values (see [Constants](#constants) above); reference one by name in an
-  array's Count/CountField box;
+  array's Count/CountField or Offset box;
 - **Reusable structures** — a top-level section with **`+ Add Structure
   Definition`**. Any structure you define here appears in every type dropdown
   (grouped under *structures*), so an array of records is just

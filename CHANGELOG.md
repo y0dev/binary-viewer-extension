@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.18.0
+
+- **Pointer-style offsets (`offsetField`) and field `id`.** A field can now
+  take its position from `offsetField` — a `"+"`-sum of terms (same syntax as
+  `countField`) resolved as an **absolute** file offset at parse time —
+  instead of a fixed `offset`, for formats where one field stores another's
+  byte offset elsewhere in the file (e.g. a Xilinx Zynq MPSoC `BOOT.BIN`
+  boot header pointing at its Image Header Table). Also adds an optional
+  `id` on any field — a short alternative to `name` for `countField`/
+  `offsetField` references, so a long display name doesn't have to be
+  retyped verbatim; referencing by `name` still works exactly as before, and
+  `id`s must be unique across the format. The decode window auto-widens for
+  `offsetField`, same as it already does for a `countField` array. The form
+  editor's Offset box now takes a name/sum the same way the Count box
+  already does, and each row gets an **id** box.
+
 ## 0.17.0
 
 - **Refresh button in the format editor.** A new **↻ Refresh** button next to

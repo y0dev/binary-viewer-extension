@@ -80,6 +80,14 @@ in the hex view. Works with a fields-based format or a sections-only one.
 - **Constants** — a top-level `constants` map of named, fixed values (a
   number, or a `"+"`-separated sum of other constants) a field can reference
   by name — for a size the format author picked, not one read from the file.
+- **Pointer-style offsets** — `offsetField` positions a field from a `"+"`-sum
+  of terms, same as `countField`, resolved as an absolute file offset — for
+  formats (e.g. bootloader headers) where one field stores another's byte
+  offset elsewhere in the file.
+- **Field `id`** — a short alternative to a field's `name` for referencing it
+  from `countField`/`offsetField`, so a long display name (`"Width Detection
+  Word"`) doesn't have to be retyped verbatim; referencing by `name` still
+  works.
 - **Array views** — `"view": "20...35"` renders just that slice of a big array
   in the Structure view; the array's own count/size/offsets are unaffected.
 - **Nested arrays in the form** — a chained element type (`"int16[4][3]"`) is

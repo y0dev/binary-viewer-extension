@@ -211,6 +211,17 @@ function validateField(
   if (typeof field.name !== 'string' || field.name.trim() === '') {
     errors.push(`${path}.name is required`);
   }
+  if (field.id !== undefined && (typeof field.id !== 'string' || field.id.trim() === '')) {
+    errors.push(`${path}.id must be a non-empty string`);
+  }
+  if (field.offsetField !== undefined) {
+    if (typeof field.offsetField !== 'string' || field.offsetField.trim() === '') {
+      errors.push(`${path}: "offsetField" must be a non-empty string`);
+    }
+    if (field.offset !== undefined) {
+      warnings.push(`${path}: "offset" and "offsetField" both set — "offset" wins`);
+    }
+  }
 
   const typed = hasType(field);
   const bitForm = isBitFieldForm(field);
@@ -400,6 +411,7 @@ export function validateFormat(input: unknown): ValidationResult {
 
   const structNames = validateStructuresMap(fmt.structures, result);
   validateConstantsMap(fmt.constants, result);
+  validateFieldIdsUnique(fmt, result);
 
   const hasFields = Array.isArray(fmt.fields) && fmt.fields.length > 0;
   const hasSections = Array.isArray(fmt.sections) && fmt.sections.length > 0;
@@ -423,6 +435,44 @@ export function validateFormat(input: unknown): ValidationResult {
 
   result.valid = errors.length === 0;
   return result;
+}
+
+/** Collect every `id` set anywhere in a list of fields (nested `fields` and array `items` included). */
+function collectFieldIds(fields: FieldDefinition[] | undefined, out: string[]): void {
+  for (const f of fields ?? []) {
+    if (typeof f?.id === 'string' && f.id.trim() !== '') {
+      out.push(f.id.trim());
+    }
+    if (Array.isArray(f?.fields) && !isBitSpecArray(f.fields)) {
+      collectFieldIds(f.fields as FieldDefinition[], out);
+    }
+    if (f?.items) {
+      collectFieldIds([f.items], out);
+    }
+  }
+}
+
+/** `id` must be unique across the whole format — top-level fields and every `structures` body. */
+function validateFieldIdsUnique(fmt: Partial<FormatDefinition>, result: ValidationResult): void {
+  const ids: string[] = [];
+  if (Array.isArray(fmt.fields)) {
+    collectFieldIds(fmt.fields as FieldDefinition[], ids);
+  }
+  for (const body of Object.values(fmt.structures ?? {})) {
+    const bodyFields = (body as { fields?: unknown } | undefined)?.fields;
+    if (Array.isArray(bodyFields)) {
+      collectFieldIds(bodyFields as FieldDefinition[], ids);
+    }
+  }
+  const counts = new Map<string, number>();
+  for (const id of ids) {
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  for (const [id, count] of counts) {
+    if (count > 1) {
+      result.errors.push(`Duplicate field id "${id}" (used ${count} times) — ids must be unique across the format`);
+    }
+  }
 }
 
 /** Collect struct references made anywhere in a list of fields. */

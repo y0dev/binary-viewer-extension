@@ -71,6 +71,15 @@ export interface EnumEntry {
 export interface FieldDefinition {
   name: string;
   /**
+   * A short, stable identifier for referencing this field from a `countField`
+   * or `offsetField` elsewhere — useful when `name` is a long, human-readable
+   * label (e.g. `name: "Width Detection Word"`, `id: "widthWord"`) that's
+   * awkward to type into a size/offset reference. Referencing a field by
+   * `name` keeps working exactly as before; `id` is purely an alternative,
+   * checked first. Must be unique across the whole format.
+   */
+  id?: string;
+  /**
    * The data type for a *primitive* field. Omit `type` entirely for a nested
    * structure — a field with a `fields` array and no `type` is treated as a
    * container. A field must define exactly one of `type` or nested `fields`
@@ -85,6 +94,16 @@ export interface FieldDefinition {
    */
   offset?: number;
   /**
+   * Take this field's position from a name instead of `offset`/packing —
+   * checked first against a top-level `constants` entry, then an earlier
+   * decoded integer field (by `id` or `name`), same `"+"`-sum syntax as
+   * `countField`. Always an **absolute** file offset, regardless of nesting —
+   * for pointer-style formats where one field stores another's byte offset
+   * elsewhere in the file (e.g. a boot header's "Image Header Table Offset").
+   * `offset`, when present, wins.
+   */
+  offsetField?: string;
+  /**
    * Explicit size in bytes. Required for `bytes`/`binary`/string types.
    * Optional for a structure — when given it is the structure's total size;
    * when omitted the size is computed from the largest child end offset.
@@ -95,11 +114,12 @@ export interface FieldDefinition {
   /** For `array`: number of elements. Mutually exclusive with `countField`. */
   count?: number;
   /**
-   * For `array`: take the element count from a name — checked first against
-   * the format's top-level `constants` (a fixed, author-defined value), then
-   * against an earlier decoded integer field with this name (a length
-   * prefix; must be parsed before this array — an earlier sibling, or a
-   * field in an enclosing structure). `count`, when present, wins.
+   * For `array`: a `"+"`-separated sum of terms to take the element count
+   * from — each term a literal integer, a top-level `constants` entry, or an
+   * earlier decoded integer field by `id` or `name` (a length prefix; must
+   * be parsed before this array — an earlier sibling, or a field in an
+   * enclosing structure). A single name is just a one-term sum. `count`,
+   * when present, wins.
    */
   countField?: string;
   /** For `array`: the element type (a nested field definition without a name is allowed). */

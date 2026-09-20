@@ -31,6 +31,9 @@ interface EditNode {
   id: string;
   kind: 'field' | 'struct' | 'array';
   name: string;
+  /** Optional short id for referencing this field from a countField/offset elsewhere — distinct from the tree row's own `id` above. */
+  fieldId: string;
+  /** A number ("offset"), or a name/sum of earlier fields ("offsetField") — inferred from the content, same convention as `count`. */
   offset: string;
   /** field: data type or a structure name. array: the element type. */
   type: string;
@@ -116,8 +119,10 @@ post({ type: 'ready' });
 
 const KNOWN_KEYS = new Set([
   'name',
+  'id',
   'type',
   'offset',
+  'offsetField',
   'size',
   'length',
   'endianness',
@@ -173,6 +178,7 @@ function emptyNode(kind: EditNode['kind']): EditNode {
     id: uid(),
     kind,
     name: kind === 'struct' ? 'NewStruct' : kind === 'array' ? 'items' : 'field',
+    fieldId: '',
     offset: '',
     type: 'uint8',
     count: kind === 'array' ? '4' : '',
@@ -248,9 +254,9 @@ interface CollapsedArray {
  * type string, so the form can show/edit it as plain text no matter how deep
  * it nests (a string always round-trips through a text box losslessly). An
  * explicit level only collapses when it has nothing beyond `type`/`count`/
- * `items` — `countField`, `view`, `size` or `description` at that level need
- * the JSON tab instead. Returns `null` when `f` isn't array-shaped, or a
- * level can't be expressed as text.
+ * `items` — `countField`, `view`, `size`, `description`, `id` or `offsetField`
+ * at that level need the JSON tab instead. Returns `null` when `f` isn't
+ * array-shaped, or a level can't be expressed as text.
  */
 function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
   const sh = parseArrayShorthand(f.type);
@@ -266,6 +272,8 @@ function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
     f.size !== undefined ||
     f.description !== undefined ||
     f.endianness !== undefined ||
+    f.id !== undefined ||
+    f.offsetField !== undefined ||
     typeof f.count !== 'number' ||
     !f.items
   ) {
@@ -286,6 +294,8 @@ function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
     items.size !== undefined ||
     items.description !== undefined ||
     items.endianness !== undefined ||
+    items.id !== undefined ||
+    items.offsetField !== undefined ||
     (Array.isArray(items.fields) && !looksLikeBitSpecs(items.fields))
   ) {
     return null;
@@ -293,11 +303,20 @@ function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
   return { typeString: `${items.type}[${f.count}]`, depth: 1 };
 }
 
+/** Offset box: a literal number ("offset"), or `offsetField` (a name/sum) as text. */
+function offsetBoxValue(f: FieldDefinition): string {
+  if (f.offset !== undefined) {
+    return String(f.offset);
+  }
+  return typeof f.offsetField === 'string' ? f.offsetField : '';
+}
+
 function fieldToNode(f: FieldDefinition): EditNode {
   if (isNestedStructure(f)) {
     const node = emptyNode('struct');
     node.name = f.name ?? '';
-    node.offset = f.offset === undefined ? '' : String(f.offset);
+    node.fieldId = f.id ?? '';
+    node.offset = offsetBoxValue(f);
     node.size = f.size === undefined ? '' : String(f.size);
     node.endianness = f.endianness ?? '';
     node.description = f.description ?? '';
@@ -308,7 +327,8 @@ function fieldToNode(f: FieldDefinition): EditNode {
   if (f.type === 'array' || (shorthand && !STRING_OR_SIZED.has(shorthand.base))) {
     const node = emptyNode('array');
     node.name = f.name ?? '';
-    node.offset = f.offset === undefined ? '' : String(f.offset);
+    node.fieldId = f.id ?? '';
+    node.offset = offsetBoxValue(f);
     if (shorthand) {
       node.count = String(shorthand.count);
       node.type = shorthand.base;
@@ -344,8 +364,9 @@ function fieldToNode(f: FieldDefinition): EditNode {
     }
   }
   node.name = f.name ?? '';
+  node.fieldId = f.id ?? '';
   node.type = f.type ?? 'uint8';
-  node.offset = f.offset === undefined ? '' : String(f.offset);
+  node.offset = offsetBoxValue(f);
   node.size = f.size === undefined ? '' : String(f.size);
   node.length = f.length === undefined ? '' : String(f.length);
   node.endianness = f.endianness ?? '';
@@ -472,16 +493,30 @@ function num(s: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * Offset box: a number sets `offset`; non-numeric text sets `offsetField` — a
+ * "+"-sum of terms (constant/earlier field, by id or name) resolved as an
+ * absolute file position at parse time, same convention as Count/CountField.
+ */
+function applyOffset(f: FieldDefinition, node: EditNode): void {
+  const off = num(node.offset);
+  if (off !== undefined) {
+    f.offset = off;
+  } else if (node.offset.trim()) {
+    f.offsetField = node.offset.trim();
+  }
+}
+
 function nodeToField(node: EditNode): FieldDefinition {
   if (node.kind === 'struct') {
     const f: FieldDefinition = {
       name: node.name.trim(),
       fields: node.children.map(nodeToField),
     };
-    const off = num(node.offset);
-    if (off !== undefined) {
-      f.offset = off;
+    if (node.fieldId.trim()) {
+      f.id = node.fieldId.trim();
     }
+    applyOffset(f, node);
     const sz = num(node.size);
     if (sz !== undefined) {
       f.size = sz;
@@ -508,6 +543,9 @@ function nodeToField(node: EditNode): FieldDefinition {
       type: 'array',
       items,
     };
+    if (node.fieldId.trim()) {
+      f.id = node.fieldId.trim();
+    }
     if (countNum !== undefined) {
       f.count = countNum;
     } else if (countField) {
@@ -518,10 +556,7 @@ function nodeToField(node: EditNode): FieldDefinition {
     } else {
       f.count = 0;
     }
-    const off = num(node.offset);
-    if (off !== undefined) {
-      f.offset = off;
-    }
+    applyOffset(f, node);
     if (node.view.trim()) {
       f.view = node.view.trim();
     }
@@ -535,10 +570,10 @@ function nodeToField(node: EditNode): FieldDefinition {
   }
 
   const f: FieldDefinition = { name: node.name.trim(), type: node.type.trim() };
-  const off = num(node.offset);
-  if (off !== undefined) {
-    f.offset = off;
+  if (node.fieldId.trim()) {
+    f.id = node.fieldId.trim();
   }
+  applyOffset(f, node);
   const sz = num(node.size);
   if (sz !== undefined) {
     f.size = sz;
@@ -1443,7 +1478,8 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
           width: 90,
           placeholder: 'N or field',
           title:
-            'A number for a fixed-length array, or the name of an earlier integer field to take the length from (length-prefixed array).',
+            'A number for a fixed-length array, or a "+"-sum of terms (a Constants entry, or an earlier ' +
+            'integer field by id or name) to take the length from — e.g. "Rows" or "Dogs + Cats".',
         }),
       ),
       el('span', { class: 'fe-inline-label', text: 'of' }),
@@ -1454,7 +1490,16 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
   }
 
   head.append(
-    labelled('offset', bindInput(node, 'offset', { placeholder: 'auto', width: 70 })),
+    labelled(
+      'offset',
+      bindInput(node, 'offset', {
+        placeholder: 'auto',
+        width: 70,
+        title:
+          'A byte offset, or the name/id of an earlier decoded field storing this one\'s position ' +
+          '(a pointer elsewhere in the file, e.g. a boot header\'s image table offset) — always absolute.',
+      }),
+    ),
     labelled(
       node.kind === 'array' ? 'elem size' : 'size',
       bindInput(node, 'size', { placeholder: node.kind === 'struct' ? 'auto' : '', width: 60 }),
@@ -1496,6 +1541,16 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
   // description + advanced (second line)
   const line2 = el('div', { class: 'fe-node-line2' }, [
     labelled('description', bindInput(node, 'description', { width: 320 })),
+    labelled(
+      'id',
+      bindInput(node, 'fieldId', {
+        width: 110,
+        placeholder: 'optional, for refs',
+        title:
+          'A short id for referencing this field from another field\'s Count/CountField or Offset box ' +
+          '— handy when Name is long or awkward to type there. Referencing by Name keeps working too.',
+      }),
+    ),
   ]);
   if (node.kind === 'field') {
     const enumEd = enumEditor(node);

@@ -190,3 +190,75 @@ describe('FormatSchema.validateFormat — constants', () => {
     assert.ok(r.valid);
   });
 });
+
+describe('FormatSchema.validateFormat — field id and offsetField', () => {
+  it('accepts a field with a unique id', () => {
+    const r = validateFormat({
+      name: 'ids',
+      fields: [{ name: 'Width Detection Word', id: 'widthWord', type: 'uint32', offset: 0 }],
+    });
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.valid);
+  });
+
+  it('rejects an empty string id', () => {
+    const r = validateFormat({
+      name: 'ids',
+      fields: [{ name: 'x', id: '  ', type: 'uint8', offset: 0 }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /\.id must be a non-empty string/.test(e)));
+  });
+
+  it('rejects duplicate ids across top-level fields', () => {
+    const r = validateFormat({
+      name: 'dup-ids',
+      fields: [
+        { name: 'a', id: 'dup', type: 'uint8', offset: 0 },
+        { name: 'b', id: 'dup', type: 'uint8', offset: 1 },
+      ],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /Duplicate field id "dup"/.test(e)));
+  });
+
+  it('rejects a duplicate id shared between a top-level field and a structures body', () => {
+    const r = validateFormat({
+      name: 'dup-ids-struct',
+      structures: {
+        Rec: { fields: [{ name: 'b', id: 'dup', type: 'uint8', offset: 0 }] },
+      },
+      fields: [{ name: 'a', id: 'dup', type: 'uint8', offset: 0 }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /Duplicate field id "dup"/.test(e)));
+  });
+
+  it('accepts an offsetField reference and warns when offset is also set', () => {
+    const ok = validateFormat({
+      name: 'off1',
+      fields: [
+        { name: 'ihtOffset', type: 'uint32', offset: 0 },
+        { name: 'iht', type: 'uint8', offsetField: 'ihtOffset' },
+      ],
+    });
+    assert.deepStrictEqual(ok.errors, []);
+    assert.ok(ok.valid);
+
+    const both = validateFormat({
+      name: 'off2',
+      fields: [{ name: 'x', type: 'uint8', offset: 4, offsetField: 'n' }],
+    });
+    assert.ok(both.valid);
+    assert.ok(both.warnings.some((w) => /"offset" and "offsetField" both set/.test(w)));
+  });
+
+  it('rejects an empty string offsetField', () => {
+    const r = validateFormat({
+      name: 'off3',
+      fields: [{ name: 'x', type: 'uint8', offsetField: '  ' }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /"offsetField" must be a non-empty string/.test(e)));
+  });
+});

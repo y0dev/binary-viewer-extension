@@ -381,6 +381,38 @@ describe('BinaryParser — array countField (length prefix)', () => {
     assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '3 elements');
   });
 
+  it('resolves countField by id when the field name is awkward to reference', () => {
+    const fmt: FormatDefinition = {
+      name: 'id-ref',
+      endianness: 'little',
+      fields: [
+        { name: 'Width Detection Word', id: 'widthWord', type: 'uint8', offset: 0 },
+        { name: 'values', type: 'array', offset: 1, countField: 'widthWord', items: { name: 'v', type: 'uint8' } },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([3, 10, 11, 12, 0xff]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '3 elements');
+  });
+
+  it('still resolves countField by name for a field that also has an id', () => {
+    const fmt: FormatDefinition = {
+      name: 'id-and-name',
+      endianness: 'little',
+      fields: [
+        { name: 'Width Detection Word', id: 'widthWord', type: 'uint8', offset: 0 },
+        {
+          name: 'values',
+          type: 'array',
+          offset: 1,
+          countField: 'Width Detection Word',
+          items: { name: 'v', type: 'uint8' },
+        },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([2, 10, 11, 0xff]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'values')!.value, '2 elements');
+  });
+
   it('reports the specific failing term in a countField sum', () => {
     const fmt: FormatDefinition = {
       name: 'bad-sum',
@@ -461,6 +493,115 @@ describe('BinaryParser — array countField (length prefix)', () => {
       ]),
       false,
     );
+    // A field positioned by offsetField is also parse-time-only.
+    assert.strictEqual(
+      hasParseTimeSize([{ name: 'imageHeaderTable', type: 'uint8', offsetField: 'ihtOffset' }]),
+      true,
+    );
+    // offsetField overridden by an explicit offset is static again.
+    assert.strictEqual(
+      hasParseTimeSize([{ name: 'x', type: 'uint8', offset: 4, offsetField: 'ihtOffset' }]),
+      false,
+    );
+  });
+});
+
+describe('BinaryParser — offsetField (pointer-style position) and id refs', () => {
+  it('positions a top-level field from an earlier decoded field, by name', () => {
+    const fmt: FormatDefinition = {
+      name: 'ptr',
+      endianness: 'little',
+      fields: [
+        { name: 'ihtOffset', type: 'uint32', offset: 0 },
+        { name: 'iht', type: 'uint8', offsetField: 'ihtOffset' },
+      ],
+    };
+    // ihtOffset (uint32 LE) = 8, so `iht` should be read from byte 8.
+    const bytes = [8, 0, 0, 0, 0, 0, 0, 0, 0xaa];
+    const { nodes, error } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    const iht = nodes.find((n) => n.name === 'iht')!;
+    assert.strictEqual(iht.offset, 8);
+    assert.strictEqual(iht.error, undefined);
+  });
+
+  it('positions a top-level field from a format-level constant', () => {
+    const fmt: FormatDefinition = {
+      name: 'ptr-const',
+      endianness: 'little',
+      constants: { HeaderSize: 4 },
+      fields: [{ name: 'x', type: 'uint8', offsetField: 'HeaderSize' }],
+    };
+    const { nodes } = parseFormat(fmt, win([0, 0, 0, 0, 0x2a]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'x')!.offset, 4);
+  });
+
+  it('resolves offsetField by id when a field name is awkward to reference', () => {
+    const fmt: FormatDefinition = {
+      name: 'ptr-id',
+      endianness: 'little',
+      fields: [
+        { name: 'Width Detection Word', id: 'widthWord', type: 'uint32', offset: 0 },
+        { name: 'payload', type: 'uint8', offsetField: 'widthWord' },
+      ],
+    };
+    const bytes = [4, 0, 0, 0, 0, 0, 0, 0, 0x55];
+    const { nodes, error } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    assert.strictEqual(nodes.find((n) => n.name === 'payload')!.offset, 4);
+  });
+
+  it('an explicit offset still wins over offsetField', () => {
+    const fmt: FormatDefinition = {
+      name: 'ptr-both',
+      endianness: 'little',
+      fields: [
+        { name: 'n', type: 'uint8', offset: 0 },
+        { name: 'x', type: 'uint8', offset: 2, offsetField: 'n' },
+      ],
+    };
+    const { nodes } = parseFormat(fmt, win([9, 0, 0xaa]), { defaultEndianness: 'little' });
+    assert.strictEqual(nodes.find((n) => n.name === 'x')!.offset, 2);
+  });
+
+  it('flags an unresolvable offsetField without throwing, and skips reading the field', () => {
+    const fmt: FormatDefinition = {
+      name: 'ptr-bad',
+      fields: [
+        { name: 'x', type: 'uint8', offsetField: 'missing' },
+        { name: 'trailer', type: 'uint8', offset: 0 },
+      ],
+    };
+    const { nodes, error } = parseFormat(fmt, win([1, 2, 3]), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    // A placeholder error node stands in for "x" — its bytes were never read.
+    const x = nodes.find((n) => n.name === 'x')!;
+    assert.strictEqual(x.size, 0);
+    assert.match(x.error ?? '', /"missing" is not a defined constant or an earlier field/);
+    // The next field still parses normally.
+    assert.strictEqual(nodes.find((n) => n.name === 'trailer')!.value, '1');
+  });
+
+  it('positions a struct field absolutely via offsetField, ignoring enclosing struct nesting', () => {
+    const fmt: FormatDefinition = {
+      name: 'ptr-nested',
+      endianness: 'little',
+      fields: [
+        { name: 'ihtOffset', type: 'uint32', offset: 0 },
+        {
+          name: 'header',
+          offset: 4,
+          fields: [{ name: 'iht', type: 'uint8', offsetField: 'ihtOffset' }],
+        },
+      ],
+    };
+    // ihtOffset = 20 — far outside the "header" struct starting at 4.
+    const bytes = new Array(21).fill(0);
+    bytes[0] = 20;
+    bytes[20] = 0x77;
+    const { nodes, error } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    assert.strictEqual(nodes.find((n) => n.name === 'iht')!.offset, 20);
   });
 });
 
