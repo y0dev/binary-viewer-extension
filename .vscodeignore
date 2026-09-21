@@ -23,4 +23,5 @@ esbuild.js
 test/fixtures/generated/**
 docs/mockups/**
 examples/binaries/**
+.testing_results/**
 CONTRIBUTING.md

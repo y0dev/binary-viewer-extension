@@ -34,6 +34,22 @@ describe('FieldSyntax.expandShorthandField', () => {
     assert.deepStrictEqual(f.items, { name: 'item', type: 'Sample' });
     assert.strictEqual(f.count, 3);
   });
+  it('preserves id and offsetField through a scalar/struct-name shorthand expansion', () => {
+    // Regression: these were silently dropped, so a field like
+    // { type: "PartitionHeader[32]", offsetField: "phtOffset + phtOffset + phtOffset + phtOffset" }
+    // packed instead of jumping to its pointer — only reachable via this
+    // branch (a struct-name or plain scalar shorthand), since the char/ascii
+    // and bytes/binary branches already spread `...field`.
+    const f = expandShorthandField({
+      name: 'PHT',
+      id: 'pht',
+      type: 'Record[32]',
+      offsetField: 'ptrField',
+    });
+    assert.strictEqual(f.id, 'pht');
+    assert.strictEqual(f.offsetField, 'ptrField');
+    assert.strictEqual(f.offset, undefined);
+  });
   it('maps char/ascii shorthand to a string length, not an array', () => {
     assert.deepStrictEqual(expandShorthandField({ name: 't', type: 'char[4]' }), {
       name: 't',

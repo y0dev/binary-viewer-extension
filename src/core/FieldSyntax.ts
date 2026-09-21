@@ -57,8 +57,14 @@ export function expandShorthandField(field: FieldDefinition): FieldDefinition {
     items.size = field.items.size;
   }
   const out: FieldDefinition = { name: field.name, type: 'array', count, items };
+  if (field.id !== undefined) {
+    out.id = field.id;
+  }
   if (field.offset !== undefined) {
     out.offset = field.offset;
+  }
+  if (field.offsetField !== undefined) {
+    out.offsetField = field.offsetField;
   }
   if (field.endianness !== undefined) {
     out.endianness = field.endianness;

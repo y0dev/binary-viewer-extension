@@ -15,6 +15,16 @@
   `offsetField`, same as it already does for a `countField` array. The form
   editor's Offset box now takes a name/sum the same way the Count box
   already does, and each row gets an **id** box.
+- **Fix: `id`/`offsetField` dropped on a struct-array shorthand field.**
+  Found testing against a real Xilinx Zynq MPSoC `BOOT.BIN`: a field whose
+  `type` was a reusable-struct shorthand (e.g. `"PartitionHeader[32]"`) lost
+  its `id` and `offsetField` when `FieldSyntax.expandShorthandField` rebuilt
+  it into the explicit array form — so a pointer-positioned array of records
+  silently packed instead of jumping to its pointer. `offset`/`endianness`/
+  `description` were already preserved there; `id`/`offsetField` now are too.
+- **Fix: `.testing_results/` shipped in the packaged `.vsix`.** Gitignored
+  but not `.vscodeignore`d, so `vsce package` was bundling an 8.5 MB test
+  fixture into the extension. Added to `.vscodeignore`.
 
 ## 0.17.0
 

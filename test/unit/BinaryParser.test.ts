@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import { parseFormat, ByteWindow } from '../../src/core/BinaryParser';
 import { hasParseTimeSize } from '../../src/core/BinaryField';
+import { resolveStructures } from '../../src/core/FormatResolve';
 import type { FormatDefinition } from '../../src/types/format';
 
 function win(bytes: number[], fileSize = bytes.length): ByteWindow {
@@ -602,6 +603,34 @@ describe('BinaryParser — offsetField (pointer-style position) and id refs', ()
     const { nodes, error } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
     assert.strictEqual(error, undefined);
     assert.strictEqual(nodes.find((n) => n.name === 'iht')!.offset, 20);
+  });
+
+  it('resolves offsetField on a field whose type is a reusable-struct array shorthand (real-world regression)', () => {
+    // Regression, found testing against a real Xilinx Zynq MPSoC BOOT.BIN:
+    // resolveStructures runs expandShorthandField on "Record[32]" before
+    // BinaryParser ever sees it, and that used to silently drop id/offsetField.
+    const fmt: FormatDefinition = {
+      name: 'zynq-like',
+      endianness: 'little',
+      structures: {
+        Record: { fields: [{ name: 'v', type: 'uint32', offset: 0 }] },
+      },
+      fields: [
+        { name: 'phtOffset', id: 'phtOffset', type: 'uint32', offset: 0 },
+        {
+          name: 'PHT',
+          type: 'Record[2]',
+          offsetField: 'phtOffset + phtOffset + phtOffset + phtOffset',
+        },
+      ],
+    };
+    const { format: resolved } = resolveStructures(fmt);
+    // phtOffset (word offset) = 4 -> byte offset 16 (x4).
+    const bytes = new Array(24).fill(0);
+    bytes[0] = 4;
+    const { nodes, error } = parseFormat(resolved, win(bytes), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    assert.strictEqual(nodes.find((n) => n.name === 'PHT')!.offset, 16);
   });
 });
 
