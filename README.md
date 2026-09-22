@@ -90,6 +90,10 @@ in the hex view. Works with a fields-based format or a sections-only one.
   works.
 - **Array views** — `"view": "20...35"` renders just that slice of a big array
   in the Structure view; the array's own count/size/offsets are unaffected.
+- **Array early-stop terminator** — `"until": { "field": "next" }` stops an
+  array once a field inside the element just parsed equals a value (default
+  `0`), for a linked-list "next" pointer — so a fixed/max `count` doesn't
+  over-report elements that were never really there.
 - **Nested arrays in the form** — a chained element type (`"int16[4][3]"`) is
   form-editable up to 3 dimensions; deeper nesting needs the JSON tab.
 - **Format editor** — build fields, **arrays** (`+ Add Array` → count → element

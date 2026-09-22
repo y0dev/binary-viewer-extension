@@ -334,8 +334,23 @@ function validateField(
         );
       }
     }
+    if (field.until !== undefined) {
+      if (!field.until || typeof field.until !== 'object' || Array.isArray(field.until)) {
+        errors.push(`${path}: "until" must be an object { field, equals? }`);
+      } else {
+        const u = field.until as { field?: unknown; equals?: unknown };
+        if (typeof u.field !== 'string' || u.field.trim() === '') {
+          errors.push(`${path}.until.field must be a non-empty string`);
+        }
+        if (u.equals !== undefined && typeof u.equals !== 'number') {
+          errors.push(`${path}.until.equals must be a number`);
+        }
+      }
+    }
   } else if (field.view !== undefined) {
     errors.push(`${path}: "view" only applies to "array" fields`);
+  } else if (field.until !== undefined) {
+    errors.push(`${path}: "until" only applies to "array" fields`);
   }
 
   const scalarWithBits = isScalarType(t) && isBitSpecArray(field.fields);

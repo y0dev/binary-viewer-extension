@@ -135,6 +135,17 @@ export interface FieldDefinition {
    */
   view?: { start?: number; end?: number } | string;
   /**
+   * For `array`: stop adding elements once the field named here — inside the
+   * element *just parsed*, matched by `id` or `name` — equals `equals`
+   * (default `0`). For a linked-list-style terminator (e.g. a "next header
+   * offset" field that's `0` on the last entry), so a fixed/max `count` (or
+   * `countField`) doesn't over-report elements that were never really there.
+   * The terminating element itself is still included; checked in addition to
+   * `count`/`countField`, `maxArrayElements` and the node budget — whichever
+   * stops the array first wins, so a corrupt file still can't loop forever.
+   */
+  until?: { field: string; equals?: number };
+  /**
    * Nested content:
    *  - `FieldDefinition[]` — a nested structure (with or without `type: "struct"`).
    *    Child offsets are relative to this structure.

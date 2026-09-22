@@ -560,11 +560,13 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
 
   const renderLimit = Math.min(windowCount, ctx.maxArrayElements);
   let parsed = 0;
+  let stoppedAtTerminator = false;
   for (let i = 0; i < renderLimit; i++) {
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
     }
     const idx = startIdx + i;
+    const beforeLen = ctx.nodes.length;
     const consumed = parseField(
       ctx,
       { ...item, name: `${field.name}[${idx}]`, offset: undefined },
@@ -573,10 +575,14 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
     );
     cursor += consumed || staticEach;
     parsed++;
+    if (field.until && matchesUntil(ctx, field.until, beforeLen)) {
+      stoppedAtTerminator = true;
+      break;
+    }
   }
 
   const shown = startIdx + parsed;
-  if (shown < count) {
+  if (shown < count && !stoppedAtTerminator) {
     const more = count - shown;
     let why: string;
     if (parsed < renderLimit) {
@@ -598,15 +604,36 @@ function parseArray(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
     });
   }
   ctx.stack.pop();
-  // Only trust the running cursor when *every* element was actually parsed,
-  // sequentially from 0 (no view skipped ahead, nothing capped or budgeted);
-  // otherwise fall back to the static estimate, which stays correct for a
-  // fully fixed-size array.
-  if (field.size === undefined && !view && shown === count && count > 0) {
+  if (stoppedAtTerminator) {
+    node.value = `${shown} of ${count} element${count === 1 ? '' : 's'} (stopped at "${field.until!.field}" = ${field.until!.equals ?? 0})`;
+  }
+  // Only trust the running cursor when *every* element that's really there
+  // was parsed — either the full nominal count, sequentially from 0 (no view
+  // skipped ahead, nothing capped or budgeted), or a `until` terminator was
+  // found; otherwise fall back to the static estimate, which stays correct
+  // for a fully fixed-size array.
+  if (field.size === undefined && !view && (shown === count || stoppedAtTerminator) && count > 0) {
     size = cursor - abs;
     node.size = size;
   }
   return size;
+}
+
+/**
+ * True when the element just parsed (the nodes pushed from `fromIdx` on)
+ * carries a decoded integer field — matched by `id` first, then `name` — that
+ * equals `until.equals` (default `0`), e.g. a linked-list "next" pointer
+ * that's `0` on the last entry.
+ */
+function matchesUntil(ctx: Ctx, until: { field: string; equals?: number }, fromIdx: number): boolean {
+  const target = until.equals ?? 0;
+  for (let i = fromIdx; i < ctx.nodes.length; i++) {
+    const n = ctx.nodes[i];
+    if (typeof n.numericValue === 'number' && (n.fieldId === until.field || n.name === until.field)) {
+      return n.numericValue === target;
+    }
+  }
+  return false;
 }
 
 function readContainer(ctx: Ctx, abs: number, sizeBytes: number, le: boolean): number | bigint {

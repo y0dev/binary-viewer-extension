@@ -41,6 +41,8 @@ interface EditNode {
   count: string;
   /** array only: which elements to render, e.g. "20...35". '' = all of them. */
   view: string;
+  /** array only: stop-early terminator, e.g. "next" or "next=0xff". '' = none. */
+  until: string;
   size: string;
   length: string;
   endianness: string;
@@ -183,6 +185,7 @@ function emptyNode(kind: EditNode['kind']): EditNode {
     type: 'uint8',
     count: kind === 'array' ? '4' : '',
     view: '',
+    until: '',
     size: '',
     length: '',
     endianness: '',
@@ -269,6 +272,7 @@ function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
   if (
     f.countField !== undefined ||
     f.view !== undefined ||
+    f.until !== undefined ||
     f.size !== undefined ||
     f.description !== undefined ||
     f.endianness !== undefined ||
@@ -291,6 +295,7 @@ function tryCollapseArray(f: FieldDefinition): CollapsedArray | null {
     items.type === undefined ||
     items.countField !== undefined ||
     items.view !== undefined ||
+    items.until !== undefined ||
     items.size !== undefined ||
     items.description !== undefined ||
     items.endianness !== undefined ||
@@ -351,6 +356,9 @@ function fieldToNode(f: FieldDefinition): EditNode {
       node.view = f.view;
     } else if (f.view && typeof f.view === 'object' && f.view.start !== undefined && f.view.end !== undefined) {
       node.view = `${f.view.start}...${f.view.end}`;
+    }
+    if (f.until && typeof f.until === 'object' && typeof f.until.field === 'string') {
+      node.until = f.until.equals !== undefined ? `${f.until.field}=${f.until.equals}` : f.until.field;
     }
     node.endianness = f.endianness ?? '';
     node.description = f.description ?? '';
@@ -559,6 +567,16 @@ function nodeToField(node: EditNode): FieldDefinition {
     applyOffset(f, node);
     if (node.view.trim()) {
       f.view = node.view.trim();
+    }
+    if (node.until.trim()) {
+      const t = node.until.trim();
+      const eq = t.indexOf('=');
+      if (eq === -1) {
+        f.until = { field: t };
+      } else {
+        const equals = num(t.slice(eq + 1).trim());
+        f.until = { field: t.slice(0, eq).trim(), ...(equals !== undefined ? { equals } : {}) };
+      }
     }
     if (node.endianness === 'little' || node.endianness === 'big') {
       f.endianness = node.endianness;
@@ -1585,6 +1603,15 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
           placeholder: 'optional, e.g. 20...35',
           title:
             'Only render these element indices in the Structure view (0-based, inclusive, either order) — handy once the array has 50+ elements. The array itself (count, size, offsets) is unaffected.',
+        }),
+      ),
+      labelled(
+        'stop when',
+        bindInput(node, 'until', {
+          width: 150,
+          placeholder: 'optional, e.g. next=0',
+          title:
+            'Stop adding elements once the named field (by id or name) inside the element just parsed equals a value — "field" (defaults to 0) or "field=N". For a linked-list "next" pointer that\'s 0 on the last entry, so a max/nominal count doesn\'t over-report elements that aren\'t really there.',
         }),
       ),
     );

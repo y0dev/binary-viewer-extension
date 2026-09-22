@@ -855,6 +855,84 @@ describe('BinaryParser — nested-array element stride', () => {
   });
 });
 
+describe('BinaryParser — array until (linked-list terminator)', () => {
+  const fmt: FormatDefinition = {
+    name: 'chain',
+    endianness: 'little',
+    fields: [
+      {
+        name: 'entries',
+        type: 'array',
+        offset: 0,
+        count: 5,
+        until: { field: 'next', equals: 0 },
+        items: {
+          name: 'item',
+          fields: [
+            { name: 'next', id: 'next', type: 'uint8', offset: 0 },
+            { name: 'value', type: 'uint8', offset: 1 },
+          ],
+        },
+      },
+    ],
+  };
+
+  it('stops at the element whose "next" field equals 0, including that element', () => {
+    // entry0: next=1, value=10 | entry1: next=1, value=20 | entry2: next=0 (terminator), value=30
+    // entries 3 and 4 (of the nominal 5) exist in bytes but must not be parsed.
+    const bytes = [1, 10, 1, 20, 0, 30, 9, 99, 9, 99];
+    const { nodes, error } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    const items = nodes.filter((n) => /^entries\[\d+\]$/.test(n.name));
+    assert.strictEqual(items.length, 3);
+    assert.deepStrictEqual(items.map((n) => n.offset), [0, 2, 4]);
+    const arr = nodes.find((n) => n.name === 'entries')!;
+    assert.match(arr.value, /3 of 5 elements \(stopped at "next" = 0\)/);
+    // No "N more not shown" summary — the array genuinely ended, nothing was capped.
+    assert.strictEqual(nodes.find((n) => n.name === 'entries[…]'), undefined);
+  });
+
+  it('shrinks the reported array size to what was actually parsed', () => {
+    const bytes = [1, 10, 0, 20, 9, 99, 9, 99, 9, 99];
+    const { nodes } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    const arr = nodes.find((n) => n.name === 'entries')!;
+    assert.strictEqual(arr.size, 4); // 2 elements * 2 bytes, not the nominal 5 * 2 = 10
+  });
+
+  it('never triggers when no element matches the terminator (runs to the nominal count)', () => {
+    const bytes = [1, 10, 1, 20, 1, 30, 1, 40, 1, 50];
+    const { nodes } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    const items = nodes.filter((n) => /^entries\[\d+\]$/.test(n.name));
+    assert.strictEqual(items.length, 5);
+    assert.strictEqual(nodes.find((n) => n.name === 'entries')!.value, '5 elements');
+  });
+
+  it('matches the terminator field by id, not just name, and defaults "equals" to 0', () => {
+    const withId: FormatDefinition = {
+      name: 'chain-id',
+      endianness: 'little',
+      fields: [
+        { name: 'n', type: 'uint8', offset: 0 },
+        {
+          name: 'entries',
+          type: 'array',
+          offset: 1,
+          countField: 'n',
+          until: { field: 'nextPartitionHeaderOffset' },
+          items: {
+            name: 'item',
+            fields: [{ name: 'Next Partition Header Offset', id: 'nextPartitionHeaderOffset', type: 'uint8', offset: 0 }],
+          },
+        },
+      ],
+    };
+    const bytes = [5, 7, 0, 9]; // n=5, entry0 next=7, entry1 next=0 (terminator) -> stop after 2
+    const { nodes } = parseFormat(withId, win(bytes), { defaultEndianness: 'little' });
+    const items = nodes.filter((n) => /^entries\[\d+\]$/.test(n.name));
+    assert.strictEqual(items.length, 2);
+  });
+});
+
 describe('BinaryParser — array view (windowed rendering)', () => {
   // int16[50], value at index i == i. "view" only affects what's rendered —
   // count, size and offsets of the array itself are unaffected.

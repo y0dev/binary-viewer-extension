@@ -262,3 +262,45 @@ describe('FormatSchema.validateFormat — field id and offsetField', () => {
     assert.ok(r.errors.some((e) => /"offsetField" must be a non-empty string/.test(e)));
   });
 });
+
+describe('FormatSchema.validateFormat — array until', () => {
+  const withUntil = (until: unknown) => ({
+    name: 'u',
+    fields: [
+      {
+        name: 'xs',
+        type: 'array',
+        offset: 0,
+        count: 5,
+        until,
+        items: { name: 'i', fields: [{ name: 'next', id: 'next', type: 'uint8', offset: 0 }] },
+      },
+    ],
+  });
+
+  it('accepts { field } (equals defaults) and { field, equals }', () => {
+    assert.deepStrictEqual(validateFormat(withUntil({ field: 'next' })).errors, []);
+    assert.deepStrictEqual(validateFormat(withUntil({ field: 'next', equals: 0xff })).errors, []);
+  });
+
+  it('rejects a non-object, or an object missing a non-empty "field"', () => {
+    assert.ok(!validateFormat(withUntil('next')).valid);
+    assert.ok(!validateFormat(withUntil({})).valid);
+    assert.ok(!validateFormat(withUntil({ field: '  ' })).valid);
+  });
+
+  it('rejects a non-number "equals"', () => {
+    const r = validateFormat(withUntil({ field: 'next', equals: '0' }));
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /until\.equals must be a number/.test(e)));
+  });
+
+  it('rejects "until" on a non-array field', () => {
+    const r = validateFormat({
+      name: 'u2',
+      fields: [{ name: 'x', type: 'uint32', offset: 0, until: { field: 'next' } }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /only applies to "array"/.test(e)));
+  });
+});

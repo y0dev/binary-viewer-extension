@@ -300,6 +300,7 @@ checked first. IDs must be unique across the whole format.
 | `countField` | `array` | a `"+"`-separated sum of terms to read the element count from (a single name is just a one-term sum) — each term is a literal integer, a top-level `constants` entry, or an earlier decoded integer field by `id` or `name` (a length prefix); `count` wins if it's also set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
 | `view` | `array` | which element indices the Structure view renders — `{ start, end }` (0-based, inclusive) or the shorthand string `"start...end"`; doesn't affect the array's actual count/size/offsets |
+| `until` | `array` | `{ field, equals? }` — stop adding elements once the named field (by `id` or `name`) inside the element just parsed equals `equals` (default `0`); the terminating element is included. For a linked-list "next" pointer that's `0` on the last entry |
 | `fields` | `flags`,`bitfield` | `BitSpec[]` — `{ name, bits, description?, enum?, boolean? }` |
 | `endianness` | scalars & multi-byte composites | `"little"` / `"big"` override |
 | `enum` | `enum` + any integer scalar | value→label map or `[{value,name}]` |
@@ -383,6 +384,28 @@ checked first. IDs must be unique across the whole format.
   { "name": "samples", "type": "array", "offset": 0, "count": 1000,
     "view": "20...35", "items": { "name": "v", "type": "int16" } }
   ```
+
+  For a linked-list-style array — a fixed/max `count` (or `countField`)
+  where the *real* number of entries is only known by reading a "next
+  pointer" field in each element until it hits a terminator — set `until`.
+  `count`/`countField` still act as the safety cap (so a corrupt file can't
+  loop forever); `until` stops the array early once it's hit:
+
+  ```jsonc
+  {
+    "name": "Partition Header Table",
+    "type": "array",
+    "count": 32,
+    "until": { "field": "nextPartitionHeaderOffset" },
+    "offsetField": "phtOffset",
+    "items": { "name": "item", "type": "PartitionHeader" }
+  }
+  ```
+
+  `until.field` is matched by `id` or `name` against the element *just
+  parsed* — `equals` defaults to `0`. The terminating element is included;
+  nothing after it is. If no element ever matches, the array just runs to
+  its `count`/`countField`/`maxArrayElements` limit as usual.
 
 ## Bit fields
 
@@ -475,6 +498,9 @@ second line, an **id** box for a short reference name (see
 - The **Offset** box (like **Count**) takes a number, or a name/`"+"`-sum to
   size it from — a Constants entry or an earlier field's decoded value,
   referenced by its **id** or its Name;
+- An array row's **stop when** box (next to **view**) takes `field` or
+  `field=N` — stop the array early once that field (inside the element just
+  parsed) equals `N` (default `0`), e.g. a linked-list "next" pointer;
 - **Constants** — a top-level section with **`+ Add Constant`** for named
   values (see [Constants](#constants) above); reference one by name in an
   array's Count/CountField or Offset box;

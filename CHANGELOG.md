@@ -1,5 +1,19 @@
 # Change Log
 
+## 0.18.5
+
+- **Array early-stop terminator (`until`).** An `array` field can set
+  `"until": { "field": "next", "equals": 0 }` (`equals` defaults to `0`) to
+  stop adding elements once the field named there — inside the element just
+  parsed, matched by `id` or `name` — equals that value. Built for a
+  linked-list-style "next" pointer that's `0` on the last entry (the Xilinx
+  Zynq MPSoC boot header's Partition/Image Header chains, which this was
+  tested against), so a fixed/max `count` or `countField` doesn't over-report
+  elements that were never really there. The terminating element is still
+  included; it composes with `count`/`countField`, `maxArrayElements` and the
+  node budget, so a corrupt file with no real terminator can't loop forever.
+  The form editor's array row gets a matching **stop when** box.
+
 ## 0.18.2
 
 - **Bit specs support a comma-separated list of non-contiguous ranges**
