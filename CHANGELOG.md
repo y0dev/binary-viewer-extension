@@ -1,6 +1,6 @@
 # Change Log
 
-## 0.18.5
+## 0.18.4
 
 - **Array early-stop terminator (`until`).** An `array` field can set
   `"until": { "field": "next", "equals": 0 }` (`equals` defaults to `0`) to
