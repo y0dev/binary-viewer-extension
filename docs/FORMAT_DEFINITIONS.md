@@ -407,6 +407,12 @@ checked first. IDs must be unique across the whole format.
   1, 2, 4 or 8.
 - The editor and loader reject overlapping ranges and ranges past the container
   width.
+- **`"bits"` can also be a comma-separated list** (`"0-5,12-13,16-31"`) for a
+  field split across non-contiguous positions — common for a catch-all
+  "Reserved" spec that fills every leftover bit around several named fields.
+  The parts combine into one value, the first-listed part becoming its
+  low-order bits; overlap/out-of-range checks apply per part, not the whole
+  span, so gaps between parts stay free for other specs to claim.
 
 Rendered as:
 

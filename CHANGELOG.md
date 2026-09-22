@@ -1,5 +1,36 @@
 # Change Log
 
+## 0.18.2
+
+- **Bit specs support a comma-separated list of non-contiguous ranges**
+  (`"bits": "0-5,12-13,16-31"`) — for a field split across multiple bit
+  positions, most commonly a catch-all "Reserved" spec filling every
+  leftover bit around several named fields (a real pattern in the Xilinx
+  Zynq MPSoC boot header this was tested against). The parts combine into
+  one value, the first-listed part as the low-order bits; overlap and
+  out-of-range checks apply per part, so gaps between parts stay free for
+  other specs.
+- **Fix: `id`/`offsetField` dropped on a struct-array shorthand field.**
+  Found testing against a real Xilinx Zynq MPSoC `BOOT.BIN`: a field whose
+  `type` was a reusable-struct shorthand (e.g. `"PartitionHeader[32]"`) lost
+  its `id` and `offsetField` when `FieldSyntax.expandShorthandField` rebuilt
+  it into the explicit array form — so a pointer-positioned array of records
+  silently packed instead of jumping to its pointer. `offset`/`endianness`/
+  `description` were already preserved there; `id`/`offsetField` now are too.
+- **Fix: `.testing_results/` shipped in the packaged `.vsix`.** Gitignored
+  but not `.vscodeignore`d, so `vsce package` was bundling an 8.5 MB test
+  fixture into the extension. Added to `.vscodeignore`.
+- **Fix: `binaryViewer.formatDirectories` ignored a `"${workspaceFolder}/../…"`
+  entry.** `${workspaceFolder}` was substituted but the resulting path's
+  `..` segments were never resolved before being handed to `vscode.Uri.file`,
+  so a documented pattern like `"${workspaceFolder}/../shared-formats"` (a
+  folder that's a sibling of the workspace, not inside it) silently matched
+  nothing — only global-storage formats showed up. The path-expansion logic
+  moves to a small pure `formats/PathExpand.ts` (now unit-tested) that
+  resolves `.`/`..` after substitution.
+- **The Xilinx Zynq MPSoC `BOOT.BIN` test format now validates cleanly** —
+  it was the format that surfaced all three fixes above.
+
 ## 0.18.0
 
 - **Pointer-style offsets (`offsetField`) and field `id`.** A field can now
@@ -15,16 +46,6 @@
   `offsetField`, same as it already does for a `countField` array. The form
   editor's Offset box now takes a name/sum the same way the Count box
   already does, and each row gets an **id** box.
-- **Fix: `id`/`offsetField` dropped on a struct-array shorthand field.**
-  Found testing against a real Xilinx Zynq MPSoC `BOOT.BIN`: a field whose
-  `type` was a reusable-struct shorthand (e.g. `"PartitionHeader[32]"`) lost
-  its `id` and `offsetField` when `FieldSyntax.expandShorthandField` rebuilt
-  it into the explicit array form — so a pointer-positioned array of records
-  silently packed instead of jumping to its pointer. `offset`/`endianness`/
-  `description` were already preserved there; `id`/`offsetField` now are too.
-- **Fix: `.testing_results/` shipped in the packaged `.vsix`.** Gitignored
-  but not `.vscodeignore`d, so `vsce package` was bundling an 8.5 MB test
-  fixture into the extension. Added to `.vscodeignore`.
 
 ## 0.17.0
 

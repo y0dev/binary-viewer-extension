@@ -9,17 +9,69 @@ import type { BitSpec } from '../../src/types/format';
 
 describe('BitField', () => {
   it('parses single bits and ranges order-insensitively', () => {
-    assert.deepStrictEqual(parseBitRange('0'), { lo: 0, hi: 0, width: 1 });
-    assert.deepStrictEqual(parseBitRange('4'), { lo: 4, hi: 4, width: 1 });
-    assert.deepStrictEqual(parseBitRange('1-3'), { lo: 1, hi: 3, width: 3 });
-    assert.deepStrictEqual(parseBitRange('3-1'), { lo: 1, hi: 3, width: 3 });
-    assert.deepStrictEqual(parseBitRange(' 5 : 7 '), { lo: 5, hi: 7, width: 3 });
+    assert.deepStrictEqual(parseBitRange('0'), { parts: [{ lo: 0, hi: 0 }], lo: 0, hi: 0, width: 1 });
+    assert.deepStrictEqual(parseBitRange('4'), { parts: [{ lo: 4, hi: 4 }], lo: 4, hi: 4, width: 1 });
+    assert.deepStrictEqual(parseBitRange('1-3'), { parts: [{ lo: 1, hi: 3 }], lo: 1, hi: 3, width: 3 });
+    assert.deepStrictEqual(parseBitRange('3-1'), { parts: [{ lo: 1, hi: 3 }], lo: 1, hi: 3, width: 3 });
+    assert.deepStrictEqual(parseBitRange(' 5 : 7 '), { parts: [{ lo: 5, hi: 7 }], lo: 5, hi: 7, width: 3 });
   });
 
   it('rejects malformed specs', () => {
     assert.throws(() => parseBitRange('abc'));
     assert.throws(() => parseBitRange('1-'));
     assert.throws(() => parseBitRange(''));
+    assert.throws(() => parseBitRange('0-5,'));
+    assert.throws(() => parseBitRange('0-5,abc'));
+  });
+
+  it('parses a comma-separated multi-part spec (non-contiguous bits combined into one field)', () => {
+    const r = parseBitRange('0-5,12-13,16-31');
+    assert.deepStrictEqual(r.parts, [
+      { lo: 0, hi: 5 },
+      { lo: 12, hi: 13 },
+      { lo: 16, hi: 31 },
+    ]);
+    assert.strictEqual(r.lo, 0);
+    assert.strictEqual(r.hi, 31);
+    assert.strictEqual(r.width, 6 + 2 + 16);
+  });
+
+  it('extracts and concatenates a multi-part spec, first part as the low bits', () => {
+    // parts: bits 0-1 = 0b11, bits 4-5 = 0b10 -> combined = 0b10_11 = 11
+    const raw = 0b0010_0011; // bit0=1,bit1=1,bit4=0,bit5=1
+    assert.strictEqual(extractBits(raw, parseBitRange('0-1,4-5')), 0b1011);
+  });
+
+  it('flags a Zynq-style Reserved spec ("0-5,12-13,16-31") as tiling the container without overlap', () => {
+    const specs: BitSpec[] = [
+      { name: 'Reserved0', bits: '0-5' },
+      { name: 'PUF-HD', bits: '6-7' },
+      { name: 'Hashing', bits: '8-9' },
+      { name: 'CPU Select', bits: '10-11' },
+      { name: 'Reserved1', bits: '12-13' },
+      { name: 'BHDR RSA', bits: '14-15' },
+      { name: 'Reserved2', bits: '16-31' },
+    ];
+    assert.deepStrictEqual(validateBitSpecs(specs, 32), []);
+
+    // Now the same shape, but the three "Reserved" pieces are one combined spec.
+    const combined: BitSpec[] = [
+      { name: 'PUF-HD', bits: '6-7' },
+      { name: 'Hashing', bits: '8-9' },
+      { name: 'CPU Select', bits: '10-11' },
+      { name: 'BHDR RSA', bits: '14-15' },
+      { name: 'Reserved', bits: '0-5,12-13,16-31' },
+    ];
+    assert.deepStrictEqual(validateBitSpecs(combined, 32), []);
+  });
+
+  it('still catches an overlap against one part of a multi-part spec', () => {
+    const specs: BitSpec[] = [
+      { name: 'Reserved', bits: '0-5,16-31' },
+      { name: 'Other', bits: '4' }, // overlaps the 0-5 part
+    ];
+    const errors = validateBitSpecs(specs, 32);
+    assert.ok(errors.some((e) => /overlaps/.test(e)));
   });
 
   it('extracts bit values from a container (boundary bits included)', () => {

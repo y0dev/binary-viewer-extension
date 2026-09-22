@@ -3,23 +3,13 @@ import * as os from 'os';
 import type { FormatDefinition, FormatSource, LoadedFormat } from '../types/format';
 import { validateFormat } from '../core/FormatSchema';
 import { log } from '../util/logger';
+import { expandConfiguredPath } from './PathExpand';
 
 const WORKSPACE_REL = '.vscode/binary-viewer/formats';
 
-/** Expand `~` and `${workspaceFolder}` in a user-configured directory path. */
+/** Expand `~` and `${workspaceFolder}` in a user-configured directory path. See `PathExpand.expandConfiguredPath`. */
 export function expandDirPath(input: string): string {
-  let p = input.trim();
-  if (p === '') {
-    return p;
-  }
-  if (p === '~' || p.startsWith('~/') || p.startsWith('~\\')) {
-    p = os.homedir() + p.slice(1);
-  }
-  const ws = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-  if (ws) {
-    p = p.replace(/\$\{workspaceFolder\}/g, ws);
-  }
-  return p;
+  return expandConfiguredPath(input, os.homedir(), vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
 }
 
 export function slugify(name: string): string {

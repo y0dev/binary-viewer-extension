@@ -16,7 +16,7 @@ import type {
 import type { ParsedNode, ParsedBit } from '../types/messages';
 import { formatScalar, getScalarType } from './DataTypes';
 import { computeFieldSize, computeStructSize, lookupEnumLabel } from './BinaryField';
-import { decodeBits } from './BitField';
+import { decodeBits, type BitRange } from './BitField';
 import { isContainerForm, containerChildren } from './FieldShape';
 import { expandShorthandField } from './FieldSyntax';
 import { resolveArrayView } from './ArrayView';
@@ -632,6 +632,15 @@ function readContainer(ctx: Ctx, abs: number, sizeBytes: number, le: boolean): n
   }
 }
 
+/** "7" / "5-3" for a single part; "31-16,13-12,5-0" (high-to-low, spec order reversed) for a multi-part spec. */
+function bitRangeLabel(range: BitRange): string {
+  const partLabel = (p: { lo: number; hi: number }) => (p.lo === p.hi ? String(p.lo) : `${p.hi}-${p.lo}`);
+  if (range.parts.length === 1) {
+    return partLabel(range.parts[0]);
+  }
+  return [...range.parts].reverse().map(partLabel).join(',');
+}
+
 function parseFlags(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
   const sizeBytes = field.size ?? sizeFromScalar(field.type) ?? 1;
   if (!inWindow(ctx, abs, sizeBytes)) {
@@ -644,7 +653,7 @@ function parseFlags(ctx: Ctx, field: FieldDefinition, abs: number, depth: number
   const decoded = decodeBits(container, specs);
   const bits: ParsedBit[] = decoded.map((d) => ({
     name: d.name,
-    bitLabel: d.range.width === 1 ? String(d.range.lo) : `${d.range.hi}-${d.range.lo}`,
+    bitLabel: bitRangeLabel(d.range),
     value: d.display,
   }));
   // add descriptions
