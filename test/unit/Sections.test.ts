@@ -6,9 +6,11 @@ import {
   buildSections,
   hasFlagsColumn,
   hasDisplayColumn,
+  adjacentSection,
 } from '../../src/core/Sections';
 import { validateFormat } from '../../src/core/FormatSchema';
 import type { FormatDefinition } from '../../src/types/format';
+import type { ParsedSection } from '../../src/types/messages';
 
 const REPO = path.resolve(__dirname, '../../..');
 const readFormat = (name: string): FormatDefinition =>
@@ -137,5 +139,33 @@ describe('Sections — schema validation', () => {
   it('accepts the shipped flash-layout.json and nested-firmware.json section lists', () => {
     assert.deepStrictEqual(validateFormat(readFormat('flash-layout.json')).errors, []);
     assert.deepStrictEqual(validateFormat(readFormat('nested-firmware.json')).errors, []);
+  });
+});
+
+describe('adjacentSection (Raw-view section navigation)', () => {
+  const rows: ParsedSection[] = [
+    { name: 'A', start: 0, length: 10, end: 10, inFile: true, source: 'derived' },
+    { name: 'B', start: 10, length: 20, end: 30, inFile: true, source: 'derived' },
+    { name: 'C', start: 30, length: 5, end: 35, inFile: true, source: 'derived' },
+  ];
+
+  it('"next" finds the first section starting after the offset', () => {
+    assert.strictEqual(adjacentSection(rows, 0, 'next')!.name, 'B');
+    assert.strictEqual(adjacentSection(rows, 15, 'next')!.name, 'C');
+    assert.strictEqual(adjacentSection(rows, 30, 'next'), undefined); // already the last
+  });
+
+  it('"prev" from inside a section lands on that section\'s own start first', () => {
+    assert.strictEqual(adjacentSection(rows, 15, 'prev')!.name, 'B');
+  });
+
+  it('"prev" from exactly a section\'s start advances to the true previous one', () => {
+    assert.strictEqual(adjacentSection(rows, 10, 'prev')!.name, 'A');
+    assert.strictEqual(adjacentSection(rows, 0, 'prev'), undefined); // already the first
+  });
+
+  it('sorts by start regardless of input order', () => {
+    const shuffled = [rows[2], rows[0], rows[1]];
+    assert.strictEqual(adjacentSection(shuffled, 0, 'next')!.name, 'B');
   });
 });

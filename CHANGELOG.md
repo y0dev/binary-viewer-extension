@@ -1,5 +1,25 @@
 # Change Log
 
+## 0.18.7
+
+- **Show the active format's declared `version`.** The format select's
+  entries now show `— vX` when a format sets a `version`, and the currently
+  active one also shows as a small label next to the select.
+- **Jump between sections from the Raw tab.** New **Section ◀ / ▶** toolbar
+  buttons move the caret/selection to the previous/next section (and switch
+  to Raw from anywhere), disabled until a format produces at least one
+  section. From inside a section, **◀** goes to that section's own start
+  first, then the true previous one on a second press.
+- **Prefer deriving sections from fields over a hand-maintained `sections`
+  array**, when you don't need custom names/flags/display. A derived row's
+  name and size always match the Structure tab exactly (same parsed nodes);
+  a static `sections` array can silently drift out of sync as a format
+  evolves — which is exactly what happened in the Zynq MPSoC `BOOT.BIN` test
+  format (`Partition Headers` in `sections` vs. the real `Partition Header
+  Table` field, with stale zero lengths). No code change for this one —
+  removing the stale `sections` array lets the existing derive-from-fields
+  fallback take over.
+
 ## 0.18.6
 
 - **Fix: a large single range read silently returned zeros instead of real

@@ -30,7 +30,11 @@ bytes back in the hex view.
 Add a `sections` array to a format and the **Sections** tab shows a memory-map
 table — `Section · Start · End · Length`, plus optional user-defined **Flags**
 (`rwx`) and **Display** (`Yes`/`No`) columns. Click a row to select that region
-in the hex view. Works with a fields-based format or a sections-only one.
+in the hex view. Works with a fields-based format or a sections-only one; with
+no `sections` array, rows are derived straight from the parsed top-level
+fields instead, so they never drift out of sync with the Structure tab. From
+the **Raw** tab, toolbar **Section ◀ / ▶** buttons jump between sections
+directly.
 
 ![Sections view: an MCU flash layout with rwx flags and a display column](docs/images/sections-view.png)
 

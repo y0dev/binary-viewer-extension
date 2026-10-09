@@ -15,12 +15,17 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
 ## The toolbar
 
 ```
-[ Raw ] [ Structure ] [ Sections ]   Bytes: [16 ▼]  Group: [1 byte ▼]  Endian: [Little ▼]   Format: [ … ▼ ] ↻   [ Inspector ] [ Field Colors ] [ Search ] [ Go To ]   0x00000120
+[ Raw ] [ Structure ] [ Sections ]  Section: [◀] [▶]   Bytes: [16 ▼]  Group: [1 byte ▼]  Endian: [Little ▼]   Format: [ … ▼ ] v2.0.0 ↻   [ Inspector ] [ Field Colors ] [ Search ] [ Go To ]   0x00000120
 ```
 
 - **Raw / Structure / Sections** — switch views. Structure and Sections need a
   format applied (auto-detected or chosen); Sections also works from a format's
   top-level fields when it declares no `sections`.
+- **Section ◀ / ▶** — jump the caret/selection to the previous/next section and
+  switch to Raw, from anywhere. Disabled until a format produces at least one
+  section (its own `sections`, or derived from top-level fields). From inside
+  a section, **◀** goes to that section's own start first, then the true
+  previous one on a second press — like "Home", then back.
 - **Bytes** — 8, 16 or 32 bytes per row. Default from `binaryViewer.bytesPerRow`.
 - **Group** — *raw view only.* Show the hex as 16- / 32- / 64-bit words instead
   of single bytes. `·LE` reverses each word's bytes so a little-endian
@@ -31,9 +36,11 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
   formats/fields that don't pin their own endianness). It does **not** change
   the raw **Group** display — use `·LE` / `·BE` for that.
 - **Format** — appears when at least one format is known. Entries are tagged
-  `[workspace]` / `[builtin]`; `(detected)` marks the auto-detected one. Choose
-  **(none)** to go back to raw-only. The **↻** button rescans the workspace and
-  global formats folders.
+  `[workspace]` / `[builtin]`; `(detected)` marks the auto-detected one, and
+  `— vX` shows the format definition's own `version` field, when it sets one.
+  The active format's version also shows as a small label next to the select.
+  Choose **(none)** to go back to raw-only. The **↻** button rescans the
+  workspace and global formats folders.
 - **Field Colors** — *raw view only.* Tints each byte by its top-level field
   (a nested struct/array is one color for its whole span) so field boundaries
   are visible directly in the hex dump. Off by default; the button is
@@ -94,7 +101,14 @@ named regions:
 - Rows with `"display": false` render struck-through; tick **Hide "display: No"**
   in the tab's toolbar to drop them.
 - If the active format has no `sections` array, the tab derives one row per
-  top-level structure field (labelled *derived*).
+  top-level structure field (labelled *derived*) — names and sizes always
+  match the Structure tab exactly, since they come from the same parsed
+  nodes. Prefer this over a hand-maintained `sections` array unless you need
+  custom names, descriptions, or `flags`/`display` columns a derived row
+  can't carry — a static list can drift out of sync with the real field
+  names/sizes as the format evolves.
+- From the **Raw** tab, the toolbar's **Section ◀ / ▶** buttons jump the
+  caret to the previous/next section without switching tabs first.
 
 Add sections to a format with a `sections` array (see
 [FORMAT_DEFINITIONS.md](FORMAT_DEFINITIONS.md#sections-memory-map)) or the

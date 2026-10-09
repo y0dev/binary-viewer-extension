@@ -38,6 +38,11 @@ body {
   color: var(--vscode-descriptionForeground);
 }
 
+.bv-format-version {
+  margin-left: 2px;
+  font-size: 0.9em;
+}
+
 .bv-spacer {
   flex: 1 1 auto;
 }

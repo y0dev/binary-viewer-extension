@@ -135,6 +135,7 @@ export class FormatManager implements vscode.Disposable {
     return this.formats.map((f) => ({
       name: f.definition.name,
       description: f.definition.description,
+      version: f.definition.version,
       source: f.source,
       fileExtensions: f.definition.fileExtensions,
     }));

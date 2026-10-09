@@ -9,6 +9,7 @@ import { Inspector } from './Inspector';
 import { Toolbar } from './Toolbar';
 import { SearchBar } from './SearchBar';
 import { StatusBar } from './StatusBar';
+import { adjacentSection } from '../core/Sections';
 import type { HostToWebview, ViewMode } from '../types/messages';
 
 const appRoot = document.getElementById('app')!;
@@ -187,6 +188,16 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
       const target = resolveGotoTarget(store.state, offset);
       selectBytes(store, target, 1);
       hexView.revealOffset(target);
+      afterSelectionChange();
+    },
+    onJumpSection: (dir) => {
+      const next = adjacentSection(store.state.sections, store.state.caret, dir);
+      if (!next) {
+        return;
+      }
+      setView('raw');
+      selectBytes(store, next.start, Math.max(1, next.length));
+      hexView.revealOffset(next.start);
       afterSelectionChange();
     },
   });

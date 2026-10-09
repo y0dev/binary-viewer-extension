@@ -103,3 +103,31 @@ export function hasFlagsColumn(rows: ParsedSection[]): boolean {
 export function hasDisplayColumn(rows: ParsedSection[]): boolean {
   return rows.some((r) => typeof r.display === 'boolean');
 }
+
+/**
+ * The next section whose `start` is after `offset`, or the previous one
+ * whose `start` is before it — for "jump to next/previous section" from the
+ * Raw view. If `offset` sits inside a section, "prev" lands on that same
+ * section's own start first (so pressing it again then reaches the true
+ * previous one), matching how a "jump to start of current thing, then back"
+ * control usually behaves.
+ */
+export function adjacentSection(
+  sections: ParsedSection[],
+  offset: number,
+  dir: 'prev' | 'next',
+): ParsedSection | undefined {
+  const sorted = [...sections].sort((a, b) => a.start - b.start);
+  if (dir === 'next') {
+    return sorted.find((s) => s.start > offset);
+  }
+  let result: ParsedSection | undefined;
+  for (const s of sorted) {
+    if (s.start < offset) {
+      result = s;
+    } else {
+      break;
+    }
+  }
+  return result;
+}

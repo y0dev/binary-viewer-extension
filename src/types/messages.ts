@@ -26,6 +26,8 @@ export interface ViewerConfig {
 export interface FormatSummary {
   name: string;
   description?: string;
+  /** The format definition's own `version` field, e.g. "2.0.0" — shown next to the format select. */
+  version?: string;
   source: 'builtin' | 'global' | 'external' | 'workspace';
   fileExtensions?: string[];
 }

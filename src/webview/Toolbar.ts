@@ -7,6 +7,8 @@ import type { Endianness } from '../types/format';
 export interface ToolbarCallbacks {
   onToggleSearch(): void;
   onGoto(offset: number): void;
+  /** Raw view: jump the caret/selection to the next or previous section. */
+  onJumpSection(dir: 'prev' | 'next'): void;
 }
 
 export class Toolbar {
@@ -18,6 +20,8 @@ export class Toolbar {
   private structBtn: HTMLButtonElement;
   private sectionsBtn: HTMLButtonElement;
   private gotoInput: HTMLInputElement;
+  private prevSectionBtn: HTMLButtonElement;
+  private nextSectionBtn: HTMLButtonElement;
 
   constructor(
     private root: HTMLElement,
@@ -45,6 +49,24 @@ export class Toolbar {
       this.rawBtn,
       this.structBtn,
       this.sectionsBtn,
+    ]);
+
+    this.prevSectionBtn = el('button', {
+      class: 'bv-btn bv-btn-sm bv-btn-icon',
+      text: '◀',
+      title: 'Jump to the previous section (needs an applied format with sections)',
+      onclick: () => this.cb.onJumpSection('prev'),
+    });
+    this.nextSectionBtn = el('button', {
+      class: 'bv-btn bv-btn-sm bv-btn-icon',
+      text: '▶',
+      title: 'Jump to the next section (needs an applied format with sections)',
+      onclick: () => this.cb.onJumpSection('next'),
+    });
+    const sectionNav = el('span', { class: 'bv-tool' }, [
+      el('label', { class: 'bv-label', text: 'Section:' }),
+      this.prevSectionBtn,
+      this.nextSectionBtn,
     ]);
 
     const bytesSelect = el('select', {
@@ -166,6 +188,7 @@ export class Toolbar {
 
     this.root.append(
       segmented,
+      sectionNav,
       el('span', { class: 'bv-tool' }, [el('label', { class: 'bv-label', text: 'Bytes:' }), bytesSelect]),
       el('span', { class: 'bv-tool' }, [el('label', { class: 'bv-label', text: 'Group:' }), groupSelect]),
       el('span', { class: 'bv-tool' }, [el('label', { class: 'bv-label', text: 'Endian:' }), endianSelect]),
@@ -212,6 +235,9 @@ export class Toolbar {
       if (changed.has('formats') || changed.has('activeFormat') || changed.has('detectedFormat')) {
         this.renderFormatSelect();
       }
+      if (changed.has('sections')) {
+        this.syncSectionNav();
+      }
     });
 
     this.syncView();
@@ -220,6 +246,14 @@ export class Toolbar {
     this.inspectorBtn.classList.toggle('bv-btn-active', this.store.state.showInspector);
     this.highlightBtn.classList.toggle('bv-btn-active', this.store.state.fieldHighlight);
     this.syncHighlightBtn();
+    this.syncSectionNav();
+  }
+
+  /** Jumping between sections only makes sense once a format has produced some. */
+  private syncSectionNav(): void {
+    const has = this.store.state.sections.length > 0;
+    this.prevSectionBtn.disabled = !has;
+    this.nextSectionBtn.disabled = !has;
   }
 
   /** Field Colors only makes sense with a format applied — disable it, and
@@ -297,10 +331,22 @@ export class Toolbar {
               ? ' [builtin]'
               : '';
       const tag = f.name === s.detectedFormat ? ' (detected)' : '';
-      select.append(el('option', { value: f.name, text: `Format: ${f.name}${src}${tag}` }));
+      const ver = f.version ? ` — v${f.version}` : '';
+      select.append(el('option', { value: f.name, text: `Format: ${f.name}${ver}${src}${tag}` }));
     }
     select.value = s.activeFormat ?? '';
-    this.formatSelectWrap.append(el('label', { class: 'bv-label', text: 'Format:' }), select, reloadBtn);
+    this.formatSelectWrap.append(el('label', { class: 'bv-label', text: 'Format:' }), select);
+    const active = s.formats.find((f) => f.name === s.activeFormat);
+    if (active?.version) {
+      this.formatSelectWrap.append(
+        el('span', {
+          class: 'bv-dim bv-format-version',
+          text: `v${active.version}`,
+          title: `Version declared by this format's own JSON ("version" field)`,
+        }),
+      );
+    }
+    this.formatSelectWrap.append(reloadBtn);
   }
 
   private persist(): void {
