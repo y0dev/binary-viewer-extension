@@ -2,8 +2,8 @@
 
 ## Prerequisites
 
-- **Node.js 18+** (20 recommended — see `.nvmrc`). `npm install` runs a
-  `preinstall` check and stops with upgrade instructions on anything older —
+- **Node.js 20.19+ (20.x), 22.13+ (22.x), or 24+** (see `.nvmrc`). `npm install` runs a
+  `preinstall` check and stops with upgrade instructions on unsupported versions —
   handy on WSL/Ubuntu, which still ships Node 12/14.
 - VS Code 1.85+
 
@@ -78,6 +78,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). In short:
 
 ## Tests
 
+The search bar shows scan progress, supports cancellation, and reports result-limit
+truncation and invalid patterns inline. Unit tests cover search chunk boundaries,
+continuation, cancellation, stale UI responses, and large-file scrolling.
+
 Unit tests live in `test/unit/` and run in plain Node (no VS Code) because the
 `core/` and `binary/` modules never `import 'vscode'` at module load. Integration
 tests in `test/integration/` need `@vscode/test-electron`.
@@ -87,7 +91,7 @@ tests in `test/integration/` need `@vscode/test-electron`.
 1. Bump `version` in `package.json`, update `CHANGELOG.md`.
 2. `npm test && npm run package`.
 3. `npx @vscode/vsce publish` (requires the `devdoesit` Marketplace publisher and
-   a PAT; needs Node 20+).
+   a PAT; needs a supported Node version).
 
 ## Publisher note
 

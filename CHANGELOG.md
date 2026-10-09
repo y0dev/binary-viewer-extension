@@ -1,5 +1,28 @@
 # Change Log
 
+## Unreleased
+
+- **Fix backward search near the cursor and across scan boundaries.** A match
+  is eligible when it starts before the cursor, even if it ends after it.
+- **Search continues until completion.** Large-file searches automatically
+  resume between bounded scan slices and show progress, with a Cancel button.
+  Changing the query or closing the search bar cancels the active scan; late
+  responses from older queries no longer replace results or select bytes.
+- **Clearer search feedback.** Invalid patterns and read errors appear inline,
+  and cancelled, failed, or result-limited scans retain incomplete-result
+  warnings during navigation. Search controls have accessible labels and status
+  announcements.
+- **Fix large-file scrolling near EOF.** Scaled scrolling positions overscan
+  above the viewport, aligns the final row with its bottom, and clips overscan
+  so it cannot extend the scroll range.
+- **Refresh development tooling.** Upgrade Mocha, esbuild, TypeScript ESLint,
+  and ESLint; migrate to ESLint's flat configuration and refresh the lockfile.
+  Development requires Node.js 20.19+ (20.x), 22.13+ (22.x), or 24+.
+- **Regression coverage.** Add 25 tests for search boundaries, continuation,
+  cancellation, stale responses, inline feedback, and scaled scrolling. The
+  complete suite has 280 passing tests; the dependency audit reports no known
+  vulnerabilities.
+
 ## 0.18.4
 
 - **Array early-stop terminator (`until`).** An `array` field can set

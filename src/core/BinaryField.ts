@@ -19,7 +19,7 @@ export function computeStructSize(field: FieldDefinition): number {
   let cursor = 0;
   for (const f of containerChildren(field)) {
     const at = f.offset ?? cursor;
-    let sz = 0;
+    let sz: number;
     try {
       sz = computeFieldSize(f);
     } catch {

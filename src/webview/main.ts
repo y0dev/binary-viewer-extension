@@ -55,7 +55,10 @@ function handleMessage(msg: HostToWebview): void {
       }
       break;
     case 'searchResult':
-      searchBar?.onResult(msg.query, msg.matches, msg.done);
+      searchBar?.onResult(msg);
+      break;
+    case 'searchError':
+      searchBar?.onError(msg.requestId, msg.message);
       break;
     case 'gotoOffset':
       if (store) {

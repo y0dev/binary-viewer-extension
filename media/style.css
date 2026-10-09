@@ -252,6 +252,7 @@ body {
   left: 0;
   right: 0;
   will-change: transform;
+  overflow: hidden;
 }
 
 .bv-off {
@@ -644,4 +645,13 @@ body {
 .bv-toast-show {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* Keep search errors readable in the current VS Code theme. */
+.bv-input[aria-invalid="true"] {
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+
+.bv-search-error {
+  color: var(--vscode-errorForeground, #f48771);
 }

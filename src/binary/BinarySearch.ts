@@ -5,11 +5,19 @@ import type { SearchMatch, SearchQuery } from '../types/messages';
 const CHUNK = 1 << 20; // 1 MiB scan window
 const TIME_BUDGET_MS = 2500;
 
+export interface SearchOptions {
+  maxResults: number;
+  timeBudgetMs?: number;
+  signal?: AbortSignal;
+}
+
 export interface SearchOutcome {
   matches: SearchMatch[];
   done: boolean;
   /** Offset up to which the file has been scanned (for incremental "find all"). */
   scannedTo: number;
+  /** The result cap stopped the scan before completion. */
+  truncated?: boolean;
 }
 
 /**
@@ -20,48 +28,48 @@ export interface SearchOutcome {
 export async function searchBinary(
   reader: BinaryReader,
   query: SearchQuery,
-  opts: { maxResults: number },
+  opts: SearchOptions,
 ): Promise<SearchOutcome> {
+  opts.signal?.throwIfAborted();
   const pattern = compileSearch(query);
   const overlap = Math.max(0, pattern.length - 1);
   const size = reader.size;
-  const deadline = Date.now() + TIME_BUDGET_MS;
+  const deadline = Date.now() + (opts.timeBudgetMs ?? TIME_BUDGET_MS);
 
   if (query.direction === 'previous') {
-    return searchBackward(reader, pattern, query.from, size, overlap, deadline);
+    return searchBackward(reader, pattern, query.from, size, overlap, deadline, opts.signal);
   }
 
   const limit = query.direction === 'all' ? Math.max(1, opts.maxResults) : 1;
   const found: number[] = [];
-  const seen = new Set<number>();
   let pos = Math.max(0, Math.min(query.from, size));
 
   while (pos < size) {
     const readLen = Math.min(CHUNK + overlap, size - pos);
+    opts.signal?.throwIfAborted();
     const buf = await reader.read(pos, readLen);
+    opts.signal?.throwIfAborted();
     const hits = scanBuffer(pattern, buf, pos, {
       limit: limit - found.length,
       // Only "own" the first CHUNK bytes; the overlap tail is owned by the next chunk,
       // except for the final chunk which owns everything it holds.
-      endInBuf: pos + CHUNK >= size ? buf.length : Math.min(buf.length, CHUNK + overlap),
+      endStartInBuf: Math.min(CHUNK, size - pos),
     });
     for (const h of hits) {
-      if (h >= pos + CHUNK && pos + CHUNK < size) {
-        continue; // belongs to next chunk
-      }
-      if (!seen.has(h)) {
-        seen.add(h);
-        found.push(h);
-      }
+      found.push(h);
       if (found.length >= limit) {
         break;
       }
     }
     if (found.length >= limit) {
-      return { matches: toMatches(found, pattern.length), done: true, scannedTo: size };
+      return {
+        matches: toMatches(found, pattern.length), done: true,
+        scannedTo: found[found.length - 1] + 1,
+        truncated: query.direction === 'all',
+      };
     }
-    pos += CHUNK;
-    if (Date.now() > deadline) {
+    pos = Math.min(size, pos + CHUNK);
+    if (pos < size && Date.now() > deadline) {
       return { matches: toMatches(found, pattern.length), done: false, scannedTo: pos };
     }
   }
@@ -75,19 +83,22 @@ async function searchBackward(
   size: number,
   overlap: number,
   deadline: number,
+  signal?: AbortSignal,
 ): Promise<SearchOutcome> {
   let end = Math.max(0, Math.min(from, size)); // exclusive upper bound for a match START
   while (end > 0) {
     const start = Math.max(0, end - CHUNK);
     const readLen = Math.min(end - start + overlap, size - start);
+    signal?.throwIfAborted();
     const buf = await reader.read(start, readLen);
-    const hits = scanBuffer(pattern, buf, start, { endInBuf: end - start });
+    signal?.throwIfAborted();
+    const hits = scanBuffer(pattern, buf, start, { endStartInBuf: end - start });
     if (hits.length > 0) {
       const offset = hits[hits.length - 1];
       return { matches: [{ offset, length: pattern.length }], done: true, scannedTo: 0 };
     }
     end = start;
-    if (Date.now() > deadline) {
+    if (end > 0 && Date.now() > deadline) {
       return { matches: [], done: false, scannedTo: end };
     }
   }
@@ -96,4 +107,30 @@ async function searchBackward(
 
 function toMatches(offsets: number[], length: number): SearchMatch[] {
   return offsets.map((offset) => ({ offset, length }));
+}
+
+/** Continue bounded scans until completion, yielding between progress batches. */
+export async function streamSearch(
+  reader: BinaryReader,
+  query: SearchQuery,
+  opts: SearchOptions,
+  onProgress: (outcome: SearchOutcome) => void,
+): Promise<void> {
+  let count = 0;
+  let cursor = query;
+  while (true) {
+    opts.signal?.throwIfAborted();
+    const outcome = await searchBinary(reader, cursor, {
+      ...opts,
+      maxResults: Math.max(1, opts.maxResults) - count,
+      timeBudgetMs: opts.timeBudgetMs ?? 100,
+    });
+    opts.signal?.throwIfAborted();
+    count += outcome.matches.length;
+    onProgress(outcome);
+    if (outcome.done) { return; }
+    cursor = { ...cursor, from: outcome.scannedTo };
+    // Allow cancellation and editor events between slices.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
 }

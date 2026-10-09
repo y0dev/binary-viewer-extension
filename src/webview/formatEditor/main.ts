@@ -1257,7 +1257,7 @@ function render(): void {
         text: '+ Insert example section',
         onclick: () => {
           const example = { name: 'main', start: '0x0000', length: '0x4000', flags: 'r-x', display: true };
-          let arr: unknown[] = [];
+          let arr: unknown[];
           try {
             const p = JSON.parse(model.sectionsJson || '[]');
             arr = Array.isArray(p) ? p : [];

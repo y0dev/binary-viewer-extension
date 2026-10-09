@@ -170,6 +170,8 @@ export class HexView {
     const base = this.store.state.formatBaseAddress ?? this.store.state.baseAddress;
     this.ensureFieldRanges();
     const key = `${win.firstRow}:${win.rowCount}:${bpr}:${g}:${le}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}:${this.fieldRanges.length}`;
+    this.layer.style.transform = `translateY(${win.layerTop}px)`;
+    this.layer.style.height = `${win.layerHeight}px`;
     if (!force && key === this.lastWindowKey) {
       return;
     }
@@ -239,7 +241,6 @@ export class HexView {
       html += '</span></div>';
     }
 
-    this.layer.style.transform = `translateY(${win.layerTop}px)`;
     this.layer.innerHTML = html;
   }
 
@@ -364,7 +365,7 @@ export class HexView {
     const pageRows = Math.max(1, Math.floor(vh / this.rowHeight) - 1);
     const last = Math.max(0, this.store.state.fileSize - 1);
     const caret = this.store.state.caret;
-    let target: number | null = null;
+    let target: number;
     switch (e.key) {
       case 'ArrowLeft':
         target = caret - g;

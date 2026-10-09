@@ -9,7 +9,7 @@ import { computeFieldSize, hasParseTimeSize } from '../core/BinaryField';
 import { buildSections } from '../core/Sections';
 import { resolveStructures } from '../core/FormatResolve';
 import { resolveBaseAddress, BYTE_GROUP_MODES, type ByteGroupMode } from '../core/humanize';
-import { searchBinary } from '../binary/BinarySearch';
+import { streamSearch } from '../binary/BinarySearch';
 import type { FieldDefinition, TimestampEpoch } from '../types/format';
 import type {
   HostToWebview,
@@ -28,6 +28,7 @@ interface Entry {
   panel: vscode.WebviewPanel;
   /** Last selection reported by the webview, for commands that act on it. */
   selection?: { offset: number; length: number };
+  search?: { requestId: number; controller: AbortController };
 }
 
 interface ResolvedConfig extends ViewerConfig {
@@ -178,6 +179,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     );
 
     const disposeSub = panel.onDidDispose(() => {
+      entry.search?.controller.abort();
       messageSub.dispose();
       disposeSub.dispose();
       this.entries.delete(entry);
@@ -257,18 +259,40 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           break;
         }
 
+        case 'cancelSearch': {
+          if (entry.search?.requestId === msg.requestId) {
+            entry.search.controller.abort();
+            entry.search = undefined;
+          }
+          break;
+        }
+
         case 'search': {
-          const cfg = this.readConfig();
-          const outcome = await searchBinary(document.reader, msg.query, {
-            maxResults: cfg.maxSearchResults,
-          });
-          this.post(entry, {
-            type: 'searchResult',
-            query: msg.query,
-            matches: outcome.matches,
-            done: outcome.done,
-            scannedTo: outcome.scannedTo,
-          });
+          entry.search?.controller.abort();
+          const controller = new AbortController();
+          const task = { requestId: msg.requestId, controller };
+          entry.search = task;
+          const maxResults = Math.max(1, this.readConfig().maxSearchResults);
+          try {
+            await streamSearch(document.reader, msg.query, {
+              maxResults, signal: controller.signal,
+            }, (outcome) => {
+              this.post(entry, {
+                type: 'searchResult', requestId: msg.requestId, query: msg.query,
+                matches: outcome.matches, done: outcome.done,
+                scannedTo: outcome.scannedTo, truncated: outcome.truncated,
+              });
+            });
+          } catch (e) {
+            if (!controller.signal.aborted) {
+              this.post(entry, {
+                type: 'searchError', requestId: msg.requestId,
+                message: (e as Error).message ?? String(e),
+              });
+            }
+          } finally {
+            if (entry.search === task) { entry.search = undefined; }
+          }
           break;
         }
 

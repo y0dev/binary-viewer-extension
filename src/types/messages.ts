@@ -139,7 +139,8 @@ export type HostToWebview =
       error?: string;
     }
   | { type: 'formats'; formats: FormatSummary[]; activeFormat: string | null }
-  | { type: 'searchResult'; query: SearchQuery; matches: SearchMatch[]; done: boolean; scannedTo: number }
+  | { type: 'searchResult'; requestId: number; query: SearchQuery; matches: SearchMatch[]; done: boolean; scannedTo: number; truncated?: boolean }
+  | { type: 'searchError'; requestId: number; message: string }
   | { type: 'gotoOffset'; offset: number; select?: number }
   | { type: 'selectRange'; offset: number; length: number; reveal?: boolean }
   | { type: 'setView'; view: ViewMode }
@@ -161,7 +162,8 @@ export type WebviewToHost =
   | { type: 'requestRange'; requestId: number; offset: number; length: number }
   | { type: 'requestParse'; formatName: string; endianness?: Endianness }
   | { type: 'setActiveFormat'; formatName: string | null; endianness?: Endianness }
-  | { type: 'search'; query: SearchQuery }
+  | { type: 'search'; requestId: number; query: SearchQuery }
+  | { type: 'cancelSearch'; requestId: number }
   | { type: 'persistState'; state: WebviewPersistedState }
   | { type: 'openFormatEditor'; formatName?: string }
   | { type: 'generateFormat' }

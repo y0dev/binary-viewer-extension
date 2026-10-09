@@ -47,7 +47,7 @@ export function registerFormatAuthoringCommands(
 
     vscode.commands.registerCommand('binaryViewer.editFormat', async (nameArg?: string) => {
       let def: FormatDefinition | undefined;
-      let editing = true;
+      let editing: boolean;
       let sourceUri: vscode.Uri | undefined;
       if (typeof nameArg === 'string') {
         const loaded = formats.get(nameArg);

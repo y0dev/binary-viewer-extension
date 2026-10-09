@@ -2,7 +2,8 @@ import { Store } from './state';
 import { el } from './dom';
 import { post } from './vscodeApi';
 import { offsetHex } from '../core/humanize';
-import type { SearchMatch, SearchQuery } from '../types/messages';
+import { compileSearch } from '../core/SearchPattern';
+import type { HostToWebview, SearchMatch, SearchQuery } from '../types/messages';
 
 export interface SearchCallbacks {
   onSelect(offset: number, length: number): void;
@@ -21,6 +22,12 @@ export class SearchBar {
   private lastKey = '';
   private lastOffset = -1;
   private searching = false;
+  private cancelButton: HTMLButtonElement;
+  private requestSeq = 0;
+  private activeRequest: number | undefined;
+  private truncated = false;
+  private cancelled = false;
+  private failed = false;
 
   constructor(
     private root: HTMLElement,
@@ -73,7 +80,15 @@ export class SearchBar {
       document.createTextNode(' Aa'),
     ]);
 
-    this.status = el('span', { class: 'bv-search-status' });
+    this.status = el('span', { id: 'bv-search-status', class: 'bv-search-status', role: 'status', 'aria-live': 'polite' });
+    this.input.setAttribute('aria-label', 'Search pattern');
+    this.input.setAttribute('aria-describedby', 'bv-search-status');
+    this.kindSel.setAttribute('aria-label', 'Search encoding');
+    this.caseChk.setAttribute('aria-label', 'Ignore ASCII case');
+    this.cancelButton = el('button', {
+      class: 'bv-btn bv-btn-sm', text: 'Cancel', hidden: true,
+      onclick: () => this.cancel(),
+    });
 
     this.root.append(
       el('label', { class: 'bv-label', text: 'Find:' }),
@@ -84,6 +99,7 @@ export class SearchBar {
       el('button', { class: 'bv-btn bv-btn-sm', text: '>', title: 'Find next (Enter)', onclick: () => this.next() }),
       el('button', { class: 'bv-btn bv-btn-sm', text: 'All', title: 'Find all', onclick: () => this.all() }),
       this.status,
+      this.cancelButton,
       el('span', { class: 'bv-spacer' }),
       el('button', { class: 'bv-btn bv-btn-sm', text: 'x', title: 'Close (Esc)', onclick: () => this.hide() }),
     );
@@ -104,6 +120,7 @@ export class SearchBar {
   }
 
   hide(): void {
+    this.cancel();
     this.root.hidden = true;
   }
 
@@ -139,6 +156,13 @@ export class SearchBar {
   }
 
   private reset(): void {
+    this.cancel();
+    this.status.textContent = '';
+    this.input.removeAttribute('aria-invalid');
+    this.truncated = false;
+    this.cancelled = false;
+    this.failed = false;
+    this.status.classList.remove('bv-search-error');
     this.matches = [];
     this.index = 0;
     this.allMode = false;
@@ -195,40 +219,104 @@ export class SearchBar {
   }
 
   private dispatch(q: SearchQuery): void {
+    this.cancel();
+    this.input.removeAttribute('aria-invalid');
+    try {
+      compileSearch(q);
+    } catch (e) {
+      this.status.textContent = (e as Error).message;
+      this.input.setAttribute('aria-invalid', 'true');
+      this.status.classList.add('bv-search-error');
+      return;
+    }
+    this.matches = [];
+    this.index = 0;
+    this.allMode = q.direction === 'all';
+    this.truncated = false;
+    this.cancelled = false;
+    this.failed = false;
+    this.status.classList.remove('bv-search-error');
     this.searching = true;
-    this.status.textContent = 'searching...';
+    this.cancelButton.hidden = false;
+    this.status.textContent = 'Searching…';
     this.lastKey = this.key();
-    post({ type: 'search', query: q });
+    this.activeRequest = ++this.requestSeq;
+    post({ type: 'search', requestId: this.activeRequest, query: q });
+  }
+
+  private cancel(): void {
+    if (this.activeRequest !== undefined) {
+      post({ type: 'cancelSearch', requestId: this.activeRequest });
+      this.activeRequest = undefined;
+    }
+    if (this.searching) {
+      this.cancelled = true;
+      this.status.textContent = `Cancelled${this.matches.length ? ` — ${this.matches.length} matches (incomplete)` : ''}`;
+    }
+    this.searching = false;
+    this.cancelButton.hidden = true;
   }
 
   // ---- result handling ---------------------------------------
 
-  onResult(query: SearchQuery, matches: SearchMatch[], done: boolean): void {
+  onError(requestId: number, message: string): void {
+    if (requestId !== this.activeRequest) { return; }
+    this.activeRequest = undefined;
     this.searching = false;
+    this.cancelButton.hidden = true;
+    this.failed = true;
+    this.status.classList.add('bv-search-error');
+    this.status.textContent = `${message}${this.matches.length ? ' — results incomplete' : ''}`;
+  }
+
+  onResult(result: Extract<HostToWebview, { type: 'searchResult' }>): void {
+    const { requestId, query, matches, done, scannedTo, truncated } = result;
+    if (requestId !== this.activeRequest) { return; }
+    const firstBatch = this.matches.length === 0;
+    this.matches.push(...matches);
+    this.truncated = !!truncated;
+    this.searching = !done;
+    this.cancelButton.hidden = done;
+    if (done) { this.activeRequest = undefined; }
+
     if (query.direction === 'all') {
-      this.allMode = true;
-      this.matches = matches;
-      this.index = 0;
-      if (matches.length === 0) {
-        this.status.textContent = done ? 'no matches' : 'no matches yet...';
-        return;
+      if (firstBatch && matches.length) { this.selectCurrent(); }
+      if (!done) {
+        const total = Math.max(1, this.store.state.fileSize);
+        const percent = Math.min(100, Math.floor(scannedTo / total * 100));
+        this.status.textContent = `Searching… ${percent}% — ${this.matches.length} matches`;
+      } else {
+        this.status.textContent = this.matches.length
+          ? this.matchStatus()
+          : 'No matches';
       }
-      this.selectCurrent();
-      this.status.textContent = `${this.index + 1} / ${matches.length}${done ? '' : '+'}`;
       return;
     }
 
-    if (matches.length === 0) {
-      this.status.textContent = done ? 'not found' : 'not found (partial scan)';
+    if (!done) {
+      const distance = query.direction === 'previous'
+        ? query.from - scannedTo : scannedTo - query.from;
+      const total = query.direction === 'previous'
+        ? query.from : this.store.state.fileSize - query.from;
+      this.status.textContent = `Searching… ${Math.min(100, Math.floor(distance / Math.max(1, total) * 100))}%`;
       return;
     }
-    this.allMode = false;
-    const m = matches[0];
-    this.matches = [m];
-    this.index = 0;
+    if (!this.matches.length) {
+      this.status.textContent = 'Not found';
+      return;
+    }
+    const m = this.matches[0];
     this.lastOffset = m.offset;
     this.cb.onSelect(m.offset, m.length);
-    this.status.textContent = `${offsetHex(m.offset)}`;
+    this.status.textContent = offsetHex(m.offset);
+  }
+
+  private matchStatus(): string {
+    const suffix = this.truncated ? ' — result limit reached (incomplete)'
+      : this.failed ? ' — scan failed (incomplete)'
+      : this.cancelled ? ' — cancelled (incomplete)'
+      : this.searching ? ' — searching…' : '';
+    return `${this.index + 1} / ${this.matches.length}${suffix}`;
   }
 
   private selectCurrent(): void {
@@ -238,7 +326,7 @@ export class SearchBar {
     }
     this.lastOffset = m.offset;
     this.cb.onSelect(m.offset, m.length);
-    this.status.textContent = `${this.index + 1} / ${this.matches.length}`;
+    this.status.textContent = this.matchStatus();
   }
 
   get busy(): boolean {

@@ -186,11 +186,14 @@ export function scanBuffer(
   pattern: CompiledPattern,
   buf: Uint8Array,
   bufBaseOffset: number,
-  opts: { limit?: number; startInBuf?: number; endInBuf?: number } = {},
+  opts: { limit?: number; startInBuf?: number; endInBuf?: number; endStartInBuf?: number } = {},
 ): number[] {
   const out: number[] = [];
   const limit = opts.limit ?? Infinity;
-  const last = Math.min(opts.endInBuf ?? buf.length, buf.length) - pattern.length;
+  const last = Math.min(
+    Math.min(opts.endInBuf ?? buf.length, buf.length) - pattern.length,
+    (opts.endStartInBuf ?? Infinity) - 1,
+  );
   let i = Math.max(0, opts.startInBuf ?? 0);
   const fb = pattern.firstByte;
   for (; i <= last; i++) {

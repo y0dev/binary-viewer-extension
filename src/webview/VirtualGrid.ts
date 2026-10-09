@@ -10,6 +10,8 @@ export interface GridWindow {
   rowCount: number;
   /** translateY to apply to the rendered rows layer. */
   layerTop: number;
+  /** Clip overscan so it cannot enlarge the scrollable area. */
+  layerHeight: number;
 }
 
 export class VirtualGrid {
@@ -34,14 +36,22 @@ export class VirtualGrid {
     if (!this.scaled) {
       const firstRow = Math.max(0, Math.floor(scrollTop / this.rowHeight) - this.overscan);
       const rowCount = Math.min(this.totalRows - firstRow, visibleRows + this.overscan * 2);
-      return { firstRow, rowCount: Math.max(0, rowCount), layerTop: firstRow * this.rowHeight };
+      return {
+        firstRow, rowCount: Math.max(0, rowCount),
+        layerTop: firstRow * this.rowHeight, layerHeight: Math.max(0, rowCount) * this.rowHeight,
+      };
     }
     const maxScroll = Math.max(1, this.sizerHeight() - viewportHeight);
-    const maxFirstRow = Math.max(0, this.totalRows - visibleRows);
+    const maxFirstRow = Math.max(0, this.totalRows - viewportHeight / this.rowHeight);
     const ratio = Math.min(1, Math.max(0, scrollTop / maxScroll));
-    const firstRow = Math.max(0, Math.round(ratio * maxFirstRow) - this.overscan);
+    const logicalTop = ratio * maxFirstRow;
+    const firstRow = Math.max(0, Math.floor(logicalTop) - this.overscan);
     const rowCount = Math.min(this.totalRows - firstRow, visibleRows + this.overscan * 2);
-    return { firstRow: Math.max(0, firstRow), rowCount: Math.max(0, rowCount), layerTop: scrollTop };
+    const layerTop = scrollTop + (firstRow - logicalTop) * this.rowHeight;
+    return {
+      firstRow, rowCount: Math.max(0, rowCount), layerTop,
+      layerHeight: Math.max(0, Math.min(rowCount * this.rowHeight, this.sizerHeight() - layerTop)),
+    };
   }
 
   /** Inverse: scrollTop that brings `row` into view (near the top third). */
@@ -49,10 +59,9 @@ export class VirtualGrid {
     if (!this.scaled) {
       return Math.max(0, row * this.rowHeight - viewportHeight / 3);
     }
-    const visibleRows = Math.ceil(viewportHeight / this.rowHeight) + 1;
-    const maxFirstRow = Math.max(1, this.totalRows - visibleRows);
+    const maxFirstRow = Math.max(1, this.totalRows - viewportHeight / this.rowHeight);
     const maxScroll = Math.max(1, this.sizerHeight() - viewportHeight);
-    const targetFirst = Math.max(0, row - Math.floor(visibleRows / 3));
-    return (targetFirst / maxFirstRow) * maxScroll;
+    const targetFirst = Math.max(0, row - viewportHeight / (3 * this.rowHeight));
+    return Math.min(1, targetFirst / maxFirstRow) * maxScroll;
   }
 }
