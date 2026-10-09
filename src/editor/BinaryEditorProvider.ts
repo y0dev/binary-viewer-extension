@@ -21,7 +21,17 @@ import type {
 
 const VIEW_TYPE = 'binaryViewer.hexEditor';
 const HEADER_MIN_WINDOW = 4096;
-const HEADER_MAX_WINDOW = 8 * 1024 * 1024;
+/**
+ * Upper bound on the decode window for an `indeterminate` format (one with a
+ * countField/offsetField/view-driven field whose real extent isn't known
+ * until parse time) — it would otherwise try to read the whole file. Real
+ * pointer-based formats can legitimately need many MB (e.g. a Zynq MPSoC
+ * `BOOT.BIN`'s partition data commonly runs to the end of an 8+ MB file), so
+ * this stays generous rather than silently truncating; it only exists to
+ * bound extension-host memory for a pathologically large file, never sent to
+ * the webview as raw bytes either way (see `doParse`).
+ */
+const HEADER_MAX_WINDOW = 64 * 1024 * 1024;
 
 interface Entry {
   document: BinaryDocument;

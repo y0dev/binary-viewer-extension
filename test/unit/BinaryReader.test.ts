@@ -74,6 +74,35 @@ describe('BinaryCache', () => {
       await reader.dispose();
     }
   });
+
+  it('returns real bytes (not silent zeros) for a single range larger than the whole cache', async () => {
+    // Regression: a request spanning more blocks than the cache can ever
+    // hold used to have its earlier blocks evicted (to make room for later
+    // ones, loaded in parallel) before they were read back — the evicted
+    // portion came back as zeros instead of real file data. This matters
+    // for a large "decode the whole file" read on a format that's flagged
+    // indeterminate (e.g. countField/offsetField-heavy), which is exactly a
+    // single getRange() call bigger than the cache's own budget.
+    const size = 1 << 20; // 1 MiB file
+    const buf = Buffer.alloc(size);
+    for (let i = 0; i < size; i++) {
+      buf[i] = ((i % 251) + 1) & 0xff; // never 0, so any 0 byte back means a gap
+    }
+    const reader = await BinaryReader.create(fileUri(writeFixture('c2.bin', buf)));
+    // 4 KiB blocks, cap 64 KiB (16 blocks) — the whole 1 MiB file needs 256.
+    const cache = new BinaryCache(reader, 4096, 64 * 1024);
+    try {
+      const got = await cache.getRange(0, size);
+      assert.strictEqual(got.length, size);
+      for (let i = 0; i < size; i++) {
+        if (got[i] !== buf[i]) {
+          assert.fail(`byte ${i}: expected ${buf[i]}, got ${got[i]} (zeroed/evicted?)`);
+        }
+      }
+    } finally {
+      await reader.dispose();
+    }
+  });
 });
 
 describe('searchBinary (streaming)', () => {

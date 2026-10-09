@@ -1,5 +1,27 @@
 # Change Log
 
+## 0.18.6
+
+- **Fix: a large single range read silently returned zeros instead of real
+  file data.** `BinaryCache.getRange` loaded the blocks a request needed in
+  parallel and evicted the oldest resident block as each one finished — so a
+  request spanning more blocks than the cache's own budget could have its
+  earlier blocks evicted before the same call read them back, filling that
+  part of the result with zeros instead of file content. Found decoding a
+  Xilinx Zynq MPSoC `BOOT.BIN` whose partition data genuinely runs to the end
+  of an 8+ MB file: data beyond the cache's budget silently came back blank,
+  looking like a missing/not-found region. A request bigger than the cache
+  can ever hold now reads straight through to the underlying file instead —
+  a one-shot large read doesn't benefit from the scrollback-oriented cache
+  anyway.
+- **Raise the decode-window cap for `indeterminate` formats from 8 MB to
+  64 MB.** A format with a `countField`/`offsetField`/`view`-driven field
+  (real extent unknown until parse time) reads up to this cap instead of the
+  whole file; 8 MB was too small for a real multi-partition `BOOT.BIN`, so
+  fields positioned past that point were never fetched at all, regardless of
+  the cache fix above. Never sent to the webview as raw bytes either way —
+  this only bounds extension-host memory for a pathologically large file.
+
 ## 0.18.5
 
 - **Fix backward search near the cursor and across scan boundaries.** A match

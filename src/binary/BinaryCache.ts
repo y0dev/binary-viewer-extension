@@ -35,6 +35,18 @@ export class BinaryCache {
     const firstBlock = Math.floor(start / this.blockSize);
     const lastBlock = Math.floor((end - 1) / this.blockSize);
 
+    // A single request spanning more blocks than the cache can ever hold
+    // would have its earlier blocks evicted (to make room for later ones,
+    // loaded in parallel below) before this call gets to read them back —
+    // silently returning zeros for the evicted portion instead of real file
+    // data. Read straight through to the underlying reader instead; this is
+    // a one-shot large read (e.g. a decode window), not the
+    // repeated-small-range scrollback pattern the cache exists to speed up,
+    // so there's nothing worth caching here anyway.
+    if (lastBlock - firstBlock + 1 > this.maxBlocks) {
+      return this.reader.read(start, end - start);
+    }
+
     const needed: number[] = [];
     for (let b = firstBlock; b <= lastBlock; b++) {
       if (!this.blocks.has(b)) {
