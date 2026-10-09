@@ -1,6 +1,6 @@
 # Change Log
 
-## Unreleased
+## 0.18.5
 
 - **Fix backward search near the cursor and across scan boundaries.** A match
   is eligible when it starts before the cursor, even if it ends after it.
