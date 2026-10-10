@@ -117,7 +117,8 @@ Walkthrough of a real format end-to-end: [Creating a binary
 format](CREATING_A_FORMAT.md). Full field/type reference:
 [Format definitions](FORMAT_DEFINITIONS.md) (arrays incl. length-prefixed
 `countField`, pointer-style `offsetField`, reusable `structures`, `sections`,
-`baseAddress`, timestamp epochs, bit-fields, enums).
+`baseAddress`, timestamp epochs, bit-fields, enums, variable-length `cstring`,
+`sizeAlign`).
 
 ## Edit a format's JSON by hand, outside the form editor
 

@@ -1,5 +1,34 @@
 # Change Log
 
+## 0.18.8
+
+- **New field type `cstring`** — a variable-length, terminator-scanned
+  string whose size is only known at parse time, for formats that don't give
+  a string a fixed `length`. `terminator` picks the ending byte (default
+  `0`), `wordSize` groups and reverses N-byte chunks before scanning (for
+  formats that pack strings as byte-reversed words — some Xilinx boot
+  images), and `maxLength` bounds the scan so a non-terminated/corrupt file
+  can't make the parser run away.
+- **New structure property `sizeAlign`** — rounds a structure's
+  auto-computed size up to a fixed byte boundary, for record formats that
+  pad every entry to, say, 64 bytes regardless of its actual content length.
+  Works on an inline structure, and on a reusable `structures` entry (its own
+  `size`/`sizeAlign`/`endianness` now also round-trip through the visual form
+  editor, where only `description` did before).
+- **Fix: a field positioned via `offsetField` no longer inflates its
+  enclosing structure's own computed size.** Such a field points elsewhere
+  in the file by design; previously its target size still counted toward the
+  *enclosing* structure's size in both the static size estimate
+  (`computeStructSize`) and the parser's own runtime struct sizing, which
+  could badly inflate a `sizeAlign`-rounded structure containing one. Found
+  while adding `cstring`/`sizeAlign` to the Zynq MPSoC `BOOT.BIN` test
+  format's `Image Header`, whose variable-length `Image Name` sits ahead of
+  an `offsetField`-positioned partition-table pointer.
+- **Fix: a reusable structure's `sizeAlign` survives `structures` reference
+  inlining.** Resolving a `{ "type": "<Name>" }` reference already carried
+  over `size`/`endianness`/`description` from the structure body but silently
+  dropped `sizeAlign`.
+
 ## 0.18.7
 
 - **Show the active format's declared `version`.** The format select's

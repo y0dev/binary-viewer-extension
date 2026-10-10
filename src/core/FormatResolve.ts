@@ -56,6 +56,9 @@ export function resolveStructures(format: FormatDefinition): ResolveResult {
       if (inlined.size === undefined && body.size !== undefined) {
         inlined.size = body.size;
       }
+      if (inlined.sizeAlign === undefined && body.sizeAlign !== undefined) {
+        inlined.sizeAlign = body.sizeAlign;
+      }
       if (inlined.endianness === undefined && body.endianness !== undefined) {
         inlined.endianness = body.endianness;
       }

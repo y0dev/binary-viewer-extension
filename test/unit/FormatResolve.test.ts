@@ -48,6 +48,26 @@ describe('FormatResolve.resolveStructures', () => {
     assert.deepStrictEqual((origin.fields as { name: string }[]).map((f) => f.name), ['x', 'y']);
   });
 
+  it('carries a reusable structure\'s own size/sizeAlign/endianness/description onto the inlined field', () => {
+    const fmt: FormatDefinition = {
+      name: 'x',
+      structures: {
+        Padded: {
+          sizeAlign: 8,
+          endianness: 'big',
+          description: 'from the body',
+          fields: [{ name: 'v', type: 'uint8', offset: 0 }],
+        },
+      },
+      fields: [{ name: 'rec', type: 'Padded', offset: 0 }],
+    };
+    const { format } = resolveStructures(fmt);
+    const rec = format.fields![0];
+    assert.strictEqual(rec.sizeAlign, 8);
+    assert.strictEqual(rec.endianness, 'big');
+    assert.strictEqual(rec.description, 'from the body');
+  });
+
   it('inlines a struct reference used as an array element', () => {
     const fmt: FormatDefinition = {
       name: 'x',

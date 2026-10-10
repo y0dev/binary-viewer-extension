@@ -12,12 +12,21 @@ import { expandShorthandField } from './FieldSyntax';
 /**
  * Total bytes a container occupies: explicit `size` if given, otherwise the
  * largest child end offset (children packed after the previous sibling when
- * they omit their own offset). Nested containers recurse through this.
+ * they omit their own offset), rounded up to `sizeAlign` if set. Nested
+ * containers recurse through this. A `cstring` child's real size is only
+ * known at parse time (see `computeFieldSize`), so this is a best-effort
+ * estimate when one is present — the parser's own runtime size (`BinaryParser.
+ * parseStruct`) is authoritative.
  */
 export function computeStructSize(field: FieldDefinition): number {
   let end = 0;
   let cursor = 0;
   for (const f of containerChildren(field)) {
+    // A field positioned via `offsetField` (no explicit `offset`) points
+    // somewhere else in the file by design — it must not grow this
+    // structure's own computed size, however large its own static size is.
+    // See the matching runtime check in `BinaryParser.parseStruct`.
+    const outOfBand = f.offset === undefined && !!f.offsetField;
     const at = f.offset ?? cursor;
     let sz: number;
     try {
@@ -27,19 +36,28 @@ export function computeStructSize(field: FieldDefinition): number {
       // cursor; the explicit `size` (if any) still governs.
       sz = 0;
     }
-    end = Math.max(end, at + sz);
     cursor = at + sz;
+    if (!outOfBand) {
+      end = Math.max(end, cursor);
+    }
   }
-  return field.size ?? end;
+  if (field.size !== undefined) {
+    return field.size;
+  }
+  if (field.sizeAlign && field.sizeAlign > 0) {
+    return Math.ceil(end / field.sizeAlign) * field.sizeAlign;
+  }
+  return end;
 }
 
 /**
  * True when any field in the tree is positioned or sized only at parse time —
- * an `array` with `countField` and no fixed `count`, or a field with
+ * an `array` with `countField` and no fixed `count`, a field with
  * `offsetField` and no fixed `offset` (a pointer stored elsewhere in the
- * file). Callers that need to bound a read ahead of parsing (the editor's
- * decode window) must widen it in that case, since `computeFieldSize`
- * reports 0 for such a field and its position could be anywhere in the file.
+ * file), or a `cstring` (terminator-scanned, length unknown until found).
+ * Callers that need to bound a read ahead of parsing (the editor's decode
+ * window) must widen it in that case, since `computeFieldSize` reports 0 (or
+ * throws) for such a field and its real extent could be anywhere in the file.
  */
 export function hasParseTimeSize(fields: readonly FieldDefinition[] | undefined): boolean {
   for (const f of fields ?? []) {
@@ -47,6 +65,9 @@ export function hasParseTimeSize(fields: readonly FieldDefinition[] | undefined)
       return true;
     }
     if (f.offsetField && f.offset === undefined) {
+      return true;
+    }
+    if (f.type === 'cstring') {
       return true;
     }
     if (f.items && hasParseTimeSize([f.items])) {
@@ -95,6 +116,10 @@ export function computeFieldSize(field: FieldDefinition): number {
       return field.size ?? req(field.length, field, 'length');
     case 'utf16':
       return field.size ?? req(field.length, field, 'length') * 2;
+    case 'cstring':
+      // Terminator-scanned — the real size is only known once the bytes are
+      // actually read (see `hasParseTimeSize`/`BinaryParser.parseCstring`).
+      throw new Error(`cstring field "${field.name}" has no statically-known size`);
     case 'enum':
       return field.size ?? 4;
     case 'flags':

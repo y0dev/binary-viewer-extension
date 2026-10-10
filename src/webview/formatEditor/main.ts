@@ -2,7 +2,7 @@ import { el, clear } from '../dom';
 import { FORMAT_EDITOR_CSS } from './styles';
 import { parseArrayShorthand } from '../../core/FieldSyntax';
 import { reorderFormatKeys } from '../../core/FormatOrder';
-import type { FormatDefinition, FieldDefinition, MagicSpec, BitSpec } from '../../types/format';
+import type { FormatDefinition, FieldDefinition, MagicSpec, BitSpec, StructBody } from '../../types/format';
 import type {
   FormatEditorFromHost,
   FormatEditorToHost,
@@ -44,6 +44,8 @@ interface EditNode {
   /** array only: stop-early terminator, e.g. "next" or "next=0xff". '' = none. */
   until: string;
   size: string;
+  /** struct only: round the auto-computed size up to this boundary when `size` is empty. */
+  sizeAlign: string;
   length: string;
   endianness: string;
   description: string;
@@ -65,6 +67,9 @@ interface EditStruct {
   id: string;
   name: string;
   description: string;
+  size: string;
+  sizeAlign: string;
+  endianness: string;
   children: EditNode[];
   collapsed: boolean;
 }
@@ -187,6 +192,7 @@ function emptyNode(kind: EditNode['kind']): EditNode {
     view: '',
     until: '',
     size: '',
+    sizeAlign: '',
     length: '',
     endianness: '',
     description: '',
@@ -214,7 +220,16 @@ function enumNode(): EditNode {
 }
 
 function emptyStruct(): EditStruct {
-  return { id: uid(), name: 'Record', description: '', children: [emptyNode('field')], collapsed: false };
+  return {
+    id: uid(),
+    name: 'Record',
+    description: '',
+    size: '',
+    sizeAlign: '',
+    endianness: '',
+    children: [emptyNode('field')],
+    collapsed: false,
+  };
 }
 
 function cloneNode(n: EditNode): EditNode {
@@ -323,6 +338,7 @@ function fieldToNode(f: FieldDefinition): EditNode {
     node.fieldId = f.id ?? '';
     node.offset = offsetBoxValue(f);
     node.size = f.size === undefined ? '' : String(f.size);
+    node.sizeAlign = f.sizeAlign === undefined ? '' : String(f.sizeAlign);
     node.endianness = f.endianness ?? '';
     node.description = f.description ?? '';
     node.children = (f.fields as FieldDefinition[]).map(fieldToNode);
@@ -477,6 +493,9 @@ function toModel(def: FormatDefinition | null): Model {
       id: uid(),
       name,
       description: body.description ?? '',
+      size: body.size === undefined ? '' : String(body.size),
+      sizeAlign: body.sizeAlign === undefined ? '' : String(body.sizeAlign),
+      endianness: body.endianness ?? '',
       collapsed: false,
       children: (body.fields ?? []).map(fieldToNode),
     })),
@@ -528,6 +547,10 @@ function nodeToField(node: EditNode): FieldDefinition {
     const sz = num(node.size);
     if (sz !== undefined) {
       f.size = sz;
+    }
+    const sa = num(node.sizeAlign);
+    if (sa !== undefined) {
+      f.sizeAlign = sa;
     }
     if (node.endianness === 'little' || node.endianness === 'big') {
       f.endianness = node.endianness;
@@ -674,7 +697,7 @@ function buildDefinition(): FormatDefinition {
     def.constants = constants;
   }
 
-  const structs: Record<string, { fields: FieldDefinition[]; description?: string }> = {};
+  const structs: Record<string, StructBody> = {};
   for (const s of model.structs) {
     const key = s.name.trim();
     if (!key || s.children.length === 0) {
@@ -683,6 +706,17 @@ function buildDefinition(): FormatDefinition {
     structs[key] = { fields: s.children.map(nodeToField) };
     if (s.description.trim()) {
       structs[key].description = s.description.trim();
+    }
+    const sz = num(s.size);
+    if (sz !== undefined) {
+      structs[key].size = sz;
+    }
+    const sa = num(s.sizeAlign);
+    if (sa !== undefined) {
+      structs[key].sizeAlign = sa;
+    }
+    if (s.endianness === 'little' || s.endianness === 'big') {
+      structs[key].endianness = s.endianness;
     }
   }
   if (Object.keys(structs).length) {
@@ -1526,6 +1560,18 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
 
   if (node.kind === 'field') {
     head.append(labelled('len', bindInput(node, 'length', { width: 55 })));
+  } else if (node.kind === 'struct') {
+    head.append(
+      labelled(
+        'align to',
+        bindInput(node, 'sizeAlign', {
+          placeholder: 'none',
+          width: 55,
+          title:
+            'Round this structure\'s auto-computed size up to a multiple of this many bytes (ignored if Size is also set) — for a record format that pads every entry to a fixed boundary regardless of its actual content length.',
+        }),
+      ),
+    );
   }
 
   const endSel = el('select', {
@@ -1819,6 +1865,56 @@ function renderStructDef(parent: HTMLElement, s: EditStruct): void {
         return input;
       })(),
     ),
+    labelled(
+      'size',
+      (() => {
+        const input = el('input', {
+          type: 'text',
+          value: s.size,
+          placeholder: 'auto',
+          title: 'Explicit total size for this structure; omit to compute from its children.',
+          oninput: (e) => {
+            s.size = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }) as HTMLInputElement;
+        input.style.width = '55px';
+        return input;
+      })(),
+    ),
+    labelled(
+      'align to',
+      (() => {
+        const input = el('input', {
+          type: 'text',
+          value: s.sizeAlign,
+          placeholder: 'none',
+          title:
+            'Round the auto-computed size up to a multiple of this many bytes (ignored if Size is also set).',
+          oninput: (e) => {
+            s.sizeAlign = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }) as HTMLInputElement;
+        input.style.width = '55px';
+        return input;
+      })(),
+    ),
+    (() => {
+      const sel = el('select', {
+        onchange: (e) => {
+          s.endianness = (e.target as HTMLSelectElement).value;
+          scheduleValidate();
+        },
+      }) as HTMLSelectElement;
+      sel.append(
+        el('option', { value: '', text: 'endian: default' }),
+        el('option', { value: 'little', text: 'LE' }),
+        el('option', { value: 'big', text: 'BE' }),
+      );
+      sel.value = s.endianness;
+      return sel;
+    })(),
     el('span', { class: 'fe-node-actions' }, [
       iconBtn('✕', 'Delete structure definition', () => {
         model.structs = model.structs.filter((x) => x.id !== s.id);

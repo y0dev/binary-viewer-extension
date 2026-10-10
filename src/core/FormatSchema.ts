@@ -23,6 +23,7 @@ const COMPOSITE_TYPES = new Set([
   'utf8',
   'utf16',
   'string',
+  'cstring',
   'enum',
   'flags',
   'bitfield',
@@ -115,7 +116,7 @@ function validateStructure(
   result: ValidationResult,
   knownStructs: ReadonlySet<string> = NO_STRUCTS,
 ): void {
-  const { errors } = result;
+  const { errors, warnings } = result;
   const label = field.name ? `structure "${field.name}"` : 'structure';
 
   if (
@@ -129,6 +130,13 @@ function validateStructure(
     (typeof field.size !== 'number' || !Number.isInteger(field.size) || field.size < 0)
   ) {
     errors.push(`${cap(label)} has an invalid size.`);
+  }
+  if (field.sizeAlign !== undefined) {
+    if (!Number.isInteger(field.sizeAlign) || field.sizeAlign < 1) {
+      errors.push(`${path}.sizeAlign must be a positive integer`);
+    } else if (field.size !== undefined) {
+      warnings.push(`${path}: "size" and "sizeAlign" both set — "size" wins`);
+    }
   }
   if (field.endianness !== undefined && normalizeEndianness(field.endianness) === undefined) {
     errors.push(`${path}.endianness must be "little" or "big"`);
@@ -251,6 +259,9 @@ function validateField(
     if (field.endianness !== undefined && normalizeEndianness(field.endianness) === undefined) {
       errors.push(`${path}.endianness must be "little" or "big"`);
     }
+    if (field.sizeAlign !== undefined && (!Number.isInteger(field.sizeAlign) || field.sizeAlign < 1)) {
+      errors.push(`${path}.sizeAlign must be a positive integer`);
+    }
     return;
   }
 
@@ -286,6 +297,31 @@ function validateField(
   }
   if ((field.size !== undefined && (field.size < 0 || !Number.isInteger(field.size)))) {
     errors.push(`${path}.size must be a non-negative integer`);
+  }
+  if (field.sizeAlign !== undefined) {
+    errors.push(`${path}: "sizeAlign" only applies to a structure (or a reusable-structure reference)`);
+  }
+
+  if (t === 'cstring') {
+    if (field.terminator !== undefined && (!Number.isInteger(field.terminator) || field.terminator < 0 || field.terminator > 255)) {
+      errors.push(`${path}.terminator must be an integer 0-255`);
+    }
+    if (field.wordSize !== undefined && (!Number.isInteger(field.wordSize) || field.wordSize < 1)) {
+      errors.push(`${path}.wordSize must be a positive integer`);
+    }
+    if (field.maxLength !== undefined && (!Number.isInteger(field.maxLength) || field.maxLength < 1)) {
+      errors.push(`${path}.maxLength must be a positive integer`);
+    }
+  } else {
+    if (field.terminator !== undefined) {
+      errors.push(`${path}: "terminator" only applies to "cstring" fields`);
+    }
+    if (field.wordSize !== undefined) {
+      errors.push(`${path}: "wordSize" only applies to "cstring" fields`);
+    }
+    if (field.maxLength !== undefined) {
+      errors.push(`${path}: "maxLength" only applies to "cstring" fields`);
+    }
   }
 
   if (t === 'array') {
@@ -537,7 +573,7 @@ function validateStructuresMap(
       errors.push(`${path} must be an object with a "fields" array`);
       continue;
     }
-    const body = raw as { fields?: unknown; size?: unknown; endianness?: unknown };
+    const body = raw as { fields?: unknown; size?: unknown; sizeAlign?: unknown; endianness?: unknown };
     if (!Array.isArray(body.fields) || body.fields.length === 0) {
       errors.push(`${path}.fields must be a non-empty array`);
       continue;
@@ -547,6 +583,13 @@ function validateStructuresMap(
       (typeof body.size !== 'number' || !Number.isInteger(body.size) || body.size < 0)
     ) {
       errors.push(`${path}.size must be a non-negative integer`);
+    }
+    if (body.sizeAlign !== undefined) {
+      if (typeof body.sizeAlign !== 'number' || !Number.isInteger(body.sizeAlign) || body.sizeAlign < 1) {
+        errors.push(`${path}.sizeAlign must be a positive integer`);
+      } else if (body.size !== undefined) {
+        warnings.push(`${path}: "size" and "sizeAlign" both set — "size" wins`);
+      }
     }
     if (body.endianness !== undefined && normalizeEndianness(body.endianness) === undefined) {
       errors.push(`${path}.endianness must be "little" or "big"`);

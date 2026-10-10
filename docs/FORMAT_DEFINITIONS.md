@@ -295,7 +295,11 @@ checked first. IDs must be unique across the whole format.
 | `offset` | all | byte offset — absolute at the top level, **relative to the parent** inside a structure. **Omit** to pack immediately after the previous sibling |
 | `offsetField` | all | a `"+"`-sum of terms (same syntax as `countField`) to take this field's position from instead of `offset`/packing — always an **absolute** file offset regardless of nesting, for pointer-style formats. `offset`, when present, wins |
 | `size` | structure, `bytes`,`binary`,`padding`,`enum`,`flags`, any scalar | explicit byte width (structure: total size; omitted ⇒ computed from children) |
+| `sizeAlign` | structure (or a reusable-structure reference) | round the auto-computed structure size up to this many bytes; no effect when `size` is also set |
 | `length` | strings, `char` | number of characters / code units |
+| `terminator` | `cstring` | ending byte value, 0-255 (default `0`) |
+| `wordSize` | `cstring` | group bytes into `wordSize`-byte chunks and reverse each before scanning, then scan for the terminator (default `1`, no grouping) |
+| `maxLength` | `cstring` | give up scanning for the terminator after this many bytes (default `1024`) |
 | `count` | `array` | fixed element count |
 | `countField` | `array` | a `"+"`-separated sum of terms to read the element count from (a single name is just a one-term sum) — each term is a literal integer, a top-level `constants` entry, or an earlier decoded integer field by `id` or `name` (a length prefix); `count` wins if it's also set |
 | `items` | `array` | element `FieldDefinition` (its `name`/`offset` are ignored) |
@@ -330,6 +334,45 @@ checked first. IDs must be unique across the whole format.
 - `ascii` / `string` — fixed `length` bytes, non-printable → `.`, trimmed at NUL
 - `utf8` — `length`/`size` bytes decoded as UTF-8
 - `utf16` — `length` code units (or `size` bytes) decoded as UTF-16 (endian-aware)
+- `cstring` — the only **variable-length** string: scans forward from its
+  offset for a `terminator` byte (default `0`), consuming through it. Its
+  size isn't known until parse time, same bucket as a `countField` array or
+  `offsetField` field — the decode window widens accordingly (see
+  [Pointer-style offsets](#pointer-style-offsets--offsetfield)). Options:
+  - `terminator?: number` — the ending byte value (0-255). Default `0`.
+  - `wordSize?: number` — group bytes into `wordSize`-byte chunks and
+    **reverse each chunk** before scanning/decoding, e.g. `4` for a string
+    packed as byte-reversed 32-bit words (some Xilinx boot formats pack
+    image names this way). The field always consumes whole chunks, so a
+    terminator landing mid-chunk still consumes that entire chunk. Default
+    `1` (plain byte order — an ordinary C string).
+  - `maxLength?: number` — give up with an error if no terminator is found
+    within this many bytes, so a non-terminated/corrupt file can't make the
+    parser scan forever. Default `1024`.
+
+  ```jsonc
+  { "name": "label", "type": "cstring", "offset": 0 },
+  { "name": "packed_name", "type": "cstring", "offset": 16, "wordSize": 4, "maxLength": 256 }
+  ```
+
+  A structure that contains a `cstring` (or any other parse-time-sized
+  field) and needs its *total* size to pad to a fixed boundary regardless of
+  the actual content length — common for a record format that pads every
+  entry to, say, 64 bytes — sets `sizeAlign` instead of a fixed `size`:
+  rounds the structure's auto-computed size up to the next multiple. A field
+  positioned via `offsetField` elsewhere in the file never counts toward
+  this — it isn't *inside* the structure, however far away it points.
+
+  ```jsonc
+  {
+    "name": "Record",
+    "sizeAlign": 64,
+    "fields": [
+      { "name": "name", "type": "cstring", "offset": 0, "wordSize": 4 },
+      { "name": "terminator", "type": "bytes", "size": 4 }
+    ]
+  }
+  ```
 
 ### Other
 - `boolean` — one byte, `true` if non-zero

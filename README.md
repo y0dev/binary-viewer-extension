@@ -98,6 +98,12 @@ directly.
   array once a field inside the element just parsed equals a value (default
   `0`), for a linked-list "next" pointer — so a fixed/max `count` doesn't
   over-report elements that were never really there.
+- **`cstring`** — a variable-length, terminator-scanned string whose size is
+  only known at parse time, with `wordSize` to decode byte-reversed word-packed
+  names (e.g. some Xilinx boot formats) and `maxLength` to bound the scan.
+- **`sizeAlign`** — rounds a structure's auto-computed size up to a fixed
+  boundary (e.g. `64`), for record formats that pad every entry regardless of
+  its actual content length.
 - **Nested arrays in the form** — a chained element type (`"int16[4][3]"`) is
   form-editable up to 3 dimensions; deeper nesting needs the JSON tab.
 - **Format editor** — build fields, **arrays** (`+ Add Array` → count → element

@@ -212,6 +212,8 @@ function parseField(ctx: Ctx, rawField: FieldDefinition, abs: number, depth: num
     case 'utf16':
     case 'string':
       return parseString(ctx, field, abs, depth);
+    case 'cstring':
+      return parseCstring(ctx, field, abs, depth);
     case 'bytes':
     case 'hex':
       return parseBytes(ctx, field, abs, depth, 'hex');
@@ -466,6 +468,15 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
     if (ctx.nodes.length >= ctx.maxNodes) {
       break;
     }
+    // A field positioned via `offsetField` (no explicit `offset`) points
+    // somewhere else in the file by design — it doesn't occupy space inside
+    // this structure, so it must not grow this structure's own auto-computed
+    // size (`end`), however far away it lands. It still advances `cursor` for
+    // a later sibling that packs with no offset of its own (the same
+    // "pack right after whatever came before" rule used everywhere else,
+    // including at the top level, where it's relied on — e.g. a field right
+    // after an offsetField-positioned one).
+    const outOfBand = f.offset === undefined && !!f.offsetField;
     const childAbs = resolveFieldOffset(ctx, f, abs, cursor, depth + 1);
     if (childAbs === null) {
       continue;
@@ -473,13 +484,20 @@ function parseStruct(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
     const rel = childAbs - abs;
     const csize = parseField(ctx, f, childAbs, depth + 1);
     cursor = rel + csize;
-    end = Math.max(end, cursor);
+    if (!outOfBand) {
+      end = Math.max(end, cursor);
+    }
   }
   ctx.stack.pop();
   // An explicit `size` is authoritative; otherwise grow to what the children
   // actually consumed (a child sized at parse time — e.g. a `countField` array
-  // — can exceed the statically computed size).
-  const size = field.size !== undefined ? staticSize : Math.max(staticSize, end);
+  // or `cstring` — can exceed the statically computed size), then round up to
+  // `sizeAlign` if set (a format that pads every record to a fixed boundary
+  // regardless of its actual content length).
+  let size = field.size !== undefined ? staticSize : Math.max(staticSize, end);
+  if (field.size === undefined && field.sizeAlign && field.sizeAlign > 0) {
+    size = Math.ceil(size / field.sizeAlign) * field.sizeAlign;
+  }
   if (size !== staticSize) {
     node.size = size;
     node.value = `${size} byte${size === 1 ? '' : 's'}`;
@@ -780,6 +798,80 @@ function parseString(ctx: Ctx, field: FieldDefinition, abs: number, depth: numbe
     depth,
   });
   return size;
+}
+
+const DEFAULT_CSTRING_MAX = 1024;
+
+/**
+ * A terminator-scanned string whose size is only known once the terminator
+ * byte is found — unlike every other string type, which is fixed-size. Reads
+ * `wordSize`-byte chunks (reversing each one first when `wordSize > 1`, for
+ * formats that pack a string as byte-reversed words), scanning left to right
+ * for `terminator`; always consumes whole chunks, so a terminator mid-chunk
+ * still consumes that entire chunk (matching formats that pad to a word
+ * boundary). Gives up — reporting an error, not throwing — after `maxLength`
+ * bytes with no terminator found, or at the edge of the loaded window.
+ */
+function parseCstring(ctx: Ctx, field: FieldDefinition, abs: number, depth: number): number {
+  const wordSize = field.wordSize && field.wordSize > 0 ? Math.floor(field.wordSize) : 1;
+  const terminator =
+    field.terminator !== undefined ? ((Math.floor(field.terminator) % 256) + 256) % 256 : 0;
+  const maxLength = field.maxLength && field.maxLength > 0 ? Math.floor(field.maxLength) : DEFAULT_CSTRING_MAX;
+  const typeLabel = wordSize > 1 ? `cstring (word×${wordSize})` : 'cstring';
+
+  const local = localOffset(ctx, abs);
+  if (local < 0 || local >= ctx.win.bytes.byteLength) {
+    pushNode(ctx, {
+      name: field.name,
+      typeLabel,
+      offset: abs,
+      size: 0,
+      value: '',
+      depth,
+      detail: field.description,
+      error: 'outside loaded window',
+    });
+    return 0;
+  }
+
+  const scanLimit = Math.min(maxLength, ctx.win.bytes.byteLength - local);
+  const chars: string[] = [];
+  let consumed = 0;
+  let found = false;
+  for (let chunkStart = 0; chunkStart + wordSize <= scanLimit; chunkStart += wordSize) {
+    const chunk: number[] = [];
+    for (let i = 0; i < wordSize; i++) {
+      chunk.push(ctx.win.bytes[local + chunkStart + i]);
+    }
+    if (wordSize > 1) {
+      chunk.reverse();
+    }
+    consumed = chunkStart + wordSize;
+    for (const b of chunk) {
+      if (b === terminator) {
+        found = true;
+        break;
+      }
+      chars.push(b >= 0x20 && b <= 0x7e ? String.fromCharCode(b) : '.');
+    }
+    if (found) {
+      break;
+    }
+  }
+
+  const node = pushNode(ctx, {
+    name: field.name,
+    typeLabel,
+    offset: abs,
+    size: consumed,
+    value: JSON.stringify(chars.join('')),
+    detail: field.description,
+    depth,
+  });
+  if (!found) {
+    node.error = `no terminator (0x${terminator.toString(16).padStart(2, '0')}) found within ${maxLength} bytes`;
+  }
+  return consumed;
 }
 
 function parseBytes(

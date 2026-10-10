@@ -933,6 +933,164 @@ describe('BinaryParser — array until (linked-list terminator)', () => {
   });
 });
 
+describe('BinaryParser — cstring (terminator-scanned string)', () => {
+  it('scans a plain (wordSize 1) C string and consumes through the terminator', () => {
+    const fmt: FormatDefinition = {
+      name: 'cstr',
+      fields: [
+        { name: 's', type: 'cstring', offset: 0 },
+        { name: 'after', type: 'uint8' },
+      ],
+    };
+    // "hi\0" (3 bytes) then a trailing byte that must land at offset 3.
+    const { nodes } = parseFormat(fmt, win([0x68, 0x69, 0x00, 0xaa]), { defaultEndianness: 'little' });
+    const s = nodes.find((n) => n.name === 's')!;
+    assert.strictEqual(JSON.parse(s.value), 'hi');
+    assert.strictEqual(s.size, 3);
+    assert.strictEqual(s.error, undefined);
+    const after = nodes.find((n) => n.name === 'after')!;
+    assert.strictEqual(after.offset, 3);
+    assert.strictEqual(after.value, '170');
+  });
+
+  it('decodes a Xilinx-style word-reversed string, consuming whole word chunks', () => {
+    // "zynqmp_fsbl.elf" packed as byte-reversed 32-bit words, terminator (0x00)
+    // landing inside the 4th chunk — the whole chunk is still consumed (16 bytes),
+    // matching the real Image Header "Image Name" field this was modeled on.
+    const bytes = [
+      0x71, 0x6e, 0x79, 0x7a, // "zynq" reversed
+      0x66, 0x5f, 0x70, 0x6d, // "mp_f" reversed
+      0x2e, 0x6c, 0x62, 0x73, // "sbl." reversed
+      0x00, 0x66, 0x6c, 0x65, // "elf\0" reversed
+      0xaa, // sentinel past the string, to confirm the field stops at 16
+    ];
+    const fmt: FormatDefinition = {
+      name: 'cstr-word',
+      fields: [{ name: 'name', type: 'cstring', offset: 0, wordSize: 4 }],
+    };
+    const { nodes } = parseFormat(fmt, win(bytes), { defaultEndianness: 'little' });
+    const n = nodes.find((x) => x.name === 'name')!;
+    assert.strictEqual(JSON.parse(n.value), 'zynqmp_fsbl.elf');
+    assert.strictEqual(n.size, 16);
+    assert.strictEqual(n.error, undefined);
+  });
+
+  it('accepts a custom terminator byte', () => {
+    const fmt: FormatDefinition = {
+      name: 'cstr-term',
+      fields: [{ name: 's', type: 'cstring', offset: 0, terminator: 0xff }],
+    };
+    const { nodes } = parseFormat(fmt, win([0x41, 0x42, 0xff, 0x43]), { defaultEndianness: 'little' });
+    const s = nodes.find((n) => n.name === 's')!;
+    assert.strictEqual(JSON.parse(s.value), 'AB');
+    assert.strictEqual(s.size, 3);
+  });
+
+  it('reports an error (without throwing) when no terminator is found within maxLength', () => {
+    const fmt: FormatDefinition = {
+      name: 'cstr-noterm',
+      fields: [{ name: 's', type: 'cstring', offset: 0, maxLength: 4 }],
+    };
+    const { nodes, error } = parseFormat(fmt, win([0x41, 0x42, 0x43, 0x44, 0x45, 0x46]), {
+      defaultEndianness: 'little',
+    });
+    assert.strictEqual(error, undefined);
+    const s = nodes.find((n) => n.name === 's')!;
+    assert.strictEqual(s.size, 4);
+    assert.match(s.error ?? '', /no terminator.*found within 4 bytes/);
+  });
+
+  it('a struct with sizeAlign rounds its auto-computed size up to the boundary', () => {
+    const fmt: FormatDefinition = {
+      name: 'record',
+      fields: [
+        {
+          name: 'rec',
+          offset: 0,
+          sizeAlign: 8,
+          fields: [
+            { name: 'name', type: 'cstring', offset: 0 }, // "hi\0" = 3 bytes
+          ],
+        },
+        { name: 'after', type: 'uint8' },
+      ],
+    };
+    // rec: "hi\0" (3 bytes) rounds up to 8; "after" must land at offset 8.
+    const { nodes } = parseFormat(fmt, win([0x68, 0x69, 0x00, 0, 0, 0, 0, 0, 0xbb]), {
+      defaultEndianness: 'little',
+    });
+    const rec = nodes.find((n) => n.name === 'rec')!;
+    assert.strictEqual(rec.size, 8);
+    const after = nodes.find((n) => n.name === 'after')!;
+    assert.strictEqual(after.offset, 8);
+  });
+
+  it('reports "outside loaded window" at the window edge instead of throwing', () => {
+    const fmt: FormatDefinition = {
+      name: 'cstr-edge',
+      fields: [{ name: 's', type: 'cstring', offset: 10 }],
+    };
+    const { nodes, error } = parseFormat(fmt, win([1, 2, 3]), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    const s = nodes.find((n) => n.name === 's')!;
+    assert.strictEqual(s.error, 'outside loaded window');
+    assert.strictEqual(s.size, 0);
+  });
+});
+
+describe('BinaryParser — a struct\'s own size ignores an out-of-band (offsetField) child', () => {
+  it('does not let a far-away offsetField child grow the enclosing struct\'s sizeAlign-rounded size', () => {
+    // Regression, found via a real Xilinx Zynq MPSoC BOOT.BIN: a struct (an
+    // "ImageHeader" record) with a cstring + sizeAlign, that ALSO has an
+    // offsetField child pointing far away ("Partitions", elsewhere in the
+    // file). The far-away child must not inflate the struct's own size —
+    // the next sibling struct in a packed array must land right after this
+    // one's *real* (small, rounded) size, not after the pointer target.
+    const fmt: FormatDefinition = {
+      name: 'rec-offsetfield',
+      fields: [
+        {
+          name: 'records',
+          type: 'array',
+          offset: 0,
+          count: 2,
+          items: {
+            name: 'item',
+            sizeAlign: 8,
+            fields: [
+              { name: 'name', type: 'cstring', offset: 0 }, // "hi\0" = 3 bytes -> rounds to 8
+              { name: 'ptr', id: 'ptr', type: 'uint32', offset: 4 },
+              // Points far away (byte 1000) — must not affect this struct's own size.
+              { name: 'far', type: 'uint8', offsetField: 'ptr' },
+            ],
+          },
+        },
+      ],
+    };
+    const bytes = new Array(1001).fill(0);
+    // record[0]: name="hi\0", ptr = 1000 (far offset), padding to 8 bytes.
+    bytes[0] = 0x68;
+    bytes[1] = 0x69;
+    bytes[2] = 0x00;
+    bytes[4] = 1000 & 0xff;
+    bytes[5] = (1000 >> 8) & 0xff;
+    bytes[1000] = 0xaa;
+    // record[1] starts at byte 8 (not at byte 1000+1, which the bug used to produce).
+    bytes[8] = 0x79; // 'y'
+    bytes[9] = 0x00;
+
+    const { nodes, error } = parseFormat(fmt, win(bytes, 1001), { defaultEndianness: 'little' });
+    assert.strictEqual(error, undefined);
+    const rec0 = nodes.find((n) => n.name === 'records[0]')!;
+    const rec1 = nodes.find((n) => n.name === 'records[1]')!;
+    assert.strictEqual(rec0.size, 8);
+    assert.strictEqual(rec1.offset, 8);
+    const far = nodes.filter((n) => n.name === 'far');
+    assert.strictEqual(far[0].offset, 1000);
+    assert.strictEqual(far[0].value, '170');
+  });
+});
+
 describe('BinaryParser — array view (windowed rendering)', () => {
   // int16[50], value at index i == i. "view" only affects what's rendered —
   // count, size and offsets of the array itself are unaffected.

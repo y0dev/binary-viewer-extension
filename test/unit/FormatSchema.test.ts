@@ -304,3 +304,70 @@ describe('FormatSchema.validateFormat — array until', () => {
     assert.ok(r.errors.some((e) => /only applies to "array"/.test(e)));
   });
 });
+
+describe('FormatSchema.validateFormat — cstring and sizeAlign', () => {
+  it('accepts a plain cstring and one with terminator/wordSize/maxLength', () => {
+    const r = validateFormat({
+      name: 'c1',
+      fields: [
+        { name: 'a', type: 'cstring', offset: 0 },
+        { name: 'b', type: 'cstring', offset: 4, terminator: 0xff, wordSize: 4, maxLength: 256 },
+      ],
+    });
+    assert.deepStrictEqual(r.errors, []);
+    assert.ok(r.valid);
+  });
+
+  it('rejects an out-of-range terminator, and a non-positive wordSize/maxLength', () => {
+    const bad = (extra: object) =>
+      validateFormat({ name: 'c2', fields: [{ name: 'a', type: 'cstring', offset: 0, ...extra }] });
+    assert.ok(!bad({ terminator: 256 }).valid);
+    assert.ok(!bad({ terminator: -1 }).valid);
+    assert.ok(!bad({ wordSize: 0 }).valid);
+    assert.ok(!bad({ maxLength: 0 }).valid);
+  });
+
+  it('rejects terminator/wordSize/maxLength on a non-cstring field', () => {
+    const r = validateFormat({
+      name: 'c3',
+      fields: [{ name: 'a', type: 'uint32', offset: 0, wordSize: 4 }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /"wordSize" only applies to "cstring"/.test(e)));
+  });
+
+  it('accepts sizeAlign on a structure and warns when size is also set', () => {
+    const ok = validateFormat({
+      name: 's1',
+      fields: [{ name: 'rec', offset: 0, sizeAlign: 64, fields: [{ name: 'x', type: 'uint8', offset: 0 }] }],
+    });
+    assert.deepStrictEqual(ok.errors, []);
+
+    const both = validateFormat({
+      name: 's2',
+      fields: [
+        { name: 'rec', offset: 0, size: 32, sizeAlign: 64, fields: [{ name: 'x', type: 'uint8', offset: 0 }] },
+      ],
+    });
+    assert.ok(both.valid);
+    assert.ok(both.warnings.some((w) => /"size" and "sizeAlign" both set/.test(w)));
+  });
+
+  it('rejects a non-positive sizeAlign on a structure', () => {
+    const r = validateFormat({
+      name: 's3',
+      fields: [{ name: 'rec', offset: 0, sizeAlign: 0, fields: [{ name: 'x', type: 'uint8', offset: 0 }] }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /sizeAlign must be a positive integer/.test(e)));
+  });
+
+  it('rejects sizeAlign on a plain (non-structure) field', () => {
+    const r = validateFormat({
+      name: 's4',
+      fields: [{ name: 'a', type: 'uint32', offset: 0, sizeAlign: 4 }],
+    });
+    assert.ok(!r.valid);
+    assert.ok(r.errors.some((e) => /"sizeAlign" only applies to a structure/.test(e)));
+  });
+});

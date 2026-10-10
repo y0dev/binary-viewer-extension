@@ -40,6 +40,7 @@ export type CompositeTypeName =
   | 'utf8'
   | 'utf16'
   | 'string' // alias for ascii
+  | 'cstring' // terminator-scanned string; size is only known at parse time
   | 'enum'
   | 'flags' // bit-field container
   | 'bitfield'
@@ -106,11 +107,41 @@ export interface FieldDefinition {
   /**
    * Explicit size in bytes. Required for `bytes`/`binary`/string types.
    * Optional for a structure — when given it is the structure's total size;
-   * when omitted the size is computed from the largest child end offset.
+   * when omitted the size is computed from the largest child end offset (see
+   * `sizeAlign` to round that computed size up to a boundary instead).
    */
   size?: number;
+  /**
+   * For a structure/array/struct-name-reference with no explicit `size`:
+   * round the auto-computed size (largest child end) up to the next multiple
+   * of this value. For a format that pads each record to a fixed boundary
+   * regardless of its actual content length — e.g. a record containing a
+   * `cstring` whose length varies, padded to the next 64-byte boundary.
+   * No effect when `size` is also set (`size` always wins).
+   */
+  sizeAlign?: number;
   /** For string types: number of characters/code units. */
   length?: number;
+  /**
+   * For `cstring`: the byte value that ends the string (consumed, not
+   * included in the decoded value). Default `0` (NUL).
+   */
+  terminator?: number;
+  /**
+   * For `cstring`: group bytes into `wordSize`-byte chunks and reverse each
+   * chunk before scanning/decoding — e.g. `4` for a string packed as
+   * byte-reversed 32-bit words (seen in some Xilinx boot formats). The field
+   * always consumes whole chunks, so the terminator can land anywhere within
+   * the last chunk and the field still consumes that entire chunk. Default
+   * `1` (plain byte order, an ordinary C string).
+   */
+  wordSize?: number;
+  /**
+   * For `cstring`: give up and report an error if no `terminator` byte is
+   * found within this many bytes (a corrupt/non-terminated file can't hang
+   * the parser). Default `1024`.
+   */
+  maxLength?: number;
   /** For `array`: number of elements. Mutually exclusive with `countField`. */
   count?: number;
   /**
@@ -221,6 +252,8 @@ export interface StructBody {
   fields: FieldDefinition[];
   /** Explicit total size; otherwise computed from the largest child end. */
   size?: number;
+  /** Round the computed size (when `size` is omitted) up to this boundary. */
+  sizeAlign?: number;
   endianness?: Endianness;
   description?: string;
 }
