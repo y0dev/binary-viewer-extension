@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.18.8",
+  "version": "0.18.9",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -154,6 +154,24 @@
           ],
           "default": "1",
           "markdownDescription": "How the **raw** hex view groups bytes into words (this does not affect the structure decoder or the inspector). `·LE` reverses the bytes so a little-endian `01 00 00 00` reads as `00000001`; `·BE` keeps file order. Remembered per file from the toolbar's **Group** control."
+        },
+        "binaryViewer.fieldColors.enabledByDefault": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Enable **Field Colors** by default when opening a file with an applied format. A remembered per-file choice takes precedence."
+        },
+        "binaryViewer.fieldColors.brightness": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 10,
+          "maximum": 60,
+          "markdownDescription": "Intensity of the field-color backgrounds in the Raw view, from `10` to `60` percent. Existing out-of-range values are clamped to these limits. The default `20` keeps byte text readable. Field-name tag swatches retain their full colors. Changes apply to open viewers."
+        },
+        "binaryViewer.fieldColors.maxTags": {
+          "type": "integer",
+          "default": 8,
+          "minimum": 0,
+          "markdownDescription": "Maximum field-name tags shown above the Raw view when **Field Colors** is enabled. Tags identify top-level fields intersecting the visible bytes, using the same colors as the hex dump. Click a tag to select its field. Set to `0` to hide tags while keeping byte colors. Changes apply to open viewers."
         },
         "binaryViewer.defaultEndianness": {
           "type": "string",

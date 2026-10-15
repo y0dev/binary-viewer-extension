@@ -1,8 +1,9 @@
+import { FieldTags } from './FieldTags';
 import { Store, displayAddr } from './state';
 import { DataProvider } from './DataProvider';
 import { VirtualGrid } from './VirtualGrid';
 import { groupHexDisplay, parseByteGroup } from '../core/humanize';
-import { computeFieldColorRanges, fieldColorAt, FieldColorRange } from '../core/FieldColors';
+import { computeFieldColorRanges, fieldColorAt, fieldColorBackground, fieldColorForeground, FieldColorRange } from '../core/FieldColors';
 import type { ParsedNode } from '../types/messages';
 
 const HEX_LUT: string[] = [];
@@ -34,6 +35,7 @@ export interface HexViewCallbacks {
 }
 
 export class HexView {
+  private tags: FieldTags;
   private scroller: HTMLDivElement;
   private sizer: HTMLDivElement;
   private layer: HTMLDivElement;
@@ -48,6 +50,7 @@ export class HexView {
   private forceNext = false;
   /** Field Colors overlay: memoized against the `parsed` array it was built from. */
   private fieldRanges: FieldColorRange[] = [];
+  private themeBackground: number[] = [30, 30, 30];
   private fieldRangesSrc: ParsedNode[] | null = null;
 
   constructor(
@@ -57,6 +60,17 @@ export class HexView {
     private cb: HexViewCallbacks,
   ) {
     this.root.classList.add('bv-hex');
+    this.tags = new FieldTags(this.root, (range) => {
+      const length = Math.min(range.end, this.store.state.fileSize) - range.start;
+      if (length <= 0) { return; }
+      this.store.update({
+        anchor: range.start, caret: range.start,
+        selection: { start: range.start, length }, activeNodeId: null,
+      });
+      this.revealOffset(range.start);
+      this.cb.onSelectionChange();
+      this.focus();
+    });
     this.header = document.createElement('div');
     this.header.className = 'bv-hex-header';
     this.headerInner = document.createElement('div');
@@ -99,6 +113,8 @@ export class HexView {
         changed.has('formatBaseAddress') ||
         changed.has('byteGroup') ||
         changed.has('fieldHighlight') ||
+        changed.has('fieldColorMaxTags') ||
+        changed.has('fieldColorBrightness') ||
         changed.has('parsed') ||
         changed.has('activeFormat')
       ) {
@@ -158,17 +174,28 @@ export class HexView {
   }
 
   private render(force: boolean): void {
-    const vh = this.scroller.clientHeight || this.root.clientHeight || 600;
+    let vh = this.scroller.clientHeight || this.root.clientHeight || 600;
     if (vh === 0) {
       return;
     }
     this.measureRow();
     this.sizer.style.height = `${this.grid.sizerHeight()}px`;
-    const win = this.grid.windowFor(this.scroller.scrollTop, vh);
+    let win = this.grid.windowFor(this.scroller.scrollTop, vh);
     const bpr = this.store.state.bytesPerRow;
     const { bytes: g, le } = parseByteGroup(this.store.state.byteGroup);
     const base = this.store.state.formatBaseAddress ?? this.store.state.baseAddress;
     this.ensureFieldRanges();
+    const theme = window.getComputedStyle(document.body).backgroundColor.match(/[\d.]+/g);
+    this.themeBackground = theme && theme.length >= 3 ? theme.slice(0, 3).map(Number) : [30, 30, 30];
+    const visibleFirst = win.firstRow + Math.floor((this.scroller.scrollTop - win.layerTop) / this.rowHeight);
+    this.tags.render(
+      this.fieldRanges, visibleFirst * bpr,
+      Math.min(this.store.state.fileSize, (visibleFirst + Math.ceil(vh / this.rowHeight) + 1) * bpr),
+      this.store.state.fieldColorMaxTags, this.store.state.caret,
+    );
+    // The legend takes one row when first shown; measure the remaining viewport.
+    vh = this.scroller.clientHeight || vh;
+    win = this.grid.windowFor(this.scroller.scrollTop, vh);
     const key = `${win.firstRow}:${win.rowCount}:${bpr}:${g}:${le}:${this.store.state.selection.start}:${this.store.state.selection.length}:${this.store.state.caret}:${this.store.state.activeNodeId}:${base}:${this.fieldRanges.length}`;
     this.layer.style.transform = `translateY(${win.layerTop}px)`;
     this.layer.style.height = `${win.layerHeight}px`;
@@ -264,7 +291,7 @@ export class HexView {
       return '';
     }
     const color = fieldColorAt(this.fieldRanges, o);
-    return color ? ` style="--field-bg:${color}33"` : '';
+    return color ? ` style="--field-bg:${fieldColorBackground(color, this.store.state.fieldColorBrightness)};--field-fg:${fieldColorForeground(color, this.store.state.fieldColorBrightness, this.themeBackground)}"` : '';
   }
 
   /** Highlight class for a cell/token covering [o, o+span). */

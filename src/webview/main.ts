@@ -1,6 +1,7 @@
 import { post, saveState, loadState, logToHost } from './vscodeApi';
 import { el, clear, base64ToBytes } from './dom';
 import { Store, AppState, selectBytes, resolveGotoTarget } from './state';
+import { resolveFieldHighlight } from '../core/FieldColors';
 import { DataProvider } from './DataProvider';
 import { HexView } from './HexView';
 import { StructureView } from './StructureView';
@@ -94,6 +95,9 @@ function handleMessage(msg: HostToWebview): void {
       setView('raw');
       hexView.revealOffset(store.state.selection.start);
       break;
+    case 'setFieldColorSettings':
+      store?.update({ fieldColorMaxTags: msg.maxTags, fieldColorBrightness: msg.brightness });
+      break;
     case 'setBytesPerRow':
       store.update({ bytesPerRow: msg.bytesPerRow });
       persist();
@@ -139,7 +143,9 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     showInspector: persisted.showInspector ?? msg.config.showInspector,
     // Needs an applied format; don't restore it "on" against a file that no
     // longer has one active.
-    fieldHighlight: (persisted.fieldHighlight ?? false) && activeFormat !== null,
+    fieldHighlight: resolveFieldHighlight(
+      persisted.fieldHighlight ?? msg.fieldHighlight, msg.config.fieldColorsEnabledByDefault, activeFormat,
+    ),
     caret: 0,
     anchor: 0,
     selection: { start: 0, length: 1 },
@@ -153,6 +159,8 @@ function boot(msg: Extract<HostToWebview, { type: 'init' }>): void {
     activeSectionName: null,
     blockSizeBytes: msg.config.blockSizeBytes,
     maxSearchResults: msg.config.maxSearchResults,
+    fieldColorMaxTags: msg.config.fieldColorMaxTags,
+    fieldColorBrightness: msg.config.fieldColorBrightness,
     baseAddress: msg.config.baseAddress,
     formatBaseAddress: null,
   };

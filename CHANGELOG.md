@@ -1,5 +1,24 @@
 # Change Log
 
+## 0.18.9
+
+- **Configurable Field Colors defaults and brightness.**
+  `binaryViewer.fieldColors.enabledByDefault` defaults to `false` and can
+  enable colors for newly opened files with an applied format; remembered
+  per-file choices take precedence. `binaryViewer.fieldColors.brightness`
+  adjusts byte-background intensity from 10 to 60 percent (default 20) and updates
+  open viewers immediately. Byte text automatically switches between black
+  and white for contrast. Out-of-range values are clamped to keep tints
+  visible and prevent solid backgrounds.
+
+- **Field-name tags in the Raw view.** With Field Colors enabled, a compact
+  legend uses rounded, color-tinted chips matching Binary Designer, with
+  swatches, names, and inline offset/size labels. Chips wrap to fit the viewer;
+  the field containing the caret is marked active. Click a
+  tag to select its field. The `binaryViewer.fieldColors.maxTags` setting
+  defaults to 8; `0` hides tags while retaining colors. Setting changes apply
+  to open viewers, and **+N more** indicates omitted visible fields.
+
 ## 0.18.8
 
 - **New field type `cstring`** — a variable-length, terminator-scanned

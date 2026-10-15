@@ -190,6 +190,9 @@ save) and **↻ Apply to open binary** buttons. See
 | Setting | Default | Description |
 | --- | --- | --- |
 | `binaryViewer.bytesPerRow` | `16` | Bytes per row in the raw view (8/16/32) |
+| `binaryViewer.fieldColors.enabledByDefault` | `false` | Enable Field Colors on opening a file with a format; remembered per-file choices take precedence. |
+| `binaryViewer.fieldColors.brightness` | `20` | Byte-background intensity from `10` to `60` percent (values outside this range are clamped); updates open viewers immediately. |
+| `binaryViewer.fieldColors.maxTags` | `8` | Maximum colored field-name tags above the Raw view; `0` hides tags. Tags follow the visible bytes and select their field when clicked. |
 | `binaryViewer.byteGroup` | `1` | Raw-view word grouping: `1` / `2le` / `2be` / `4le` / `4be` / `8le` / `8be` (`·LE` reverses bytes so LE reads as a number) |
 | `binaryViewer.defaultEndianness` | `little` | Inspector / format default |
 | `binaryViewer.defaultView` | `raw` | Tab a file opens on (`raw` / `structure` / `sections`; falls back to `raw` with no format; last-used tab wins) |

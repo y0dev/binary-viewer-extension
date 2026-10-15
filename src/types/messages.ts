@@ -17,6 +17,9 @@ export interface ViewerConfig {
   showInspector: boolean;
   blockSizeBytes: number;
   maxSearchResults: number;
+  fieldColorMaxTags: number;
+  fieldColorBrightness: number;
+  fieldColorsEnabledByDefault: boolean;
   /** Tab to open on when the file has no remembered view. */
   defaultView: ViewMode;
   /** Address shown for file offset 0 (from `binaryViewer.baseAddress`). */
@@ -115,6 +118,7 @@ export interface SearchMatch {
 export type HostToWebview =
   | {
       type: 'init';
+      fieldHighlight?: boolean;
       fileSize: number;
       fileName: string;
       uriPath: string;
@@ -149,6 +153,7 @@ export type HostToWebview =
   | { type: 'toggleView'; target?: 'structure' | 'sections' }
   | { type: 'toggleInspector' }
   | { type: 'showFieldInRaw' }
+  | { type: 'setFieldColorSettings'; maxTags: number; brightness: number }
   | { type: 'setBytesPerRow'; bytesPerRow: 8 | 16 | 32 }
   | { type: 'setEndianness'; endianness: Endianness }
   | { type: 'focusSearch' }

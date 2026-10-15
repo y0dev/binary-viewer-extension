@@ -42,6 +42,8 @@ export interface AppState {
 
   blockSizeBytes: number;
   maxSearchResults: number;
+  fieldColorMaxTags: number;
+  fieldColorBrightness: number;
 
   /** Address shown for file offset 0, from `binaryViewer.baseAddress`. */
   baseAddress: number;

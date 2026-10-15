@@ -281,6 +281,7 @@ body {
   /* Field Colors overlay (raw view): set per-cell via inline style; a plain
      byte with none simply falls back to no background. */
   background: var(--field-bg, transparent);
+  color: var(--field-fg, inherit);
 }
 
 .bv-cell.bv-split {
@@ -303,6 +304,7 @@ body {
   cursor: pointer;
   white-space: pre;
   background: var(--field-bg, transparent);
+  color: var(--field-fg, inherit);
 }
 
 .bv-colhead {
@@ -314,6 +316,7 @@ body {
 .bv-cell:hover,
 .bv-ac:hover {
   background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  color: var(--vscode-foreground);
 }
 
 .bv-selected {
@@ -473,6 +476,7 @@ body {
 
 .bv-crumb:hover {
   background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.2));
+  color: var(--vscode-foreground);
 }
 
 .bv-crumb-active {
@@ -659,4 +663,73 @@ body {
 
 .bv-search-error {
   color: var(--vscode-errorForeground, #f48771);
+}
+
+/* Field chips echo the Binary Designer legend: swatch, name, offset and size. */
+.bv-field-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+}
+
+.bv-field-tag {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(100%, 320px);
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--tag-color);
+  border-radius: 12px;
+  background: var(--tag-soft);
+  color: var(--vscode-foreground);
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.bv-field-tag:hover {
+  background: color-mix(in srgb, var(--tag-color) 28%, var(--vscode-editor-background));
+}
+
+.bv-field-tag-active {
+  box-shadow: inset 0 0 0 1px var(--tag-color);
+}
+
+.bv-field-tag:focus-visible {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+
+.bv-field-tag-swatch {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+}
+
+.bv-field-tag-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bv-field-tag-meta {
+  flex: none;
+  font-size: 10px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.bv-field-tags-more {
+  flex: none;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
 }

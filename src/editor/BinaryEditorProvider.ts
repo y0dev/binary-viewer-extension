@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { BinaryDocument } from './BinaryDocument';
 import { FormatManager } from '../formats/FormatManager';
+import { normalizeFieldColorBrightness } from '../core/FieldColors';
 import { getNonce } from '../util/nonce';
 import { log } from '../util/logger';
 import { parseFormat } from '../core/BinaryParser';
@@ -59,6 +60,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     private readonly formats: FormatManager,
   ) {
     this.context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('binaryViewer.fieldColors')) {
+          const cfg = this.readConfig();
+          for (const entry of this.entries) {
+            this.post(entry, { type: 'setFieldColorSettings', maxTags: cfg.fieldColorMaxTags, brightness: cfg.fieldColorBrightness });
+          }
+        }
+      }),
       this.formats.onDidChange(() => {
         for (const e of this.entries) {
           const active = e.document.activeFormatName;
@@ -223,6 +232,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           const cfg = this.readConfig();
           this.post(entry, {
             type: 'init',
+            fieldHighlight: this.context.workspaceState.get<WebviewPersistedState>(this.stateKey(document.uri))?.fieldHighlight,
             fileSize: document.fileSize,
             fileName: path.basename(document.uri.fsPath),
             uriPath: document.uri.toString(),
@@ -233,6 +243,9 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
               showInspector: cfg.showInspector,
               blockSizeBytes: cfg.blockSizeBytes,
               maxSearchResults: cfg.maxSearchResults,
+              fieldColorMaxTags: cfg.fieldColorMaxTags,
+              fieldColorBrightness: cfg.fieldColorBrightness,
+              fieldColorsEnabledByDefault: cfg.fieldColorsEnabledByDefault,
               defaultView: cfg.defaultView,
               baseAddress: cfg.baseAddress,
             },
@@ -429,6 +442,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const bpr = c.get<number>('bytesPerRow', 16);
     const bg = c.get<string>('byteGroup', '1');
     const view = c.get<ViewMode>('defaultView', 'raw');
+    const tagLimit = c.get<number>('fieldColors.maxTags', 8);
     const epoch = c.get<TimestampEpoch>('timestamp.defaultEpoch', 'unix');
     return {
       bytesPerRow: (bpr === 8 || bpr === 32 ? bpr : 16) as 8 | 16 | 32,
@@ -438,6 +452,9 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       blockSizeBytes: Math.max(4096, c.get<number>('blockSizeBytes', 65536)),
       cacheWindowBytes: Math.max(262144, c.get<number>('cacheWindowBytes', 8 * 1024 * 1024)),
       maxSearchResults: c.get<number>('maxSearchResults', 5000),
+      fieldColorBrightness: normalizeFieldColorBrightness(c.get<number>('fieldColors.brightness', 20)),
+      fieldColorsEnabledByDefault: c.get<boolean>('fieldColors.enabledByDefault', false),
+      fieldColorMaxTags: Number.isFinite(tagLimit) ? Math.max(0, Math.floor(tagLimit)) : 8,
       autoDetect: c.get<boolean>('autoDetectFormat', true),
       defaultView: view === 'structure' || view === 'sections' ? view : 'raw',
       baseAddress: resolveBaseAddress(c.get<string>('baseAddress', '')),

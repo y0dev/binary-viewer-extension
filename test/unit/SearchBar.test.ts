@@ -44,7 +44,7 @@ describe('SearchBar', () => {
       caret: 0, anchor: 0, selection: { start: 0, length: 1 }, formats: [],
       activeFormat: null, detectedFormat: null, parsed: [], parseError: null,
       activeNodeId: null, sections: [], activeSectionName: null,
-      blockSizeBytes: 65536, maxSearchResults: 5000, baseAddress: 0, formatBaseAddress: null,
+      blockSizeBytes: 65536, maxSearchResults: 5000, fieldColorMaxTags: 8, fieldColorBrightness: 20, baseAddress: 0, formatBaseAddress: null,
     };
     // Load after installing the webview API; type-only imports do not acquire it.
     const Constructor = (require('../../src/webview/SearchBar') as typeof import('../../src/webview/SearchBar')).SearchBar;

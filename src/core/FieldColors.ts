@@ -26,6 +26,7 @@ export interface FieldColorRange {
   end: number;
   /** A palette entry, e.g. `"#e69f00"`. */
   color: string;
+  name: string;
 }
 
 /**
@@ -35,10 +36,11 @@ export interface FieldColorRange {
  * byte grid, not a tree, so it colors by the outermost field only.
  */
 export function computeFieldColorRanges(
-  nodes: ReadonlyArray<Pick<ParsedNode, 'offset' | 'size' | 'depth'>>,
+  nodes: ReadonlyArray<Pick<ParsedNode, 'offset' | 'size' | 'depth'> & Partial<Pick<ParsedNode, 'name'>>>,
 ): FieldColorRange[] {
   const top = nodes.filter((n) => n.depth === 0 && n.size > 0);
   const ranges: FieldColorRange[] = top.map((n, i) => ({
+    name: n.name ?? `Field at ${n.offset}`,
     start: n.offset,
     end: n.offset + n.size,
     color: FIELD_HIGHLIGHT_PALETTE[i % FIELD_HIGHLIGHT_PALETTE.length],
@@ -66,4 +68,38 @@ export function fieldColorAt(ranges: readonly FieldColorRange[], o: number): str
     }
   }
   return undefined;
+}
+
+/** Clamp the user setting; 20% preserves the original subtle tint. */
+export function normalizeFieldColorBrightness(value: number): number {
+  return Number.isFinite(value) ? Math.min(60, Math.max(10, Math.round(value))) : 20;
+}
+
+export function fieldColorBackground(color: string, brightness: number): string {
+  const alpha = Math.round(normalizeFieldColorBrightness(brightness) / 100 * 255);
+  return `${color}${alpha.toString(16).padStart(2, '0')}`;
+}
+
+/** Remembered choices win; a format is always required to color any bytes. */
+export function resolveFieldHighlight(
+  remembered: boolean | undefined,
+  enabledByDefault: boolean,
+  activeFormat: string | null,
+): boolean {
+  return activeFormat !== null && (remembered ?? enabledByDefault);
+}
+
+/** Pick black or white against the actual tint blended onto the theme background. */
+export function fieldColorForeground(
+  color: string,
+  brightness: number,
+  background: readonly number[],
+): '#000000' | '#ffffff' {
+  const alpha = normalizeFieldColorBrightness(brightness) / 100;
+  const channels = [1, 3, 5].map((at, i) => {
+    const blended = (parseInt(color.slice(at, at + 2), 16) * alpha + background[i] * (1 - alpha)) / 255;
+    return blended <= 0.04045 ? blended / 12.92 : ((blended + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+  return luminance > 0.179 ? '#000000' : '#ffffff';
 }

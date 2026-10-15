@@ -46,7 +46,20 @@ The extension registers as an *optional* editor for `.bin .hex .img .dat .fw
   are visible directly in the hex dump. Off by default; the button is
   disabled until a format is applied to the file (there's nothing to color by
   otherwise) and turns itself back off if the format is cleared. Selection and
-  the caret outline still show clearly over the tint.
+  the caret outline still show clearly over the tint. A legend above the raw
+  rows shows rounded, tinted chips with a color swatch, field name, and
+  `@offset·sizeB` label, matching Binary Designer. Chips wrap to fit; click one to
+  select that field’s bytes. `binaryViewer.fieldColors.maxTags` limits the
+  legend to 8 tags by default (`0` hides tags without disabling byte colors).
+  A **+N more** indicator shows when the visible fields exceed the limit.
+  Set `binaryViewer.fieldColors.enabledByDefault` to `true` to enable colors
+  when opening files with an applied format; remembered per-file choices
+  still take precedence. `binaryViewer.fieldColors.brightness` controls the
+  byte-background intensity from `10` to `60` percent, default
+  `20`. Brightness changes apply immediately; tag swatches keep their full
+  colors so they remain easy to identify. Byte text switches automatically
+  between black and white to stay readable. Values outside the supported
+  range are clamped, so older settings remain visible without becoming solid.
 - **Inspector / Search / Go To** — toggles and tools (also on the command
   palette and keybindings).
 - The right-hand readout shows the caret offset and `+N` selection length.
