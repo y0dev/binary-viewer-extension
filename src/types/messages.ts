@@ -198,6 +198,8 @@ export interface FormatEditorInit {
   compositeTypes: string[];
   /** The backing file's display path, e.g. `fsPath`; null when not yet tied to one. */
   sourcePath: string | null;
+  /** How the layout preview prints offsets (`binaryViewer.formatEditor.offsetBase`). */
+  offsetBase: 'hex' | 'decimal';
 }
 
 export type FormatEditorToHost =
@@ -213,4 +215,5 @@ export type FormatEditorToHost =
 export type FormatEditorFromHost =
   | FormatEditorInit
   | { type: 'validationResult'; errors: string[] }
+  | { type: 'offsetBase'; offsetBase: 'hex' | 'decimal' }
   | { type: 'saved'; sourcePath: string | null };

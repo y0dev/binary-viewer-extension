@@ -1,5 +1,26 @@
 # Change Log
 
+## 0.19.0
+
+- **Format editor redesign.** A sticky top bar holds Undo / Redo, Save, Save
+  draft, Validate and Close, with the validation status always visible. Tabs are
+  now **Form**, **JSON** and a read-only **JSON Preview**.
+
+- **Layout Preview side panel** (replaces the inline preview from 0.18.10): one
+  Offset column plus Name / Type / Size, a **Struct sizes** table and the frame
+  total. Offsets print in hex by default; set
+  `binaryViewer.formatEditor.offsetBase` to `decimal` to change it (applies to
+  open editors).
+
+- **Row toggles like Binary Designer:** `rsv` (reserved padding that keeps its
+  size), `{}` (enum table), `b` (bit-field table with name / bits rows) and `[]`
+  (field ⇄ array). Bit-field specs already in a format now load into the table.
+
+- **Undo / Redo** across the Form and JSON tabs.
+
+- Refreshed README screenshots (toolbar, Field Colors chips, Sections) plus a
+  new format-editor screenshot; `npm run gen-screenshots` regenerates them.
+
 ## 0.18.10
 
 - **Expected Layout panel in the format editor.** A sticky side panel (Form and

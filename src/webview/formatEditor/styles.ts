@@ -43,6 +43,7 @@ table.fe-fields input[type=text] { width: 100%; }
 .fe-adv { margin-top: 4px; }
 .fe-adv summary { cursor: pointer; opacity: 0.8; font-size: 0.85em; }
 .fe-errors { border: 1px solid var(--vscode-inputValidation-errorBorder, #b00); background: var(--vscode-inputValidation-errorBackground, rgba(180,0,0,0.1)); padding: 8px 10px; border-radius: 3px; white-space: pre-wrap; }
+.fe-errors.fe-errors-ok { border-color: var(--vscode-panel-border); background: transparent; padding: 4px 10px; }
 .fe-ok { color: var(--vscode-testing-iconPassed, #3c3); }
 .fe-preview { font-family: var(--vscode-editor-font-family, monospace); background: var(--vscode-textCodeBlock-background); padding: 10px; border-radius: 3px; white-space: pre; overflow: auto; max-height: 320px; }
 .fe-actions { display: flex; gap: 10px; position: sticky; bottom: 0; padding: 10px 0; background: var(--vscode-editor-background); }
@@ -90,15 +91,25 @@ select optgroup { font-style: italic; }
 .fe-inline-label { font-size: 0.7em; opacity: 0.65; }
 .fe-node-actions { display: inline-flex; gap: 3px; margin-left: auto; }
 .fe-node-actions button.icon { padding: 1px 6px; }
+.fe-toggle-btn { font-family: var(--vscode-editor-font-family, monospace); }
+.fe-toggle-btn.fe-toggle-on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
 .fe-add-row { gap: 8px; margin-top: 2px; }
 button.icon-text { padding: 3px 9px; font-size: 0.9em; }
 
 /* ---- expected layout table ---- */
+.fe-topbar {
+  position: sticky; top: 0; z-index: 5; padding: 8px 16px;
+  background: var(--vscode-editor-background);
+  border-bottom: 1px solid var(--vscode-panel-border);
+}
+.fe-topbar .fe-errors { max-height: 84px; overflow: auto; margin-top: 6px; }
+button:disabled { opacity: 0.45; cursor: default; }
+.fe-lay-h3 { font-size: 0.95em; margin: 14px 0 4px; }
 .fe-shell { display: flex; align-items: flex-start; gap: 16px; }
 .fe-shell > .fe-wrap { flex: 1 1 auto; min-width: 0; }
 .fe-side {
   flex: 0 0 min(420px, 38%); position: sticky; top: 8px;
-  max-height: calc(100vh - 16px); overflow: auto;
+  max-height: calc(100vh - 120px); margin-top: 16px; margin-right: 16px; overflow: auto;
   border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 0 10px 10px;
   background: var(--vscode-editor-background);
 }

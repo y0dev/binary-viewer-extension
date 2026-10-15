@@ -53,7 +53,13 @@ export class FormatEditorPanel {
     this.panel.webview.html = this.html(this.panel.webview);
 
     this.panel.webview.onDidReceiveMessage((msg: FormatEditorToHost) => this.onMessage(msg));
+    const cfg = vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('binaryViewer.formatEditor.offsetBase')) {
+        this.send({ type: 'offsetBase', offsetBase: FormatEditorPanel.offsetBase() });
+      }
+    });
     this.panel.onDidDispose(() => {
+      cfg.dispose();
       if (FormatEditorPanel.instance === this) {
         FormatEditorPanel.instance = undefined;
       }
@@ -69,7 +75,13 @@ export class FormatEditorPanel {
       scalarTypes: SCALAR_TYPE_NAMES,
       compositeTypes: COMPOSITE_TYPE_NAMES,
       sourcePath: initial.sourceUri ? this.displayPath(initial.sourceUri) : null,
+      offsetBase: FormatEditorPanel.offsetBase(),
     });
+  }
+
+  private static offsetBase(): 'hex' | 'decimal' {
+    const v = vscode.workspace.getConfiguration('binaryViewer').get<string>('formatEditor.offsetBase', 'hex');
+    return v === 'decimal' ? 'decimal' : 'hex';
   }
 
   private send(message: FormatEditorFromHost): void {

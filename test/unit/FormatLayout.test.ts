@@ -29,3 +29,16 @@ describe('buildLayout', () => {
     assert.ok(l.dynamic);
   });
 });
+
+describe('buildLayout struct sizes', () => {
+  it('reports each reusable structure size and keeps its scratch rows out of the table', () => {
+    const l = buildLayout({
+      name: 'x',
+      structures: { Vec: { fields: [{ name: 'x', type: 'float32' }, { name: 'y', type: 'float32' }], sizeAlign: 16 } },
+      fields: [{ name: 'v', type: 'Vec' }],
+    });
+    assert.deepStrictEqual(l.structs, [{ name: 'Vec', size: 16, sizeAlign: 16 }]);
+    assert.ok(l.rows.every((r) => r.depth === 0 || r.name !== ''));
+    assert.strictEqual(l.rows.length, 3);
+  });
+});

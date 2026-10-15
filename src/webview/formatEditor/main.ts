@@ -54,6 +54,10 @@ interface EditNode {
   advancedError?: string;
   /** Structured enum value→label rows (for `enum` type or an enum overlay). */
   enumRows: { value: string; label: string }[];
+  /** Bit-field rows (`fields: [{ name, bits }]` on an integer field). `raw` keeps any extra keys on the spec. */
+  bitRows: { name: string; bits: string; raw?: Record<string, unknown> }[];
+  /** The type a field had before "reserved" turned it into padding, so the toggle can restore it. */
+  prevType?: string;
   /** Structured `timestamp` config; '' means "leave to the default". */
   tsSize: string;
   tsUnit: string;
@@ -101,6 +105,7 @@ interface Model {
 }
 
 let model: Model;
+let offsetBase: 'hex' | 'decimal' = 'hex';
 /** The backing file's display path for the format currently loaded, if any. */
 let sourcePath: string | null = null;
 
@@ -108,9 +113,18 @@ window.addEventListener('message', (ev: MessageEvent<FormatEditorFromHost>) => {
   const msg = ev.data;
   if (msg.type === 'init') {
     init = msg;
+    offsetBase = msg.offsetBase;
     sourcePath = msg.sourcePath;
     model = toModel(msg.format);
+    history.length = 0;
+    histIdx = -1;
+    skipNextRecord = false;
+    showPreview = false;
     render();
+    recordHistory();
+  } else if (msg.type === 'offsetBase') {
+    offsetBase = msg.offsetBase;
+    scheduleLayout();
   } else if (msg.type === 'validationResult') {
     showErrors(msg.errors);
   } else if (msg.type === 'saved') {
@@ -137,6 +151,7 @@ const KNOWN_KEYS = new Set([
   'description',
   'enum',
   'timestamp',
+  'fields', // bit-field specs on a plain field (containers are handled before this)
 ]);
 
 type EnumRow = { value: string; label: string };
@@ -199,6 +214,7 @@ function emptyNode(kind: EditNode['kind']): EditNode {
     description: '',
     advanced: '',
     enumRows: [],
+    bitRows: [],
     tsSize: '',
     tsUnit: '',
     tsEpoch: '',
@@ -238,6 +254,7 @@ function cloneNode(n: EditNode): EditNode {
     ...n,
     id: uid(),
     enumRows: n.enumRows.map((r) => ({ ...r })),
+    bitRows: n.bitRows.map((r) => ({ ...r })),
     children: n.children.map(cloneNode),
   };
 }
@@ -397,6 +414,12 @@ function fieldToNode(f: FieldDefinition): EditNode {
   node.endianness = f.endianness ?? '';
   node.description = f.description ?? '';
   node.enumRows = enumToRows(f.enum);
+  if (looksLikeBitSpecs(f.fields)) {
+    node.bitRows = (f.fields as unknown as BitSpec[]).map((b) => {
+      const { name, bits, ...rest } = b as BitSpec & Record<string, unknown>;
+      return { name: String(name ?? ''), bits: String(bits ?? ''), raw: Object.keys(rest).length ? rest : undefined };
+    });
+  }
   if (f.timestamp) {
     node.tsSize = f.timestamp.size === undefined ? '' : String(f.timestamp.size);
     node.tsUnit = f.timestamp.unit ?? '';
@@ -633,6 +656,12 @@ function nodeToField(node: EditNode): FieldDefinition {
   const enumMap = rowsToEnum(node.enumRows);
   if (enumMap) {
     f.enum = enumMap;
+  }
+  const bitSpecs = node.bitRows
+    .filter((b) => b.bits.trim() !== '')
+    .map((b) => ({ ...(b.raw ?? {}), name: b.name.trim(), bits: b.bits.trim() }));
+  if (bitSpecs.length) {
+    f.fields = bitSpecs as unknown as FieldDefinition['fields'];
   }
   if (node.tsSize || node.tsUnit || node.tsEpoch) {
     const ts: NonNullable<FieldDefinition['timestamp']> = {};
@@ -944,7 +973,8 @@ function pushNode(target: 'top' | { structId: string } | { structDefId: string }
 // ---- rendering -----------------------------------------------------
 
 let errorBox: HTMLElement;
-let previewBox: HTMLElement;
+let previewBox: HTMLElement | undefined;
+let showPreview = false;
 let fileRowPath: HTMLElement | undefined;
 let debounce: number | undefined;
 
@@ -982,6 +1012,70 @@ function updateFileRow(): void {
   }
 }
 
+// ---- undo / redo ----------------------------------------------------
+// Snapshots of the whole definition, recorded once edits go idle.
+let undoBtn: HTMLButtonElement | undefined;
+let redoBtn: HTMLButtonElement | undefined;
+const history: string[] = [];
+let histIdx = -1;
+let skipNextRecord = false;
+
+function currentSnapshot(): string | null {
+  try {
+    return model.mode === 'json'
+      ? JSON.stringify(JSON.parse(model.jsonText))
+      : JSON.stringify(buildDefinition());
+  } catch {
+    return null; // mid-edit invalid JSON: nothing to record yet
+  }
+}
+
+function recordHistory(): void {
+  if (skipNextRecord) {
+    skipNextRecord = false;
+    return;
+  }
+  const snap = currentSnapshot();
+  if (snap === null || snap === history[histIdx]) {
+    return;
+  }
+  history.length = histIdx + 1;
+  history.push(snap);
+  if (history.length > 200) {
+    history.shift();
+  }
+  histIdx = history.length - 1;
+  updateUndoButtons();
+}
+
+function updateUndoButtons(): void {
+  if (undoBtn) {
+    undoBtn.disabled = histIdx <= 0;
+  }
+  if (redoBtn) {
+    redoBtn.disabled = histIdx >= history.length - 1;
+  }
+}
+
+function stepHistory(delta: number): void {
+  recordHistory(); // capture any edit still inside the debounce window
+  const target = histIdx + delta;
+  if (target < 0 || target >= history.length) {
+    return;
+  }
+  histIdx = target;
+  const def = JSON.parse(history[histIdx]) as FormatDefinition;
+  const wasJson = model.mode === 'json';
+  const jsonText = JSON.stringify(def, null, 2);
+  model = toModel(def);
+  if (wasJson) {
+    model.mode = 'json';
+    model.jsonText = jsonText;
+  }
+  skipNextRecord = true;
+  render();
+}
+
 function changed(): void {
   render();
   scheduleValidate();
@@ -993,6 +1087,7 @@ function scheduleValidate(): void {
     clearTimeout(debounce);
   }
   debounce = window.setTimeout(() => {
+    recordHistory();
     const def = buildDefinition();
     if (model.mode === 'json' && model.jsonError) {
       showErrors(['JSON syntax error: ' + model.jsonError]);
@@ -1016,6 +1111,7 @@ let layoutBox: HTMLElement | undefined;
 let layoutTimer: number | undefined;
 
 const hex = (n: number) => '0x' + n.toString(16).toUpperCase().padStart(4, '0');
+const fmtOffset = (n: number) => (offsetBase === 'hex' ? hex(n) : String(n));
 
 /** Redraw the expected-layout table (debounced; hex + decimal offset columns). */
 function scheduleLayout(): void {
@@ -1048,8 +1144,7 @@ function scheduleLayout(): void {
       return;
     }
     const head = el('tr', {}, [
-      el('th', { text: 'Offset (hex)' }),
-      el('th', { text: 'Offset (dec)' }),
+      el('th', { text: 'Offset' }),
       el('th', { text: 'Name' }),
       el('th', { text: 'Type' }),
       el('th', { text: 'Size' }),
@@ -1063,8 +1158,7 @@ function scheduleLayout(): void {
       const typeText = r.note ? `${r.type}  · ${r.note}` : r.type;
       body.append(
         el('tr', { class: `fe-lay-${r.kind}` }, [
-          el('td', { text: r.offset === null ? '→ pointer' : pre + hex(r.offset) }),
-          el('td', { class: 'num', text: r.offset === null ? '' : pre + String(r.offset) }),
+          el('td', { text: r.offset === null ? '→ pointer' : pre + fmtOffset(r.offset) }),
           nameCell,
           el('td', { class: 'fe-lay-dim', text: typeText }),
           el('td', { class: 'num', text: r.size === null ? (r.kind === 'bits' ? '' : '?') : String(r.size) }),
@@ -1073,11 +1167,34 @@ function scheduleLayout(): void {
     }
     layoutBox.append(el('table', {}, [el('thead', {}, [head]), body]));
     const total = layout.totalSize;
+    if (layout.structs.length) {
+      layoutBox.append(
+        el('h3', { class: 'fe-lay-h3', text: 'Struct sizes' }),
+        el('table', {}, [
+          el('thead', {}, [
+            el('tr', {}, [el('th', { text: 'Struct' }), el('th', { text: 'Size' }), el('th', { text: 'Align' })]),
+          ]),
+          el(
+            'tbody',
+            {},
+            layout.structs.map((st) =>
+              el('tr', {}, [
+                el('td', { text: st.name }),
+                el('td', { class: 'num', text: st.size === null ? '?' : String(st.size) }),
+                el('td', { class: 'num', text: st.sizeAlign ? String(st.sizeAlign) : '—' }),
+              ]),
+            ),
+          ),
+        ]),
+      );
+    }
     layoutBox.append(
       el('div', {
         class: 'fe-layout-foot',
         text:
-          (total !== null ? `Total: ${total} bytes (${hex(total)})` : 'Total: unknown') +
+          (total !== null
+            ? `Total: ${total} bytes${offsetBase === 'hex' ? ` (${hex(total)})` : ''}`
+            : 'Total: unknown') +
           (layout.dynamic ? ' — plus parse-time sizes (≥ = lower bound, ? = unknown until the file is read)' : ''),
       }),
     );
@@ -1086,11 +1203,16 @@ function scheduleLayout(): void {
 
 function updatePreview(): void {
   scheduleLayout();
-  if (model.mode === 'json' || !previewBox) {
+  if (model.mode === 'json') {
+    if (previewBox) {
+      previewBox.textContent = model.jsonText;
+    }
     return;
   }
   const def = buildDefinition();
-  previewBox.textContent = JSON.stringify(def, null, 2);
+  if (previewBox) {
+    previewBox.textContent = JSON.stringify(def, null, 2);
+  }
   const advErrors: string[] = [];
   collectAdvErrors(model.tree, '', advErrors);
   for (const s of model.structs) {
@@ -1106,6 +1228,7 @@ function updatePreview(): void {
 
 function showErrors(errors: string[]): void {
   clear(errorBox);
+  errorBox.classList.toggle('fe-errors-ok', errors.length === 0);
   if (errors.length === 0) {
     errorBox.append(el('span', { class: 'fe-ok', text: 'Valid' }));
     return;
@@ -1161,14 +1284,36 @@ function render(): void {
   wrap.append(
     el('div', { class: 'fe-tabs' }, [
       el('button', {
-        class: 'fe-tab' + (model.mode === 'form' ? ' active' : ''),
-        text: 'Form editor',
-        onclick: () => switchMode('form'),
+        class: 'fe-tab' + (model.mode === 'form' && !showPreview ? ' active' : ''),
+        text: 'Form',
+        onclick: () => {
+          showPreview = false;
+          switchMode('form');
+          if (model.mode === 'form') {
+            render();
+          }
+        },
       }),
       el('button', {
-        class: 'fe-tab' + (model.mode === 'json' ? ' active' : ''),
+        class: 'fe-tab' + (model.mode === 'json' && !showPreview ? ' active' : ''),
         text: 'JSON',
-        onclick: () => switchMode('json'),
+        onclick: () => {
+          showPreview = false;
+          if (model.mode === 'json') {
+            render();
+          } else {
+            switchMode('json');
+          }
+        },
+      }),
+      el('button', {
+        class: 'fe-tab' + (showPreview ? ' active' : ''),
+        text: 'JSON Preview',
+        title: 'Read-only view of the definition that will be saved',
+        onclick: () => {
+          showPreview = true;
+          render();
+        },
       }),
       el('span', { class: 'fe-spacer' }),
       el('button', {
@@ -1179,6 +1324,15 @@ function render(): void {
       }),
     ]),
   );
+
+  if (showPreview) {
+    previewBox = el('pre', { class: 'fe-preview' });
+    wrap.append(previewBox);
+    mountPage(wrap);
+    updatePreview();
+    scheduleValidate();
+    return;
+  }
 
   if (model.mode === 'json') {
     renderJsonMode(wrap);
@@ -1382,16 +1536,7 @@ function render(): void {
   );
 
   // ---- preview + errors ----
-  wrap.append(el('h2', { text: 'Validation' }));
-  errorBox = el('div', { class: 'fe-errors' });
-  wrap.append(errorBox);
-  wrap.append(el('h2', { text: 'JSON Preview' }));
-  previewBox = el('pre', { class: 'fe-preview' });
-  wrap.append(previewBox);
-
-  // ---- actions ----
-  wrap.append(actionBar());
-
+  previewBox = undefined;
   mountPage(wrap);
   updatePreview();
   post({ type: 'validate', format: buildDefinition() });
@@ -1432,21 +1577,21 @@ function renderJsonMode(wrap: HTMLElement): void {
     ]),
   );
 
-  wrap.append(el('h2', { text: 'Validation' }));
-  errorBox = el('div', { class: 'fe-errors' });
-  wrap.append(errorBox);
-
-  wrap.append(actionBar());
 }
 
 /** Page shell: the editor column plus a sticky side panel with the expected layout. */
 function mountPage(wrap: HTMLElement): void {
+  errorBox = el('div', { class: 'fe-errors' });
   layoutBox = el('div', { class: 'fe-layout' });
   const aside = el('aside', { class: 'fe-side' }, [
-    el('h2', { text: 'Expected Layout' }),
+    el('h2', { text: 'Layout Preview' }),
     layoutBox,
   ]);
-  app.append(el('div', { class: 'fe-shell' }, [wrap, aside]));
+  app.append(
+    el('div', { class: 'fe-topbar' }, [actionBar(), errorBox]),
+    el('div', { class: 'fe-shell' }, [wrap, aside]),
+  );
+  updateUndoButtons();
 }
 
 function switchMode(to: 'form' | 'json'): void {
@@ -1673,8 +1818,28 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
   head.append(endSel);
 
   // action buttons
+  const toggles: HTMLElement[] = [];
+  if (node.kind === 'field') {
+    toggles.push(
+      toggleBtn('rsv', 'Reserved: keep this many bytes as padding (not decoded)', node.type.trim() === 'padding', () =>
+        toggleReserved(node),
+      ),
+      toggleBtn('{}', 'Enum: map values of this field to names', node.enumRows.length > 0, () => toggleEnum(node)),
+      toggleBtn('b', 'Bit-field: split this integer into named bit ranges', node.bitRows.length > 0, () =>
+        toggleBitfield(node),
+      ),
+    );
+  }
+  if (node.kind !== 'struct') {
+    toggles.push(
+      toggleBtn('[]', 'Array: turn this field into an array of its type (and back)', node.kind === 'array', () =>
+        toggleArray(node),
+      ),
+    );
+  }
   head.append(
     el('span', { class: 'fe-node-actions' }, [
+      ...toggles,
       iconBtn('↑', 'Move up', () => moveNode(node.id, -1)),
       iconBtn('↓', 'Move down', () => moveNode(node.id, 1)),
       iconBtn('⧉', 'Duplicate', () => duplicateNode(node.id)),
@@ -1704,6 +1869,10 @@ function renderNode(parent: HTMLElement, node: EditNode, depth: number): void {
     const enumEd = enumEditor(node);
     if (enumEd) {
       line2.append(enumEd);
+    }
+    const bitEd = bitfieldEditor(node);
+    if (bitEd) {
+      line2.append(bitEd);
     }
     const tsEd = timestampEditor(node);
     if (tsEd) {
@@ -1777,7 +1946,21 @@ function addRow(marginLeft: number, buttons: [string, () => void][]): HTMLElemen
 
 /** The sticky Save / Save draft / Validate / Close bar, shared by both modes. */
 function actionBar(): HTMLElement {
+  undoBtn = el('button', {
+    class: 'secondary',
+    text: '↶ Undo',
+    title: 'Undo the last edit',
+    onclick: () => stepHistory(-1),
+  }) as HTMLButtonElement;
+  redoBtn = el('button', {
+    class: 'secondary',
+    text: '↷ Redo',
+    title: 'Redo',
+    onclick: () => stepHistory(1),
+  }) as HTMLButtonElement;
   return el('div', { class: 'fe-actions' }, [
+    undoBtn,
+    redoBtn,
     el('button', { text: 'Save', onclick: () => post({ type: 'save', format: buildDefinition() }) }),
     el('button', {
       class: 'secondary',
@@ -1795,6 +1978,158 @@ function actionBar(): HTMLElement {
 }
 
 /** Inline value→label table for an `enum` field (or an enum overlay on a scalar). */
+const BIT_CONTAINER_TYPES = new Set([
+  'uint8', 'int8', 'uint16', 'int16', 'uint32', 'int32', 'uint64', 'int64', 'byte', 'flags', 'bitfield',
+]);
+
+/** A small on/off button for a row — `on` highlights it. */
+function toggleBtn(text: string, title: string, on: boolean, onClick: () => void): HTMLElement {
+  return el('button', { class: 'icon secondary fe-toggle-btn' + (on ? ' fe-toggle-on' : ''), text, title, onclick: onClick });
+}
+
+/** field <-> array: the field's type becomes the element type, and back. */
+function toggleArray(node: EditNode): void {
+  if (node.kind === 'array') {
+    node.kind = 'field';
+    node.count = '';
+    node.view = '';
+    node.until = '';
+  } else {
+    node.kind = 'array';
+    node.count = node.count.trim() || '4';
+    node.bitRows = [];
+  }
+  changed();
+}
+
+/** Add / remove the enum value→label table (an overlay on an integer, or a plain `enum`). */
+function toggleEnum(node: EditNode): void {
+  if (node.enumRows.length > 0) {
+    node.enumRows = [];
+    if (node.type.trim() === 'enum') {
+      node.type = 'uint32';
+    }
+  } else {
+    const t = node.type.trim();
+    if (!BIT_CONTAINER_TYPES.has(t) || t === 'flags' || t === 'bitfield') {
+      node.type = 'enum';
+      node.size = node.size.trim() || '4';
+    }
+    node.bitRows = [];
+    node.enumRows = [
+      { value: '0', label: '' },
+      { value: '1', label: '' },
+    ];
+  }
+  changed();
+}
+
+/** Add / remove the bit-range table; ensures the field has an integer container type. */
+function toggleBitfield(node: EditNode): void {
+  if (node.bitRows.length > 0) {
+    node.bitRows = [];
+  } else {
+    if (!BIT_CONTAINER_TYPES.has(node.type.trim())) {
+      node.type = 'uint8';
+    }
+    node.bitRows = [{ name: 'Flag0', bits: '0' }];
+  }
+  changed();
+}
+
+/** Turn a field into reserved padding (keeps its byte size) or restore its former type. */
+function toggleReserved(node: EditNode): void {
+  if (node.type.trim() === 'padding') {
+    node.type = node.prevType || 'uint8';
+    node.prevType = undefined;
+    if (node.name.trim() === 'reserved') {
+      node.name = 'field';
+    }
+  } else {
+    node.prevType = node.type;
+    const sz = SCALAR_BYTES[node.type.trim()];
+    node.type = 'padding';
+    node.size = node.size.trim() || String(sz ?? 1);
+    node.enumRows = [];
+    node.bitRows = [];
+    if (!node.name.trim() || node.name.trim() === 'field') {
+      node.name = 'reserved';
+    }
+  }
+  changed();
+}
+
+const SCALAR_BYTES: Record<string, number> = {
+  uint8: 1, int8: 1, byte: 1, bool: 1, uint16: 2, int16: 2, uint32: 4, int32: 4, float32: 4,
+  uint64: 8, int64: 8, float64: 8,
+};
+
+/** Name → bit-range rows for a bit-field (`bits` is "3" or "0-3"). */
+function bitfieldEditor(node: EditNode): HTMLElement | null {
+  if (node.bitRows.length === 0) {
+    return null;
+  }
+  const box = el('details', { class: 'fe-adv', open: true }, [
+    el('summary', { text: `bit fields (${node.bitRows.length})` }),
+  ]);
+  for (const row of node.bitRows) {
+    box.append(
+      el('div', { class: 'fe-row fe-enum-row' }, [
+        el('input', {
+          type: 'text',
+          value: row.name,
+          placeholder: 'name',
+          oninput: (e) => {
+            row.name = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }),
+        el('span', { class: 'fe-inline-label', text: 'bits' }),
+        el('input', {
+          type: 'text',
+          value: row.bits,
+          placeholder: '0 or 1-3',
+          title: 'A single bit ("3") or an inclusive range ("0-3"), bit 0 = least significant',
+          style: 'width:80px',
+          oninput: (e) => {
+            row.bits = (e.target as HTMLInputElement).value;
+            scheduleValidate();
+          },
+        }),
+        iconBtn('✕', 'Remove bit range', () => {
+          node.bitRows = node.bitRows.filter((r) => r !== row);
+          changed();
+        }),
+      ]),
+    );
+  }
+  box.append(
+    el('div', { class: 'fe-row fe-add-row' }, [
+      el('button', {
+        class: 'secondary icon-text',
+        text: '+ bits',
+        onclick: () => {
+          node.bitRows.push({ name: `Flag${node.bitRows.length}`, bits: nextFreeBit(node) });
+          changed();
+        },
+      }),
+    ]),
+  );
+  return box;
+}
+
+/** The lowest bit number above every range already used. */
+function nextFreeBit(node: EditNode): string {
+  let top = -1;
+  for (const r of node.bitRows) {
+    const m = /^\s*(\d+)(?:\s*-\s*(\d+))?\s*$/.exec(r.bits);
+    if (m) {
+      top = Math.max(top, Number(m[2] ?? m[1]));
+    }
+  }
+  return String(top + 1);
+}
+
 function enumEditor(node: EditNode): HTMLElement | null {
   const isEnum = node.type.trim() === 'enum';
   if (!isEnum && node.enumRows.length === 0) {

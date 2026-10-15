@@ -33,6 +33,8 @@ export interface FormatLayout {
   totalSize: number | null;
   /** True when some size/offset is only known at parse time. */
   dynamic: boolean;
+  /** Size of each reusable `structures` entry (null = depends on parse-time data). */
+  structs: { name: string; size: number | null; sizeAlign?: number }[];
 }
 
 const MAX_DEPTH = 24;
@@ -185,9 +187,24 @@ export function buildLayout(def: FormatDefinition): FormatLayout {
   }
 
   const top = layFields((def.fields ?? []) as FieldDefinition[], 0, 0, false, []);
-  return {
-    rows,
-    totalSize: rows.length ? top.end : null,
-    dynamic,
-  };
+  const totalSize = rows.length ? top.end : null;
+  const wasDynamic = dynamic;
+
+  // Struct sizes: lay each body out on its own, then discard the scratch rows.
+  const structs: FormatLayout['structs'] = [];
+  const mark = rows.length;
+  for (const [name, body] of Object.entries(table)) {
+    const inner = layFields(((body?.fields ?? []) as FieldDefinition[]), 0, 0, false, [name]);
+    let size: number | null = body?.size ?? inner.end;
+    if (body?.size === undefined && body?.sizeAlign && body.sizeAlign > 0) {
+      size = Math.ceil(size / body.sizeAlign) * body.sizeAlign;
+    }
+    if (body?.size === undefined && inner.approx) {
+      size = null;
+    }
+    structs.push({ name, size, sizeAlign: body?.sizeAlign });
+  }
+  rows.length = mark;
+
+  return { rows, totalSize, dynamic: wasDynamic, structs };
 }

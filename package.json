@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.18.10",
+  "version": "0.19.0",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -351,6 +351,15 @@
           "default": 8,
           "minimum": 0,
           "markdownDescription": "Maximum field-name tags shown above the Raw view when **Field Colors** is enabled. Tags identify top-level fields intersecting the visible bytes, using the same colors as the hex dump. Click a tag to select its field. Set to `0` to hide tags while keeping byte colors. Changes apply to open viewers."
+        },
+        "binaryViewer.formatEditor.offsetBase": {
+          "type": "string",
+          "enum": [
+            "hex",
+            "decimal"
+          ],
+          "default": "hex",
+          "markdownDescription": "How the **Layout Preview** in the Binary Format editor prints byte offsets. Changes apply to open editors."
         },
         "binaryViewer.defaultEndianness": {
           "type": "string",

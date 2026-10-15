@@ -8,24 +8,13 @@
 </head>
 <body>
   <div id="app"></div>
+  <script src="toolbar.js"></script>
   <script>
     const app = document.getElementById('app');
     const h = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-    // ---- toolbar ----
-    const tb = h('div', 'bv-toolbar');
-    const seg = h('div', 'bv-segmented');
-    seg.append(h('button', 'bv-seg', 'Raw'), h('button', 'bv-seg bv-seg-active', 'Structure'));
-    tb.append(seg);
-    const tool = (label, ...opts) => {
-      const w = h('span', 'bv-tool'); w.append(h('label', 'bv-label', label));
-      const s = h('select', 'bv-select'); opts.forEach((o) => s.append(h('option', null, o))); w.append(s); return w;
-    };
-    tb.append(tool('Bytes:', '16'), tool('Endian:', 'Little Endian'),
-              tool('Format:', 'Format: Nested Firmware (example) (detected)'));
-    tb.append(h('span', 'bv-spacer'));
-    tb.append(h('button', 'bv-btn bv-btn-active', 'Inspector'), h('button', 'bv-btn', 'Search'), h('button', 'bv-btn', 'Go To'));
-    tb.append(h('span', 'bv-offset-readout bv-mono', '0x0000000C  +4'));
+    // ---- toolbar (shared) ----
+    const tb = buildToolbar(h, { view: 'structure', format: 'Nested Firmware (example)', version: '1.0', inspector: true, fieldColors: false, offset: '0x0000000C  +4' });
     app.append(tb);
 
     const body = h('div', 'bv-body');

@@ -43,10 +43,22 @@ if (!browser) {
 }
 console.log('Using browser:', browser);
 
+// The editor mockup reuses the real format-editor stylesheet (a TS template string).
+{
+  const ts = fs.readFileSync(path.join(ROOT, 'src', 'webview', 'formatEditor', 'styles.ts'), 'utf8');
+  const m = /FORMAT_EDITOR_CSS = `([\s\S]*?)`;/.exec(ts);
+  if (!m) {
+    console.error('Could not extract FORMAT_EDITOR_CSS from styles.ts');
+    process.exit(1);
+  }
+  fs.writeFileSync(path.join(ROOT, 'docs', 'mockups', 'editor.generated.css'), m[1]);
+}
+
 const shots = [
-  { html: 'raw.html', png: 'raw-view.png', size: '1180,662' },
-  { html: 'structure.html', png: 'structure-view.png', size: '1180,470' },
-  { html: 'sections.html', png: 'sections-view.png', size: '1180,430' },
+  { html: 'raw.html', png: 'raw-view.png', size: '1420,640' },
+  { html: 'structure.html', png: 'structure-view.png', size: '1420,470' },
+  { html: 'sections.html', png: 'sections-view.png', size: '1420,430' },
+  { html: 'editor.html', png: 'editor-view.png', size: '1420,640' },
 ];
 
 for (const { html, png, size } of shots) {

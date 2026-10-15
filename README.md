@@ -135,6 +135,15 @@ Read-only by design in this version.
 
 ### Custom formats
 
+Build one visually with **Binary Viewer: Create Binary Format** — a form editor
+with undo/redo, a live validation bar, a JSON tab and read-only preview, and a
+side panel showing the expected byte layout (offsets in hex or decimal — see
+`binaryViewer.formatEditor.offsetBase` — plus sizes and struct sizes) as you
+edit, and `[]` / `b` / `rsv` buttons on each field to make it an array, a
+bit-field, or reserved padding:
+
+![Format editor: form on the left, live layout preview on the right](docs/images/editor-view.png)
+
 Formats are plain JSON — there is no expression language and nothing in a
 definition is executed. They load from four places, in ascending priority:
 **builtin** → **global storage** → **`binaryViewer.formatDirectories`** (extra
