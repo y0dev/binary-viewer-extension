@@ -25,6 +25,9 @@ export class FormatManager implements vscode.Disposable {
   private formats: LoadedFormat[] = [];
   private watchers: vscode.FileSystemWatcher[] = [];
   private reloadTimer: NodeJS.Timeout | undefined;
+  private signatures = new Map<string, string>();
+  private listSignature = '\0';
+  private lastChangedNames: ReadonlySet<string> = new Set();
   private readonly _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
 
@@ -116,7 +119,33 @@ export class FormatManager implements vscode.Disposable {
         `(${workspace.length} workspace, ${external.length} external, ${global.length} global, ` +
         `${builtin.length} builtin).`,
     );
-    this._onDidChange.fire();
+    // Diff against the previous load so a no-op file event (autosave of an
+    // unchanged file, a save that only touched whitespace) doesn't refresh viewers.
+    const next = new Map(this.formats.map((f) => [f.definition.name, JSON.stringify(f.definition)]));
+    const changed = new Set<string>();
+    for (const [name, sig] of next) {
+      if (this.signatures.get(name) !== sig) {
+        changed.add(name);
+      }
+    }
+    for (const name of this.signatures.keys()) {
+      if (!next.has(name)) {
+        changed.add(name);
+      }
+    }
+    const listChanged = this.formats.map((f) => f.definition.name + '\0' + f.source).join('\n');
+    const listDiffers = listChanged !== this.listSignature;
+    this.signatures = next;
+    this.listSignature = listChanged;
+    this.lastChangedNames = changed;
+    if (changed.size > 0 || listDiffers) {
+      this._onDidChange.fire();
+    }
+  }
+
+  /** Names of formats added / removed / edited by the most recent reload. */
+  get changedNames(): ReadonlySet<string> {
+    return this.lastChangedNames;
   }
 
   getAll(): LoadedFormat[] {

@@ -81,7 +81,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             activeFormat: e.document.activeFormatName,
           });
           // Re-decode in place when the applied format's definition changed.
-          if (e.document.activeFormatName) {
+          if (e.document.activeFormatName && this.formats.changedNames.has(e.document.activeFormatName)) {
             void this.doParse(e, e.document.activeFormatName);
           }
         }

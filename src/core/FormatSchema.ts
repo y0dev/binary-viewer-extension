@@ -437,6 +437,18 @@ export function validateFormat(input: unknown): ValidationResult {
   }
   const fmt = input as Partial<FormatDefinition>;
 
+  // Binary File Designer names the reusable-layout map `structs`; accept it as
+  // an alias for `structures` (normalized in place so every loader sees one key).
+  const aliased = (fmt as { structs?: unknown }).structs;
+  if (aliased !== undefined) {
+    if (fmt.structures === undefined) {
+      fmt.structures = aliased as FormatDefinition['structures'];
+    } else {
+      result.warnings.push('Both "structures" and "structs" are set — "structs" is ignored');
+    }
+    delete (fmt as { structs?: unknown }).structs;
+  }
+
   if (typeof fmt.name !== 'string' || fmt.name.trim() === '') {
     errors.push('"name" is required and must be a non-empty string');
   }

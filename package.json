@@ -2,7 +2,7 @@
   "name": "binary-structure-inspector",
   "displayName": "Binary Viewer & Structure Inspector",
   "description": "Hex/binary file viewer with a virtualized hex dump, data inspector, binary search, and user-defined binary structure decoding for embedded development.",
-  "version": "0.18.9",
+  "version": "0.18.10",
   "publisher": "devdoesit",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -46,61 +46,195 @@
       "description": "Workspace-defined binary formats under .vscode/binary-viewer are only loaded in trusted workspaces. Raw hex viewing and global formats work everywhere."
     }
   },
-  "activationEvents": ["onStartupFinished"],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "customEditors": [
       {
         "viewType": "binaryViewer.hexEditor",
         "displayName": "Binary Viewer",
         "selector": [
-          { "filenamePattern": "*.bin" },
-          { "filenamePattern": "*.hex" },
-          { "filenamePattern": "*.img" },
-          { "filenamePattern": "*.dat" },
-          { "filenamePattern": "*.fw" },
-          { "filenamePattern": "*.rom" },
-          { "filenamePattern": "*.dump" },
-          { "filenamePattern": "*.raw" },
-          { "filenamePattern": "*.eeprom" },
-          { "filenamePattern": "*.nvram" }
+          {
+            "filenamePattern": "*.bin"
+          },
+          {
+            "filenamePattern": "*.hex"
+          },
+          {
+            "filenamePattern": "*.img"
+          },
+          {
+            "filenamePattern": "*.dat"
+          },
+          {
+            "filenamePattern": "*.fw"
+          },
+          {
+            "filenamePattern": "*.rom"
+          },
+          {
+            "filenamePattern": "*.dump"
+          },
+          {
+            "filenamePattern": "*.raw"
+          },
+          {
+            "filenamePattern": "*.eeprom"
+          },
+          {
+            "filenamePattern": "*.nvram"
+          }
         ],
         "priority": "option"
       }
     ],
     "commands": [
-      { "command": "binaryViewer.goToOffset", "title": "Go To Offset", "category": "Binary Viewer" },
-      { "command": "binaryViewer.search", "title": "Search", "category": "Binary Viewer" },
-      { "command": "binaryViewer.findNext", "title": "Find Next", "category": "Binary Viewer" },
-      { "command": "binaryViewer.findPrevious", "title": "Find Previous", "category": "Binary Viewer" },
-      { "command": "binaryViewer.toggleStructureView", "title": "Toggle Structure View", "category": "Binary Viewer" },
-      { "command": "binaryViewer.toggleSectionsView", "title": "Toggle Sections View", "category": "Binary Viewer" },
-      { "command": "binaryViewer.toggleInspector", "title": "Toggle Inspector", "category": "Binary Viewer" },
-      { "command": "binaryViewer.showFieldInRawView", "title": "Show Field in Raw View", "category": "Binary Viewer" },
-      { "command": "binaryViewer.selectFormat", "title": "Select Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.createFormat", "title": "Create Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.generateFormat", "title": "Generate Binary Format From File", "category": "Binary Viewer" },
-      { "command": "binaryViewer.editFormat", "title": "Edit Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.duplicateFormat", "title": "Duplicate Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.deleteFormat", "title": "Delete Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.importFormat", "title": "Import Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.exportFormat", "title": "Export Binary Format", "category": "Binary Viewer" },
-      { "command": "binaryViewer.reloadFormats", "title": "Reload Binary Formats", "category": "Binary Viewer" },
-      { "command": "binaryViewer.validateFormatFile", "title": "Validate Binary Format File", "category": "Binary Viewer", "icon": "$(check)" },
-      { "command": "binaryViewer.applyFormatFile", "title": "Apply Binary Format File", "category": "Binary Viewer", "icon": "$(sync)" },
-      { "command": "binaryViewer.openWith", "title": "Open With Binary Viewer", "category": "Binary Viewer" }
+      {
+        "command": "binaryViewer.goToOffset",
+        "title": "Go To Offset",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.search",
+        "title": "Search",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.findNext",
+        "title": "Find Next",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.findPrevious",
+        "title": "Find Previous",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.toggleStructureView",
+        "title": "Toggle Structure View",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.toggleSectionsView",
+        "title": "Toggle Sections View",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.toggleInspector",
+        "title": "Toggle Inspector",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.showFieldInRawView",
+        "title": "Show Field in Raw View",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.selectFormat",
+        "title": "Select Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.createFormat",
+        "title": "Create Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.generateFormat",
+        "title": "Generate Binary Format From File",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.editFormat",
+        "title": "Edit Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.duplicateFormat",
+        "title": "Duplicate Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.deleteFormat",
+        "title": "Delete Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.importFormat",
+        "title": "Import Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.exportFormat",
+        "title": "Export Binary Format",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.reloadFormats",
+        "title": "Reload Binary Formats",
+        "category": "Binary Viewer"
+      },
+      {
+        "command": "binaryViewer.validateFormatFile",
+        "title": "Validate Binary Format File",
+        "category": "Binary Viewer",
+        "icon": "$(check)"
+      },
+      {
+        "command": "binaryViewer.applyFormatFile",
+        "title": "Apply Binary Format File",
+        "category": "Binary Viewer",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "binaryViewer.openWith",
+        "title": "Open With Binary Viewer",
+        "category": "Binary Viewer"
+      }
     ],
     "menus": {
       "commandPalette": [
-        { "command": "binaryViewer.goToOffset", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.search", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.findNext", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.findPrevious", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.toggleStructureView", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.toggleSectionsView", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.toggleInspector", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.showFieldInRawView", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.selectFormat", "when": "binaryViewer.active" },
-        { "command": "binaryViewer.generateFormat", "when": "binaryViewer.active" }
+        {
+          "command": "binaryViewer.goToOffset",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.search",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.findNext",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.findPrevious",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.toggleStructureView",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.toggleSectionsView",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.toggleInspector",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.showFieldInRawView",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.selectFormat",
+          "when": "binaryViewer.active"
+        },
+        {
+          "command": "binaryViewer.generateFormat",
+          "when": "binaryViewer.active"
+        }
       ],
       "explorer/context": [
         {
@@ -123,26 +257,71 @@
       ]
     },
     "keybindings": [
-      { "command": "binaryViewer.goToOffset", "key": "ctrl+g", "mac": "cmd+g", "when": "binaryViewer.active && !inputFocus" },
-      { "command": "binaryViewer.search", "key": "ctrl+f", "mac": "cmd+f", "when": "binaryViewer.active && !inputFocus" },
-      { "command": "binaryViewer.findNext", "key": "f3", "when": "binaryViewer.active && !inputFocus" },
-      { "command": "binaryViewer.findPrevious", "key": "shift+f3", "when": "binaryViewer.active && !inputFocus" },
-      { "command": "binaryViewer.toggleStructureView", "key": "ctrl+alt+s", "mac": "cmd+alt+s", "when": "binaryViewer.active && !inputFocus" },
-      { "command": "binaryViewer.toggleSectionsView", "key": "ctrl+alt+m", "mac": "cmd+alt+m", "when": "binaryViewer.active && !inputFocus" },
-      { "command": "binaryViewer.toggleInspector", "key": "ctrl+alt+i", "mac": "cmd+alt+i", "when": "binaryViewer.active && !inputFocus" }
+      {
+        "command": "binaryViewer.goToOffset",
+        "key": "ctrl+g",
+        "mac": "cmd+g",
+        "when": "binaryViewer.active && !inputFocus"
+      },
+      {
+        "command": "binaryViewer.search",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "binaryViewer.active && !inputFocus"
+      },
+      {
+        "command": "binaryViewer.findNext",
+        "key": "f3",
+        "when": "binaryViewer.active && !inputFocus"
+      },
+      {
+        "command": "binaryViewer.findPrevious",
+        "key": "shift+f3",
+        "when": "binaryViewer.active && !inputFocus"
+      },
+      {
+        "command": "binaryViewer.toggleStructureView",
+        "key": "ctrl+alt+s",
+        "mac": "cmd+alt+s",
+        "when": "binaryViewer.active && !inputFocus"
+      },
+      {
+        "command": "binaryViewer.toggleSectionsView",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m",
+        "when": "binaryViewer.active && !inputFocus"
+      },
+      {
+        "command": "binaryViewer.toggleInspector",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
+        "when": "binaryViewer.active && !inputFocus"
+      }
     ],
     "configuration": {
       "title": "Binary Viewer",
       "properties": {
         "binaryViewer.bytesPerRow": {
           "type": "number",
-          "enum": [8, 16, 32],
+          "enum": [
+            8,
+            16,
+            32
+          ],
           "default": 16,
           "description": "Default number of bytes displayed per row in the raw hex view."
         },
         "binaryViewer.byteGroup": {
           "type": "string",
-          "enum": ["1", "2le", "2be", "4le", "4be", "8le", "8be"],
+          "enum": [
+            "1",
+            "2le",
+            "2be",
+            "4le",
+            "4be",
+            "8le",
+            "8be"
+          ],
           "enumDescriptions": [
             "Plain bytes",
             "16-bit words, bytes reversed (little-endian reads as a number)",
@@ -175,13 +354,20 @@
         },
         "binaryViewer.defaultEndianness": {
           "type": "string",
-          "enum": ["little", "big"],
+          "enum": [
+            "little",
+            "big"
+          ],
           "default": "little",
           "description": "Default endianness used by the data inspector and by formats that do not specify one."
         },
         "binaryViewer.defaultView": {
           "type": "string",
-          "enum": ["raw", "structure", "sections"],
+          "enum": [
+            "raw",
+            "structure",
+            "sections"
+          ],
           "default": "raw",
           "description": "Which tab a binary file opens on. 'structure' and 'sections' fall back to 'raw' when no format applies to the file. The last tab you used for a given file is remembered and takes precedence."
         },
@@ -198,14 +384,22 @@
         },
         "binaryViewer.additionalExtensions": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "scope": "machine-overridable",
           "markdownDescription": "Extra file extensions (e.g. `s19`, `.mot`, `.pkg`) to open in the Binary Viewer automatically. The built-in list (`.bin .hex .img .dat .fw .rom .dump .raw .eeprom .nvram`) always works; this adds to it. A file opened as text can still be reopened with **Open With…**."
         },
         "binaryViewer.timestamp.defaultEpoch": {
           "type": "string",
-          "enum": ["unix", "y2k", "gps", "mac", "filetime"],
+          "enum": [
+            "unix",
+            "y2k",
+            "gps",
+            "mac",
+            "filetime"
+          ],
           "enumDescriptions": [
             "1970-01-01 UTC (POSIX)",
             "2000-01-01 UTC",
@@ -245,7 +439,9 @@
         },
         "binaryViewer.formatDirectories": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "scope": "machine-overridable",
           "markdownDescription": "Extra folders to load binary format definitions (`*.json`) from — e.g. a shared network drive so the same formats are available on another machine. Absolute paths; `~` and `${workspaceFolder}` are expanded. These override global-storage formats but are overridden by workspace formats. New / changed files are picked up automatically."

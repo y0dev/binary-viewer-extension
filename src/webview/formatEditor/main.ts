@@ -2,6 +2,7 @@ import { el, clear } from '../dom';
 import { FORMAT_EDITOR_CSS } from './styles';
 import { parseArrayShorthand } from '../../core/FieldSyntax';
 import { reorderFormatKeys } from '../../core/FormatOrder';
+import { buildLayout } from '../../core/FormatLayout';
 import type { FormatDefinition, FieldDefinition, MagicSpec, BitSpec, StructBody } from '../../types/format';
 import type {
   FormatEditorFromHost,
@@ -1011,7 +1012,80 @@ function collectAdvErrors(list: EditNode[], pathPrefix: string, out: string[]): 
   });
 }
 
+let layoutBox: HTMLElement | undefined;
+let layoutTimer: number | undefined;
+
+const hex = (n: number) => '0x' + n.toString(16).toUpperCase().padStart(4, '0');
+
+/** Redraw the expected-layout table (debounced; hex + decimal offset columns). */
+function scheduleLayout(): void {
+  if (layoutTimer) {
+    clearTimeout(layoutTimer);
+  }
+  layoutTimer = window.setTimeout(() => {
+    if (!layoutBox) {
+      return;
+    }
+    let def: FormatDefinition | undefined;
+    try {
+      if (model.mode === 'json') {
+        const raw = JSON.parse(model.jsonText);
+        def = (Array.isArray(raw) ? raw[0] : raw) as FormatDefinition;
+      } else {
+        def = buildDefinition();
+      }
+    } catch {
+      /* keep showing the last good layout while the JSON is mid-edit */
+      return;
+    }
+    clear(layoutBox);
+    if (!def || typeof def !== 'object') {
+      return;
+    }
+    const layout = buildLayout(def);
+    if (layout.rows.length === 0) {
+      layoutBox.append(el('div', { class: 'fe-hint', text: 'No fields to lay out yet.' }));
+      return;
+    }
+    const head = el('tr', {}, [
+      el('th', { text: 'Offset (hex)' }),
+      el('th', { text: 'Offset (dec)' }),
+      el('th', { text: 'Name' }),
+      el('th', { text: 'Type' }),
+      el('th', { text: 'Size' }),
+    ]);
+    const body = el('tbody');
+    for (const r of layout.rows) {
+      const pre = r.approx ? '≥ ' : '';
+      const nameCell = el('td', {}, [
+        document.createTextNode('  '.repeat(r.depth) + (r.name || '(unnamed)')),
+      ]);
+      const typeText = r.note ? `${r.type}  · ${r.note}` : r.type;
+      body.append(
+        el('tr', { class: `fe-lay-${r.kind}` }, [
+          el('td', { text: r.offset === null ? '→ pointer' : pre + hex(r.offset) }),
+          el('td', { class: 'num', text: r.offset === null ? '' : pre + String(r.offset) }),
+          nameCell,
+          el('td', { class: 'fe-lay-dim', text: typeText }),
+          el('td', { class: 'num', text: r.size === null ? (r.kind === 'bits' ? '' : '?') : String(r.size) }),
+        ]),
+      );
+    }
+    layoutBox.append(el('table', {}, [el('thead', {}, [head]), body]));
+    const total = layout.totalSize;
+    layoutBox.append(
+      el('div', {
+        class: 'fe-layout-foot',
+        text:
+          (total !== null ? `Total: ${total} bytes (${hex(total)})` : 'Total: unknown') +
+          (layout.dynamic ? ' — plus parse-time sizes (≥ = lower bound, ? = unknown until the file is read)' : ''),
+      }),
+    );
+  }, 120);
+}
+
 function updatePreview(): void {
+  scheduleLayout();
   if (model.mode === 'json' || !previewBox) {
     return;
   }
@@ -1108,7 +1182,7 @@ function render(): void {
 
   if (model.mode === 'json') {
     renderJsonMode(wrap);
-    app.append(wrap);
+    mountPage(wrap);
     updatePreview();
     scheduleValidate();
     return;
@@ -1318,7 +1392,7 @@ function render(): void {
   // ---- actions ----
   wrap.append(actionBar());
 
-  app.append(wrap);
+  mountPage(wrap);
   updatePreview();
   post({ type: 'validate', format: buildDefinition() });
 }
@@ -1363,6 +1437,16 @@ function renderJsonMode(wrap: HTMLElement): void {
   wrap.append(errorBox);
 
   wrap.append(actionBar());
+}
+
+/** Page shell: the editor column plus a sticky side panel with the expected layout. */
+function mountPage(wrap: HTMLElement): void {
+  layoutBox = el('div', { class: 'fe-layout' });
+  const aside = el('aside', { class: 'fe-side' }, [
+    el('h2', { text: 'Expected Layout' }),
+    layoutBox,
+  ]);
+  app.append(el('div', { class: 'fe-shell' }, [wrap, aside]));
 }
 
 function switchMode(to: 'form' | 'json'): void {

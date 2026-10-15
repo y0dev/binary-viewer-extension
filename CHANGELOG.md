@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.18.10
+
+- **Expected Layout panel in the format editor.** A sticky side panel (Form and
+  JSON tabs) shows the byte layout of the definition as you edit: offset in hex
+  and decimal, name, type and size, with reusable structures expanded, bit
+  ranges listed, and a total. Sizes known only at parse time (`cstring`,
+  `countField` arrays) show `?`, and offsets after them are marked `≥`.
+
+- **`structs` accepted as an alias for `structures`**, so formats exported from
+  Binary Designer load as-is.
+
+- **Fewer needless viewer refreshes.** Format reloads now only notify viewers
+  when a definition actually changed, and an open file is re-decoded only when
+  its applied format changed (no more re-decode on every autosave of an
+  unchanged format file).
+
 ## 0.18.9
 
 - **Configurable Field Colors defaults and brightness.**

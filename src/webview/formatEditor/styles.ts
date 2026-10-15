@@ -92,4 +92,27 @@ select optgroup { font-style: italic; }
 .fe-node-actions button.icon { padding: 1px 6px; }
 .fe-add-row { gap: 8px; margin-top: 2px; }
 button.icon-text { padding: 3px 9px; font-size: 0.9em; }
+
+/* ---- expected layout table ---- */
+.fe-shell { display: flex; align-items: flex-start; gap: 16px; }
+.fe-shell > .fe-wrap { flex: 1 1 auto; min-width: 0; }
+.fe-side {
+  flex: 0 0 min(420px, 38%); position: sticky; top: 8px;
+  max-height: calc(100vh - 16px); overflow: auto;
+  border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 0 10px 10px;
+  background: var(--vscode-editor-background);
+}
+@media (max-width: 900px) {
+  .fe-shell { flex-direction: column; }
+  .fe-side { position: static; flex: none; width: 100%; max-height: none; }
+}
+.fe-layout { overflow-x: auto; }
+.fe-layout table { border-collapse: collapse; width: 100%; font-family: var(--vscode-editor-font-family, monospace); font-size: 0.85em; }
+.fe-layout th, .fe-layout td { text-align: left; padding: 2px 10px; border-bottom: 1px solid var(--vscode-panel-border); white-space: nowrap; }
+.fe-layout th { font-weight: 600; opacity: 0.75; position: sticky; top: 0; background: var(--vscode-editor-background); }
+.fe-layout td.num { text-align: right; }
+.fe-layout tr.fe-lay-container td { background: var(--vscode-editorWidget-background); }
+.fe-layout tr.fe-lay-bits td { opacity: 0.75; }
+.fe-layout .fe-lay-dim { opacity: 0.6; }
+.fe-layout-foot { margin-top: 6px; font-size: 0.85em; opacity: 0.8; }
 `;

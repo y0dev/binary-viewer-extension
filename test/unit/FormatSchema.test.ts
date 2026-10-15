@@ -234,6 +234,17 @@ describe('FormatSchema.validateFormat — field id and offsetField', () => {
     assert.ok(r.errors.some((e) => /Duplicate field id "dup"/.test(e)));
   });
 
+  it('accepts "structs" (Binary File Designer) as an alias for "structures"', () => {
+    const def: Record<string, unknown> = {
+      name: 'alias',
+      structs: { Vec: { fields: [{ name: 'x', type: 'uint8' }] } },
+      fields: [{ name: 'v', type: 'Vec' }],
+    };
+    const r = validateFormat(def);
+    assert.ok(r.valid, r.errors.join('; '));
+    assert.ok(def.structures && !('structs' in def));
+  });
+
   it('accepts an offsetField reference and warns when offset is also set', () => {
     const ok = validateFormat({
       name: 'off1',
